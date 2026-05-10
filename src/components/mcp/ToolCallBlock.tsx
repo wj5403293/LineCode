@@ -22,6 +22,8 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     input = JSON.parse(toolCall.arguments);
   } catch {}
 
+  const isExecuting = streaming || !result;
+
   if (READ_TOOLS.has(toolCall.name)) {
     return <ToolCallRead name={toolCall.name} input={input} result={result} isError={isError} />;
   }
@@ -34,7 +36,7 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
         result={result}
         isError={isError}
         homePath={homePath}
-        streaming={streaming}
+        streaming={isExecuting}
       />
     );
   }

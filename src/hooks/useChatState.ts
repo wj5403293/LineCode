@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
-import { Message, Model, ToolCall } from '../types';
+import { Message, Model, ContentBlock } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage } from '../services/ai';
 import { conversationStore } from '../services/conversation';
@@ -84,6 +84,7 @@ export function useChatState(toneMode: ToneMode) {
       content: m.content,
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
+      reasoningContent: m.reasoningContent,
     }));
   }, []);
 
@@ -116,6 +117,8 @@ export function useChatState(toneMode: ToneMode) {
     const localMessages: Message[] = [...messages, userMsg];
     try {
       while (true) {
+        console.log('[LineCode] Loop iteration, localMessages:', localMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 50), toolCalls: m.toolCalls?.length, toolCallId: m.toolCallId })));
+        
         // 创建 AI 消息占位符
         const aiId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const aiPlaceholder: Message = {
@@ -126,6 +129,7 @@ export function useChatState(toneMode: ToneMode) {
 
         // 构建 API 消息
         const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode);
+        console.log('[LineCode] Built chatMessages:', chatMessages.length);
 
         // 调用 AI
         const result = await aiService.sendMessage(model, chatMessages, {
@@ -133,6 +137,25 @@ export function useChatState(toneMode: ToneMode) {
             setMessages(prev => prev.map(m =>
               m.id === aiId ? { ...m, blocks, content: blocks.filter(b => b.type === 'text').map(b => b.content).join('') } : m,
             ));
+            scrollToBottom(false);
+          },
+          onToolCallDetected: (toolCall) => {
+            setMessages(prev => prev.map(m => {
+              if (m.id === aiId) {
+                const existingBlocks = m.blocks || [];
+                const hasToolBlock = existingBlocks.some(b => b.type === 'tool_use' && b.id === toolCall.id);
+                if (!hasToolBlock) {
+                  const newBlock: ContentBlock = {
+                    type: 'tool_use',
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    content: '',
+                  };
+                  return { ...m, blocks: [...existingBlocks, newBlock] };
+                }
+              }
+              return m;
+            }));
             scrollToBottom(false);
           },
         });
@@ -146,7 +169,10 @@ export function useChatState(toneMode: ToneMode) {
           toolCalls: result.toolCalls,
           timestamp: Date.now(),
           streaming: false,
+          reasoningContent: result.reasoningContent,
         };
+
+        console.log('[LineCode] AI result - text:', result.text?.substring(0, 100), 'blocks:', result.blocks?.length, 'toolCalls:', result.toolCalls?.length, 'reasoning:', result.reasoningContent?.substring(0, 50));
 
         // 更新 UI 和本地消息
         setMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m));
@@ -154,15 +180,20 @@ export function useChatState(toneMode: ToneMode) {
 
         // 没有 tool_calls → 对话结束
         if (!result.toolCalls || result.toolCalls.length === 0) {
+          console.log('[LineCode] No tool_calls, ending loop, AI response:', result.text?.substring(0, 200));
           if (messages.length === 0) {
             summarizeTitle(model, text, result.text);
           }
           break;
         }
 
+        console.log('[LineCode] Found tool_calls:', result.toolCalls.length);
+
         // 有 tool_calls → 逐个执行工具
         for (const tc of result.toolCalls) {
+          console.log('[LineCode] Executing tool:', tc.name, 'id:', tc.id);
           const toolResult = await executeTool(tc);
+          console.log('[LineCode] Tool result:', toolResult.content?.substring(0, 100));
 
           const toolMsg: Message = {
             id: `tool_${tc.id}_${Date.now()}`,
@@ -175,9 +206,28 @@ export function useChatState(toneMode: ToneMode) {
 
           // 追加 tool_result 到消息列表
           localMessages.push(toolMsg);
-          setMessages(prev => [...prev, toolMsg]);
+          console.log('[LineCode] localMessages length:', localMessages.length);
+          setMessages(prev => {
+            const updated = [...prev, toolMsg];
+            // 将 toolResult 关联到对应的 assistant 消息
+            return updated.map(m => {
+              if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
+                const existingResults = m.toolResults || [];
+                return {
+                  ...m,
+                  toolResults: [...existingResults, {
+                    toolCallId: tc.id,
+                    content: toolResult.content,
+                    isError: toolResult.isError,
+                  }],
+                };
+              }
+              return m;
+            });
+          });
         }
 
+        console.log('[LineCode] Continuing loop with', localMessages.length, 'messages');
         // 循环继续：下一轮会把包含 tool_result 的历史发送给 AI
       }
     } catch (err: any) {

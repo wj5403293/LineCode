@@ -33,6 +33,7 @@ export interface Message {
   toolName?: string;
   timestamp: number;
   streaming?: boolean;
+  reasoningContent?: string;
 }
 
 export interface Model {

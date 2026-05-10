@@ -11,11 +11,13 @@ export interface ChatMessage {
   toolCallId?: string;
   toolName?: string;
   toolCalls?: ToolCall[];
+  reasoningContent?: string;
 }
 
 interface StreamCallbacks {
   onBlocks?: (blocks: ContentBlock[]) => void;
   onToolCalls?: (toolCalls: ToolCall[]) => void;
+  onToolCallDetected?: (toolCall: { id: string; name: string }) => void;
 }
 
 const TONE_PROMPTS: Record<ToneMode, string> = {
@@ -44,7 +46,7 @@ abstract class StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }>;
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }>;
 
   protected createReader(res: Response): ReadableStreamDefaultReader<Uint8Array> {
     const reader = (res as any).body?.getReader();
@@ -63,7 +65,7 @@ class OpenAIStreamProcessor extends StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const baseUrl = model.baseUrl || 'https://api.openai.com/v1';
 
     const body: any = {
@@ -85,6 +87,12 @@ class OpenAIStreamProcessor extends StreamProcessor {
       },
       body: JSON.stringify(body),
     });
+
+    console.log('[LineCode] OpenAI request messages:', body.messages.length);
+    body.messages.forEach((msg: any, i: number) => {
+      console.log(`[LineCode] Message ${i}:`, JSON.stringify(msg).substring(0, 200));
+    });
+    console.log('[LineCode] OpenAI HTTP response status:', res.status, res.statusText);
 
     if (!res.ok) {
       let errText = '';
@@ -109,7 +117,7 @@ class OpenAIStreamProcessor extends StreamProcessor {
         return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
       }
       if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-        return {
+        const msg: any = {
           role: 'assistant',
           content: m.content || null,
           tool_calls: m.toolCalls.map(tc => ({
@@ -118,6 +126,14 @@ class OpenAIStreamProcessor extends StreamProcessor {
             function: { name: tc.name, arguments: tc.arguments },
           })),
         };
+        if (m.reasoningContent) {
+          console.log('[LineCode] Adding reasoning_content to message:', m.reasoningContent.substring(0, 50));
+          msg.reasoning_content = m.reasoningContent;
+        }
+        return msg;
+      }
+      if (m.role === 'assistant' && m.reasoningContent) {
+        return { role: 'assistant', content: m.content, reasoning_content: m.reasoningContent };
       }
       return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content };
     });
@@ -126,27 +142,45 @@ class OpenAIStreamProcessor extends StreamProcessor {
   private async readStream(
     res: Response,
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const reader = this.createReader(res);
     const decoder = this.createDecoder();
     let full = '';
+    let reasoningFull = '';
     let buffer = '';
     const blocks: ContentBlock[] = [{ type: 'text', content: '' }];
     const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      console.log('[LineCode] OpenAI Stream read - done:', done, 'value length:', value?.length || 0);
+      if (done) {
+        console.log('[LineCode] OpenAI Stream done');
+        console.log('[LineCode] - blocks:', blocks.length);
+        console.log('[LineCode] - toolCallsMap:', toolCallsMap.size);
+        console.log('[LineCode] - full text:', full.substring(0, 100) || '(empty)');
+        console.log('[LineCode] - reasoningFull:', reasoningFull.substring(0, 100) || '(empty)');
+        break;
+      }
 
-      buffer += decoder.decode(value, { stream: true });
+      const decoded = decoder.decode(value, { stream: true });
+      console.log('[LineCode] OpenAI Stream raw:', decoded.substring(0, 300));
+      buffer += decoded;
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      console.log('[LineCode] OpenAI Stream lines:', lines.length);
 
       for (const line of lines) {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const json = JSON.parse(line.slice(6));
             const delta = json.choices?.[0]?.delta;
+            console.log('[LineCode] delta:', JSON.stringify(delta).substring(0, 100));
+
+            if (typeof delta?.reasoning_content === 'string' && delta.reasoning_content.length > 0) {
+              console.log('[LineCode] Captured reasoning_content:', delta.reasoning_content.substring(0, 20));
+              reasoningFull += delta.reasoning_content;
+            }
 
             if (delta?.content) {
               full += delta.content;
@@ -162,7 +196,10 @@ class OpenAIStreamProcessor extends StreamProcessor {
                 }
                 const existing = toolCallsMap.get(idx)!;
                 if (tc.id) existing.id = tc.id;
-                if (tc.function?.name) existing.name = tc.function.name;
+                if (tc.function?.name) {
+                  existing.name = tc.function.name;
+                  callbacks?.onToolCallDetected?.({ id: existing.id, name: existing.name });
+                }
                 if (tc.function?.arguments) existing.arguments += tc.function.arguments;
               }
             }
@@ -183,7 +220,7 @@ class OpenAIStreamProcessor extends StreamProcessor {
       callbacks?.onToolCalls?.(toolCalls);
     }
 
-    return { text: full, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
+    return { text: full, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, reasoningContent: reasoningFull || undefined };
   }
 }
 
@@ -193,7 +230,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const baseUrl = model.baseUrl || 'https://api.anthropic.com';
     const { system, messages: userMessages } = this.formatMessages(messages);
 
@@ -224,6 +261,13 @@ class AnthropicStreamProcessor extends StreamProcessor {
       body: JSON.stringify(body),
     });
 
+    console.log('[LineCode] Anthropic request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
+    body.messages.forEach((msg: any, i: number) => {
+      console.log(`[LineCode] Message ${i}: role=${msg.role}`, msg.content);
+    });
+
+    console.log('[LineCode] HTTP response status:', res.status, res.statusText);
+
     if (!res.ok) {
       let errText = '';
       try {
@@ -245,17 +289,27 @@ class AnthropicStreamProcessor extends StreamProcessor {
     let system: string | undefined;
     const formatted: { role: 'user' | 'assistant'; content: any }[] = [];
 
-    for (const msg of messages) {
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
       if (msg.role === 'system') {
         system = msg.content;
       } else if (msg.role === 'tool') {
+        const toolResults: { type: 'tool_result'; tool_use_id: string; content: string }[] = [{
+          type: 'tool_result',
+          tool_use_id: msg.toolCallId!,
+          content: msg.content,
+        }];
+        while (i + 1 < messages.length && messages[i + 1].role === 'tool') {
+          i++;
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: messages[i].toolCallId!,
+            content: messages[i].content,
+          });
+        }
         formatted.push({
           role: 'user',
-          content: [{
-            type: 'tool_result',
-            tool_use_id: msg.toolCallId,
-            content: msg.content,
-          }],
+          content: toolResults,
         });
       } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
         const content: any[] = [];
@@ -280,7 +334,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
   private async readStream(
     res: Response,
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const reader = this.createReader(res);
     const decoder = this.createDecoder();
     let buffer = '';
@@ -301,11 +355,18 @@ class AnthropicStreamProcessor extends StreamProcessor {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      console.log('[LineCode] Anthropic Stream read - done:', done, 'value length:', value?.length || 0);
+      if (done) {
+        console.log('[LineCode] Anthropic Stream done, blocks:', blocks.length, 'toolCalls:', toolCalls.length);
+        break;
+      }
 
-      buffer += decoder.decode(value, { stream: true });
+      const decoded = decoder.decode(value, { stream: true });
+      console.log('[LineCode] Anthropic Stream raw:', decoded.substring(0, 200));
+      buffer += decoded;
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      console.log('[LineCode] Anthropic Stream lines:', lines.length);
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
@@ -314,6 +375,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
 
         try {
           const json = JSON.parse(data);
+          console.log('[LineCode] Stream event:', json.type, json);
 
           if (json.type === 'content_block_start') {
             const blockType = json.content_block?.type;
@@ -330,6 +392,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
               ensureBlock('tool_use');
               blocks[currentBlockIndex].id = json.content_block.id;
               blocks[currentBlockIndex].name = json.content_block.name;
+              callbacks?.onToolCallDetected?.({ id: json.content_block.id, name: json.content_block.name });
             }
           } else if (json.type === 'content_block_delta') {
             if (json.delta?.type === 'thinking_delta') {
@@ -366,7 +429,8 @@ class AnthropicStreamProcessor extends StreamProcessor {
     }
 
     const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
-    return { text: fullText, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
+    const reasoningContent = blocks.filter(b => b.type === 'thinking').map(b => b.content).join('');
+    return { text: fullText, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, reasoningContent: reasoningContent || undefined };
   }
 }
 
@@ -395,6 +459,7 @@ class AIService {
         content: msg.content,
         toolCalls: msg.toolCalls,
         toolCallId: msg.toolCallId,
+        reasoningContent: msg.reasoningContent,
       });
     }
 
@@ -405,7 +470,7 @@ class AIService {
     model: Model,
     messages: ChatMessage[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const { createDefaultRegistry } = await import('../mcp/tools');
     const registry = createDefaultRegistry();
     const enabledTools = await mcpService.getEnabledTools();

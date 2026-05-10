@@ -35,7 +35,7 @@ export class FileEditTool extends BaseTool {
       await RNFS.writeFile(filePath, newContent, 'utf8');
 
       return {
-        content: `编辑文件 ${input.file_path} (${count} 处匹配)`,
+        content: `成功编辑文件 ${input.file_path} (${count} 处匹配已替换)\n\n文件操作已完成。请检查是否需要继续其他操作，或向用户报告结果。`,
         toolCallId: '',
       };
     } catch (err: any) {

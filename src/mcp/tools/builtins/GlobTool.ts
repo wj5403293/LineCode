@@ -24,11 +24,14 @@ export class GlobTool extends BaseTool {
 
       const results = await this.search(searchPath, input.pattern, searchPath);
       if (results.length === 0) {
-        return { content: '未找到匹配的文件', toolCallId: '' };
+        return { 
+          content: `在 ${searchPath} 目录下未找到匹配 "${input.pattern}" 的文件。\n\n请考虑：\n1. 尝试其他搜索模式\n2. 检查路径是否正确\n3. 或者向用户说明情况`, 
+          toolCallId: '' 
+        };
       }
 
       return {
-        content: `找到 ${results.length} 个匹配文件:\n${results.join('\n')}`,
+        content: `在 ${searchPath} 目录下找到 ${results.length} 个匹配文件:\n${results.join('\n')}\n\n请根据搜索结果继续操作。`,
         toolCallId: '',
       };
     } catch (err: any) {

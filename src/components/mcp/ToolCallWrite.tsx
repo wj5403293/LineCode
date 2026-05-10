@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { FileCode, Check, X, AlertCircle } from 'lucide-react-native';
 import { colors, spacing, fontSizes, radius } from '../../constants/theme';
 import DiffView from './DiffView';
 import { diffService } from '../../services/DiffService';
+import { DiffRecord } from '../../types';
 
 interface Props {
   name: string;
@@ -11,21 +12,33 @@ interface Props {
   result?: string;
   isError?: boolean;
   homePath: string;
-  streaming?: boolean; // 正在写入中
+  streaming?: boolean;
 }
 
 export default React.memo(function ToolCallWrite({ name, input, result, isError, homePath, streaming }: Props) {
   const filePath = String(input.file_path || '');
   const fileName = filePath.split('/').pop() || filePath;
   const [confirmed, setConfirmed] = useState<boolean | null>(null);
+  const [diffRecord, setDiffRecord] = useState<DiffRecord | null>(null);
 
   const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
   const langLabel = ext ? ext.toUpperCase() : 'TXT';
 
-  // 是否已写入完成（有 result 且不在 streaming）
   const isComplete = !!result && !streaming;
-  // 是否有 diff 内容可显示
-  const hasDiff = isComplete && !isError && (input._oldContent !== undefined || input.content !== undefined);
+
+  useEffect(() => {
+    if (isComplete && !isError) {
+      const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
+      diffService.getDiffChain(fullPath).then(chain => {
+        const last = chain.filter(d => !d.reverted).pop();
+        if (last) {
+          setDiffRecord(last);
+        }
+      });
+    }
+  }, [isComplete, isError, filePath, homePath]);
+
+  const hasDiff = isComplete && !isError && diffRecord;
 
   const handleConfirm = () => setConfirmed(true);
 
@@ -77,21 +90,13 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
         </View>
       </View>
 
-      {/* 写入中状态 */}
-      {streaming && (
-        <View style={styles.progressSection}>
-          <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={styles.progressText}>正在写入...</Text>
-        </View>
-      )}
-
       {/* 写入完成且有 diff */}
-      {hasDiff && (
+      {hasDiff && diffRecord && (
         <>
           <View style={styles.divider} />
           <DiffView
-            oldContent={String(input._oldContent || '')}
-            newContent={String(input.content || '')}
+            oldContent={diffRecord.oldContent}
+            newContent={diffRecord.newContent}
           />
         </>
       )}

@@ -1,0 +1,218 @@
+useChatState.ts:119 [LineCode] Loop iteration, localMessages: [{…}]
+useChatState.ts:131 [LineCode] Built chatMessages: 2
+ai.ts:457 [LineCode] Sending to openai deepseek-v4-flash messages: 2 tools: 5
+stream-polyfill.js:134 [LineAI] Using XHR streaming fetch for: https://api.deepseek.com/v1/chat/completions
+ai.ts:90 [LineCode] OpenAI request messages: 2
+ai.ts:92 [LineCode] Message 0: {"role":"system","content":"\n## 交流语气：编程模式\n- 语气严谨专业，不要废话\n- 不使用 emoji\n- 直接给出代码和结论\n- 不要说\"好的\"、\"没问题\"等客套话\n- 代码优先，解释其次\n- 错误直接指出，不要委婉\n\n\n## 可用工具\n你可以使用以下工具：\n\n### 文件操作\n  - file_read\n  - file_w
+ai.ts:92 [LineCode] Message 1: {"role":"user","content":"查看项目结构"}
+ai.ts:94 [LineCode] OpenAI HTTP response status: 200 OK
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 647
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"role":"assistant","content":null,"reasoning_content":""},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 948
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"想"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 6
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 631
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"结构"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"我需要"},"logprobs":null,"finish_rea
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 323
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"了解一下"},"logprobs":null,"finish_re
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"当前"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"下的"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 317
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"结构"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 631
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"。"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 314
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"先"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"搜索"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 314
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"。"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 400
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_00_dNGHt8xf4mQ2oX0GIqR28775","typ
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 659
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 665
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"pattern"}}]},"logpr
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":": "}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 329
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"*"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 329
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 400
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_01_KLrEmH0wa4klOaqy0zyd3615","typ
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 994
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 6
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 660
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 660
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"/*"}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 329
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"}"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 550
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"bdce3a20-8352-4805-84ed-dfea5dd8cc61","object":"chat.completion.chunk","created":1778439664,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":"","reasoning_content":null},"logprobs":null,"finish_reason
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 14
+ai.ts:153 [LineCode] OpenAI Stream raw: data: [DONE]
+
+
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: true value length: 0
+ai.ts:148 [LineCode] OpenAI Stream done, blocks: 1 toolCallsMap: 2 full text: 
+useChatState.ts:173 [LineCode] AI result - text:  blocks: 1 toolCalls: 2
+useChatState.ts:188 [LineCode] Found tool_calls: 2
+useChatState.ts:192 [LineCode] Executing tool: glob id: call_00_dNGHt8xf4mQ2oX0GIqR28775
+useChatState.ts:194 [LineCode] Tool result: 在 /data/user/0/com.lineai/files/.linecode/home 目录下找到 3 个匹配文件:
+guess_number.py
+test.html
+hello.html
+
+
+useChatState.ts:207 [LineCode] localMessages length: 3
+useChatState.ts:192 [LineCode] Executing tool: glob id: call_01_KLrEmH0wa4klOaqy0zyd3615
+useChatState.ts:194 [LineCode] Tool result: 在 /data/user/0/com.lineai/files/.linecode/home 目录下未找到匹配 "**/*" 的文件。
+
+请考虑：
+1. 尝试其他搜索模式
+2. 检查路径是否正确
+3.
+useChatState.ts:207 [LineCode] localMessages length: 4
+useChatState.ts:228 [LineCode] Continuing loop with 4 messages
+useChatState.ts:119 [LineCode] Loop iteration, localMessages: (4) [{…}, {…}, {…}, {…}]
+useChatState.ts:131 [LineCode] Built chatMessages: 5
+ai.ts:457 [LineCode] Sending to openai deepseek-v4-flash messages: 5 tools: 5
+stream-polyfill.js:134 [LineAI] Using XHR streaming fetch for: https://api.deepseek.com/v1/chat/completions
+ai.ts:90 [LineCode] OpenAI request messages: 5
+ai.ts:92 [LineCode] Message 0: {"role":"system","content":"\n## 交流语气：编程模式\n- 语气严谨专业，不要废话\n- 不使用 emoji\n- 直接给出代码和结论\n- 不要说\"好的\"、\"没问题\"等客套话\n- 代码优先，解释其次\n- 错误直接指出，不要委婉\n\n\n## 可用工具\n你可以使用以下工具：\n\n### 文件操作\n  - file_read\n  - file_w
+ai.ts:92 [LineCode] Message 1: {"role":"user","content":"查看项目结构"}
+ai.ts:92 [LineCode] Message 2: {"role":"assistant","content":null,"tool_calls":[{"id":"call_00_dNGHt8xf4mQ2oX0GIqR28775","type":"function","function":{"name":"glob","arguments":"{\"pattern\": \"*\"}"}},{"id":"call_01_KLrEmH0wa4klOa
+ai.ts:92 [LineCode] Message 3: {"role":"tool","tool_call_id":"call_00_dNGHt8xf4mQ2oX0GIqR28775","content":"在 /data/user/0/com.lineai/files/.linecode/home 目录下找到 3 个匹配文件:\nguess_number.py\ntest.html\nhello.html\n\n请根据搜索结果继续操作。"}
+ai.ts:92 [LineCode] Message 4: {"role":"tool","tool_call_id":"call_01_KLrEmH0wa4klOaqy0zyd3615","content":"在 /data/user/0/com.lineai/files/.linecode/home 目录下未找到匹配 \"**/*\" 的文件。\n\n请考虑：\n1. 尝试其他搜索模式\n2. 检查路径是否正确\n3. 或者向用户说明情况"}
+ai.ts:94 [LineCode] OpenAI HTTP response status: 200 OK
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 175
+ai.ts:153 [LineCode] OpenAI Stream raw: {"error":{"message":"The `reasoning_content` in the thinking mode must be passed back to the API.","type":"invalid_request_error","param":null,"code":"invalid_request_error"}}
+ai.ts:157 [LineCode] OpenAI Stream lines: 0
+ai.ts:146 [LineCode] OpenAI Stream read - done: true value length: 0
+ai.ts:148 [LineCode] OpenAI Stream done, blocks: 1 toolCallsMap: 0 full text: 
+useChatState.ts:173 [LineCode] AI result - text:  blocks: 1 toolCalls: undefined
+useChatState.ts:181 [LineCode] No tool_calls, ending loop, AI response: 
+ai.ts:457 [LineCode] Sending to openai deepseek-v4-flash messages: 2 tools: 5
+stream-polyfill.js:134 [LineAI] Using XHR streaming fetch for: https://api.deepseek.com/v1/chat/completions
+ai.ts:90 [LineCode] OpenAI request messages: 2
+ai.ts:92 [LineCode] Message 0: {"role":"system","content":"用不超过10个字总结这段对话的主题，只输出标题，不要任何标点符号。"}
+ai.ts:92 [LineCode] Message 1: {"role":"user","content":"用户: 查看项目结构\n助手: "}
+ai.ts:94 [LineCode] OpenAI HTTP response status: 200 OK
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 647
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"role":"assistant","content":null,"reasoning_content":""},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 314
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"想"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"查看"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 1265
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"结构"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 8
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 323
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"了解一下"},"logprobs":null,"finish_re
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 317
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"当前"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 317
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"目录"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 314
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"下"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 637
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"有哪些"},"logprobs":null,"finish_rea
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 631
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"。"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 630
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"用"},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 626
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":" "},"logprobs":null,"finish_reaso
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 317
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"文件"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 631
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"读取"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 634
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"探索"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 631
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":null,"reasoning_content":"结构"},"logprobs":null,"finish_reas
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 400
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_00_zS2nWu3OuF4B1ih4tj0w1465","typ
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 994
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 6
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 660
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 659
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 4
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 330
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\""}}]},"logprobs":
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 329
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"logprobs":n
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 549
+ai.ts:153 [LineCode] OpenAI Stream raw: data: {"id":"cecf53bd-f6c5-4371-be49-365cf4d2b4e2","object":"chat.completion.chunk","created":1778439666,"model":"deepseek-v4-flash","system_fingerprint":"fp_058df29938_prod0820_fp8_kvcache_20260402","choices":[{"index":0,"delta":{"content":"","reasoning_content":null},"logprobs":null,"finish_reason
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: false value length: 14
+ai.ts:153 [LineCode] OpenAI Stream raw: data: [DONE]
+
+
+ai.ts:157 [LineCode] OpenAI Stream lines: 2
+ai.ts:146 [LineCode] OpenAI Stream read - done: true value length: 0
+ai.ts:148 [LineCode] OpenAI Stream done, blocks: 1 toolCallsMap: 1 full text: 

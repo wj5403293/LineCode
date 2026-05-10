@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ContentBlock, ToolCall } from '../../types';
+import { ContentBlock, ToolCall, ToolResult } from '../../types';
 import { colors, spacing, radius } from '../../constants/theme';
 import ThinkingBlock from './ThinkingBlock';
 import TextBlock from './TextBlock';
@@ -10,6 +10,7 @@ interface Props {
   content: string;
   blocks?: ContentBlock[];
   toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
   streaming?: boolean;
   codeWrap?: boolean;
   thinkingAutoExpand?: boolean;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export default React.memo(function AIBubbleCompact({
-  content, blocks, toolCalls, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable, homePath,
+  content, blocks, toolCalls, toolResults, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable, homePath,
 }: Props) {
   const renderContent = () => {
     if (blocks && blocks.length > 0) {
@@ -40,7 +41,17 @@ export default React.memo(function AIBubbleCompact({
             name: block.name,
             arguments: block.content || JSON.stringify(block.input || {}),
           };
-          return <ToolCallBlock key={i} toolCall={tc} homePath={homePath || ''} streaming={streaming && i === blocks.length - 1} />;
+          const tr = toolResults?.find(r => r.toolCallId === block.id);
+          return (
+            <ToolCallBlock
+              key={i}
+              toolCall={tc}
+              homePath={homePath || ''}
+              streaming={streaming && i === blocks.length - 1}
+              result={tr?.content}
+              isError={tr?.isError}
+            />
+          );
         }
         if (block.type === 'tool_result') {
           return null;
@@ -60,9 +71,18 @@ export default React.memo(function AIBubbleCompact({
       return (
         <>
           {content ? <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} /> : null}
-          {toolCalls.map((tc, i) => (
-            <ToolCallBlock key={i} toolCall={tc} homePath={homePath || ''} />
-          ))}
+          {toolCalls.map((tc, i) => {
+            const tr = toolResults?.find(r => r.toolCallId === tc.id);
+            return (
+              <ToolCallBlock
+                key={i}
+                toolCall={tc}
+                homePath={homePath || ''}
+                result={tr?.content}
+                isError={tr?.isError}
+              />
+            );
+          })}
         </>
       );
     }
