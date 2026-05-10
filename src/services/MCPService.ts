@@ -9,7 +9,7 @@ const DEFAULT_CONFIGS: MCPConfig[] = [
     name: '文件操作',
     description: '读取、写入和编辑文件',
     enabled: true,
-    tools: ['file_read', 'file_write', 'file_edit', 'glob'],
+    tools: ['file_read', 'file_write', 'file_edit', 'file_delete', 'glob'],
   },
   {
     id: 'http_server',
@@ -28,7 +28,13 @@ class MCPService {
 
     const json = await AsyncStorage.getItem(STORAGE_KEY);
     if (json) {
-      this.configs = JSON.parse(json);
+      const parsed = JSON.parse(json);
+      this.configs = parsed;
+      const fileOps = (parsed as MCPConfig[]).find(c => c.id === 'file_ops');
+      if (fileOps && !fileOps.tools.includes('file_delete')) {
+        fileOps.tools = ['file_read', 'file_write', 'file_edit', 'file_delete', 'glob'];
+        await this.save();
+      }
     } else {
       this.configs = DEFAULT_CONFIGS;
       await this.save();

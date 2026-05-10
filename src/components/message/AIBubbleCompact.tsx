@@ -46,8 +46,7 @@ export default React.memo(function AIBubbleCompact({
             <ToolCallBlock
               key={i}
               toolCall={tc}
-              homePath={homePath || ''}
-              streaming={streaming && i === blocks.length - 1}
+              homePath={homePath}
               result={tr?.content}
               isError={tr?.isError}
             />
@@ -77,7 +76,7 @@ export default React.memo(function AIBubbleCompact({
               <ToolCallBlock
                 key={i}
                 toolCall={tc}
-                homePath={homePath || ''}
+                homePath={homePath}
                 result={tr?.content}
                 isError={tr?.isError}
               />

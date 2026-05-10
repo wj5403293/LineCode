@@ -313,6 +313,11 @@ class AnthropicStreamProcessor extends StreamProcessor {
         });
       } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
         const content: any[] = [];
+        // DeepSeek Anthropic 格式要求：thinking 块必须在 tool_use 之前
+        if (msg.reasoningContent) {
+          console.log('[LineCode] Adding thinking block to Anthropic message:', msg.reasoningContent.substring(0, 50));
+          content.push({ type: 'thinking', thinking: msg.reasoningContent });
+        }
         if (msg.content) content.push({ type: 'text', text: msg.content });
         for (const tc of msg.toolCalls) {
           content.push({
@@ -322,7 +327,17 @@ class AnthropicStreamProcessor extends StreamProcessor {
             input: JSON.parse(tc.arguments),
           });
         }
+        console.log('[LineCode] Anthropic assistant message content blocks:', content.length);
         formatted.push({ role: 'assistant', content });
+      } else if (msg.role === 'assistant' && msg.reasoningContent) {
+        // 有 reasoningContent 但没有 toolCalls
+        formatted.push({
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: msg.reasoningContent },
+            ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
+          ],
+        });
       } else if (msg.role === 'user' || msg.role === 'assistant') {
         formatted.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
       }
@@ -444,10 +459,20 @@ class AIService {
     systemPrompt: string,
     history: ChatMessage[],
     toneMode: ToneMode = 'coding',
+    homePath?: string,
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
     const toolPrompt = await mcpService.buildToolPrompt();
-    const fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '') + (toolPrompt ? `\n\n${toolPrompt}` : '');
+    
+    let fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '');
+    
+    if (homePath) {
+      fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${homePath}\n所有文件操作都相对于此目录进行。`;
+    }
+    
+    if (toolPrompt) {
+      fullSystemPrompt += `\n\n${toolPrompt}`;
+    }
 
     if (fullSystemPrompt) {
       messages.push({ role: 'system', content: fullSystemPrompt });

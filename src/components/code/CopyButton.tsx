@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { Text, Pressable, StyleSheet, Clipboard } from 'react-native';
+import { Text, Pressable, StyleSheet } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { Copy, Check } from 'lucide-react-native';
 import { colors, fontSizes } from '../../constants/theme';
 

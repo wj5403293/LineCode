@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, Clipboard, Alert, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import Markdown from 'react-native-markdown-display';
 import { colors, spacing } from '../../constants/theme';
 import { mdStyle } from './markdownStyles';

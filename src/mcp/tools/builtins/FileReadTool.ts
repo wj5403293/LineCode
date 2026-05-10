@@ -25,6 +25,19 @@ export class FileReadTool extends BaseTool {
         return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
       }
 
+      let isDirectory = false;
+      try {
+        const items = await RNFS.readDir(filePath);
+        isDirectory = true;
+        const fileList = items.map(item => `${item.isDirectory() ? '📁' : '📄'} ${item.name}`).join('\n');
+        return { 
+          content: `这是一个目录，包含以下内容:\n${fileList}\n\n如需读取文件，请指定具体文件路径。`, 
+          toolCallId: '' 
+        };
+      } catch {
+        isDirectory = false;
+      }
+
       const content = await RNFS.readFile(filePath, 'utf8');
       const lines = content.split('\n');
       const offset = input.offset || 0;

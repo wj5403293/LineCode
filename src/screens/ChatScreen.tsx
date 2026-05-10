@@ -7,6 +7,7 @@ import InputBar from '../components/InputBar';
 import Dialog from '../components/Dialog';
 import EmptyState from '../components/EmptyState';
 import Sidebar from '../components/Sidebar';
+import BatchDeleteConfirm from '../components/BatchDeleteConfirm';
 import { Message } from '../types';
 import { colors, spacing } from '../constants/theme';
 import { PERMISSIONS, MORE_OPTIONS } from '../constants/options';
@@ -37,8 +38,9 @@ export default function ChatScreen({ onGoSettings }: Props) {
       displayMode={displayMode}
       thinkingAutoExpand={thinkingAutoExpand}
       thinkingScrollable={thinkingScrollable}
+      homePath={chat.homePath}
     />
-  ), [codeWrap, displayMode, thinkingAutoExpand, thinkingScrollable]);
+  ), [codeWrap, displayMode, thinkingAutoExpand, thinkingScrollable, chat.homePath]);
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
 
@@ -119,7 +121,7 @@ export default function ChatScreen({ onGoSettings }: Props) {
           windowSize={10}
         />
 
-        <InputBar onSend={chat.handleSend} streaming={chat.streamingRef.current} />
+        <InputBar onSend={chat.handleSend} onStop={chat.handleStop} streaming={chat.streaming} />
 
         <Dialog visible={dialog === 'project'} title="项目" options={projects} selectedId={selectedProject.id} onSelect={handleProjectDialogSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId="" onSelect={() => {}} onClose={closeDialog} />
@@ -131,6 +133,13 @@ export default function ChatScreen({ onGoSettings }: Props) {
           onClose={conversation.closeSidebar}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
+        />
+
+        <BatchDeleteConfirm
+          visible={!!chat.pendingToolCall}
+          toolCalls={chat.pendingToolCall?.toolCalls || []}
+          homePath={chat.homePath}
+          onConfirm={chat.handleToolConfirm}
         />
       </View>
     </>

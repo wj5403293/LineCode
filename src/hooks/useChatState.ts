@@ -1,20 +1,34 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
-import { Message, Model, ContentBlock } from '../types';
+import { Message, Model, ContentBlock, ToolCall } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage } from '../services/ai';
 import { conversationStore } from '../services/conversation';
 import { ToneMode } from '../services/settings';
-import { executeTool } from '../mcp/ToolExecutor';
+import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor';
+
+interface PendingToolCall {
+  toolCalls: ToolCall[];
+  localMessages: Message[];
+  text: string;
+}
 
 export function useChatState(toneMode: ToneMode) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [model, setModel] = useState<Model | null>(null);
   const [loading, setLoading] = useState(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [pendingToolCall, setPendingToolCall] = useState<PendingToolCall | null>(null);
+  const [homePath, setHomePath] = useState<string>('');
+  const [streaming, setStreaming] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const streamingRef = useRef(false);
   const atBottomRef = useRef(true);
+  const abortRef = useRef(false);
+
+  useEffect(() => {
+    getHomePath().then(setHomePath);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -112,11 +126,19 @@ export function useChatState(toneMode: ToneMode) {
     // 追加用户消息
     setMessages(prev => [...prev, userMsg]);
     streamingRef.current = true;
+    setStreaming(true);
+    abortRef.current = false;
 
     // 本地消息累加器（包含 tool_calls 和 tool_result）
     const localMessages: Message[] = [...messages, userMsg];
     try {
       while (true) {
+        // 检查是否被终止
+        if (abortRef.current) {
+          console.log('[LineCode] Aborted by user');
+          break;
+        }
+
         console.log('[LineCode] Loop iteration, localMessages:', localMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 50), toolCalls: m.toolCalls?.length, toolCallId: m.toolCallId })));
         
         // 创建 AI 消息占位符
@@ -128,7 +150,7 @@ export function useChatState(toneMode: ToneMode) {
         setMessages(prev => [...prev, aiPlaceholder]);
 
         // 构建 API 消息
-        const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode);
+        const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
         console.log('[LineCode] Built chatMessages:', chatMessages.length);
 
         // 调用 AI
@@ -189,8 +211,18 @@ export function useChatState(toneMode: ToneMode) {
 
         console.log('[LineCode] Found tool_calls:', result.toolCalls.length);
 
-        // 有 tool_calls → 逐个执行工具
+        const confirmToolCalls: ToolCall[] = [];
+        const normalToolCalls: ToolCall[] = [];
+        
         for (const tc of result.toolCalls) {
+          if (needsConfirmation(tc)) {
+            confirmToolCalls.push(tc);
+          } else {
+            normalToolCalls.push(tc);
+          }
+        }
+
+        for (const tc of normalToolCalls) {
           console.log('[LineCode] Executing tool:', tc.name, 'id:', tc.id);
           const toolResult = await executeTool(tc);
           console.log('[LineCode] Tool result:', toolResult.content?.substring(0, 100));
@@ -204,12 +236,10 @@ export function useChatState(toneMode: ToneMode) {
             toolName: tc.name,
           };
 
-          // 追加 tool_result 到消息列表
           localMessages.push(toolMsg);
           console.log('[LineCode] localMessages length:', localMessages.length);
           setMessages(prev => {
             const updated = [...prev, toolMsg];
-            // 将 toolResult 关联到对应的 assistant 消息
             return updated.map(m => {
               if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
                 const existingResults = m.toolResults || [];
@@ -225,6 +255,13 @@ export function useChatState(toneMode: ToneMode) {
               return m;
             });
           });
+        }
+
+        if (confirmToolCalls.length > 0) {
+          console.log('[LineCode] Tools need confirmation:', confirmToolCalls.map(t => t.name));
+          setPendingToolCall({ toolCalls: confirmToolCalls, localMessages: [...localMessages], text });
+          streamingRef.current = false;
+          return;
         }
 
         console.log('[LineCode] Continuing loop with', localMessages.length, 'messages');
@@ -250,10 +287,190 @@ export function useChatState(toneMode: ToneMode) {
       });
     } finally {
       streamingRef.current = false;
+      setStreaming(false);
     }
   }, [model, messages, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages]);
 
+  const handleStop = useCallback(() => {
+    abortRef.current = true;
+    streamingRef.current = false;
+    setStreaming(false);
+    setPendingToolCall(null);
+  }, []);
+
   const clearMessages = useCallback(() => setMessages([]), []);
+
+  const handleToolConfirm = useCallback(async (confirmed: boolean) => {
+    if (!pendingToolCall || !model) return;
+
+    const { toolCalls, localMessages, text } = pendingToolCall;
+    setPendingToolCall(null);
+
+    if (!confirmed) {
+      for (const tc of toolCalls) {
+        const cancelMsg: Message = {
+          id: `tool_${tc.id}_${Date.now()}`,
+          role: 'tool',
+          content: '用户取消了此操作',
+          toolCallId: tc.id,
+          timestamp: Date.now(),
+          toolName: tc.name,
+        };
+        localMessages.push(cancelMsg);
+        setMessages(prev => [...prev, cancelMsg]);
+      }
+      streamingRef.current = false;
+      return;
+    }
+
+    streamingRef.current = true;
+    console.log('[LineCode] User confirmed, executing tools:', toolCalls.map(t => t.name));
+
+    for (const tc of toolCalls) {
+      console.log('[LineCode] Executing tool:', tc.name, 'id:', tc.id);
+      const toolResult = await executeTool(tc);
+      console.log('[LineCode] Tool result:', toolResult.content?.substring(0, 100));
+
+      const toolMsg: Message = {
+        id: `tool_${tc.id}_${Date.now()}`,
+        role: 'tool',
+        content: toolResult.content,
+        toolCallId: tc.id,
+        timestamp: Date.now(),
+        toolName: tc.name,
+      };
+
+      localMessages.push(toolMsg);
+      setMessages(prev => {
+        const updated = [...prev, toolMsg];
+        return updated.map(m => {
+          if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
+            const existingResults = m.toolResults || [];
+            return {
+              ...m,
+              toolResults: [...existingResults, {
+                toolCallId: tc.id,
+                content: toolResult.content,
+                isError: toolResult.isError,
+              }],
+            };
+          }
+          return m;
+        });
+      });
+    }
+
+    try {
+      while (true) {
+        const aiId = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const aiPlaceholder: Message = {
+          id: aiId, role: 'assistant', content: '', blocks: [], timestamp: Date.now(), streaming: true,
+        };
+        setMessages(prev => [...prev, aiPlaceholder]);
+
+        const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
+        const result = await aiService.sendMessage(model, chatMessages, {
+          onBlocks: (blocks) => {
+            setMessages(prev => prev.map(m =>
+              m.id === aiId ? { ...m, blocks, content: blocks.filter(b => b.type === 'text').map(b => b.content).join('') } : m,
+            ));
+            scrollToBottom(false);
+          },
+          onToolCallDetected: (toolCallInfo) => {
+            setMessages(prev => prev.map(m => {
+              if (m.id === aiId) {
+                const existingBlocks = m.blocks || [];
+                const hasToolBlock = existingBlocks.some(b => b.type === 'tool_use' && b.id === toolCallInfo.id);
+                if (!hasToolBlock) {
+                  const newBlock: ContentBlock = {
+                    type: 'tool_use',
+                    id: toolCallInfo.id,
+                    name: toolCallInfo.name,
+                    content: '',
+                  };
+                  return { ...m, blocks: [...existingBlocks, newBlock] };
+                }
+              }
+              return m;
+            }));
+            scrollToBottom(false);
+          },
+        });
+
+        const assistantMsg: Message = {
+          id: aiId,
+          role: 'assistant',
+          content: result.text,
+          blocks: result.blocks,
+          toolCalls: result.toolCalls,
+          timestamp: Date.now(),
+          streaming: false,
+          reasoningContent: result.reasoningContent,
+        };
+
+        setMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m));
+        localMessages.push(assistantMsg);
+
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          if (messages.length === 0) {
+            summarizeTitle(model, text, result.text);
+          }
+          break;
+        }
+
+        const confirmToolCalls: ToolCall[] = [];
+        const normalToolCalls: ToolCall[] = [];
+        
+        for (const tc of result.toolCalls) {
+          if (needsConfirmation(tc)) {
+            confirmToolCalls.push(tc);
+          } else {
+            normalToolCalls.push(tc);
+          }
+        }
+
+        for (const tc of normalToolCalls) {
+          const toolResult = await executeTool(tc);
+          const toolMsg: Message = {
+            id: `tool_${tc.id}_${Date.now()}`,
+            role: 'tool',
+            content: toolResult.content,
+            toolCallId: tc.id,
+            timestamp: Date.now(),
+            toolName: tc.name,
+          };
+          localMessages.push(toolMsg);
+          setMessages(prev => {
+            const updated = [...prev, toolMsg];
+            return updated.map(m => {
+              if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
+                const existingResults = m.toolResults || [];
+                return {
+                  ...m,
+                  toolResults: [...existingResults, {
+                    toolCallId: tc.id,
+                    content: toolResult.content,
+                    isError: toolResult.isError,
+                  }],
+                };
+              }
+              return m;
+            });
+          });
+        }
+
+        if (confirmToolCalls.length > 0) {
+          setPendingToolCall({ toolCalls: confirmToolCalls, localMessages: [...localMessages], text });
+          streamingRef.current = false;
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.error('[LineCode] handleToolConfirm error:', err);
+    } finally {
+      streamingRef.current = false;
+    }
+  }, [pendingToolCall, model, messages, toneMode, toChatMessages, scrollToBottom, summarizeTitle]);
 
   return {
     messages,
@@ -263,10 +480,14 @@ export function useChatState(toneMode: ToneMode) {
     conversationId,
     setConversationId,
     flatListRef,
-    streamingRef,
+    streaming,
     handleSend,
+    handleStop,
     scrollToBottom,
     handleScroll,
     clearMessages,
+    pendingToolCall,
+    homePath,
+    handleToolConfirm,
   };
 }

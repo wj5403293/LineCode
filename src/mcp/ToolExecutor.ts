@@ -91,5 +91,7 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
 export function needsConfirmation(toolCall: ToolCall): boolean {
   const registry = createDefaultRegistry();
   const tool = registry.get(toolCall.name);
-  return tool?.requiresConfirmation ?? false;
+  const result = tool?.requiresConfirmation ?? false;
+  console.log('[LineCode] needsConfirmation check:', toolCall.name, '->', result, 'tool exists:', !!tool);
+  return result;
 }

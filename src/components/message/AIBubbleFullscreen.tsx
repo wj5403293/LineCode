@@ -47,15 +47,14 @@ export default React.memo(function AIBubbleFullscreen({
               <ToolCallBlock
                 key={i}
                 toolCall={tc}
-                homePath={homePath || ''}
-                streaming={streaming && i === blocks.length - 1}
+                homePath={homePath}
                 result={tr?.content}
                 isError={tr?.isError}
               />
             );
           }
           if (block.type === 'tool_result') {
-            return null; // results are shown inline with tool_use
+            return null;
           }
           return (
             <TextBlock
@@ -70,7 +69,6 @@ export default React.memo(function AIBubbleFullscreen({
     );
   }
 
-  // 也支持通过 toolCalls 属性渲染
   if (toolCalls && toolCalls.length > 0) {
     return (
       <View style={styles.row}>
@@ -81,7 +79,7 @@ export default React.memo(function AIBubbleFullscreen({
             <ToolCallBlock
               key={i}
               toolCall={tc}
-              homePath={homePath || ''}
+              homePath={homePath}
               result={tr?.content}
               isError={tr?.isError}
             />

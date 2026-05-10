@@ -4,9 +4,6 @@ import { DisplayMode } from '../services/settings';
 import UserBubble from './message/UserBubble';
 import AIBubbleFullscreen from './message/AIBubbleFullscreen';
 import AIBubbleCompact from './message/AIBubbleCompact';
-import RNFS from 'react-native-fs';
-
-const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
 
 interface Props {
   message: Message;
@@ -14,19 +11,19 @@ interface Props {
   displayMode?: DisplayMode;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
+  homePath?: string;
 }
 
 const MemoizedUserBubble = React.memo(UserBubble);
 const MemoizedAIBubbleFullscreen = React.memo(AIBubbleFullscreen);
 const MemoizedAIBubbleCompact = React.memo(AIBubbleCompact);
 
-function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinkingAutoExpand, thinkingScrollable }: Props) {
+function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinkingAutoExpand, thinkingScrollable, homePath }: Props) {
   if (message.role === 'user') {
     return <MemoizedUserBubble content={message.content} />;
   }
 
   if (message.role === 'tool') {
-    // tool result 消息不单独渲染，已内联在 tool_use 中
     return null;
   }
 
@@ -40,7 +37,7 @@ function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinking
         codeWrap={codeWrap}
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
-        homePath={HOME_DIR}
+        homePath={homePath}
       />
     : <MemoizedAIBubbleCompact
         content={message.content}
@@ -51,7 +48,7 @@ function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinking
         codeWrap={codeWrap}
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
-        homePath={HOME_DIR}
+        homePath={homePath}
       />;
 }
 

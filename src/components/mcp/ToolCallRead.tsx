@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Clipboard, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { Eye, AlertCircle } from 'lucide-react-native';
 import { colors, spacing, fontSizes } from '../../constants/theme';
 
