@@ -2,11 +2,15 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Modal, Animated as RNAnimated,
 } from 'react-native';
-import { Plus, X, Trash2, MessageSquare } from 'lucide-react-native';
+import { Plus, X, Trash2, MessageSquare, FolderOpen, Archive } from 'lucide-react-native';
+import RNFS from 'react-native-fs';
 import { Conversation, conversationStore } from '../services/conversation';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import FileTree from './FileTree';
 
 const SIDEBAR_WIDTH = 300;
+
+type TabType = 'conversations' | 'files';
 
 interface Props {
   visible: boolean;
@@ -15,6 +19,8 @@ interface Props {
   onSelect: (id: string) => void;
   onNew: () => void;
 }
+
+const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
 
 const ConversationItem = React.memo(function ConversationItem({
   item, isActive, onSelect, onDelete,
@@ -51,6 +57,7 @@ const ConversationItem = React.memo(function ConversationItem({
 
 export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const slideAnim = useRef(new RNAnimated.Value(-SIDEBAR_WIDTH)).current;
   const backdropAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -80,6 +87,22 @@ export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }
     setConversations(prev => prev.filter(c => c.id !== id));
   }, []);
 
+  const [exportResult, setExportResult] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportZip = useCallback(async () => {
+    try {
+      const zipPath = `${RNFS.DocumentDirectoryPath}/linecode_home_export.zip`;
+      const { zip } = require('react-native-zip-archive');
+      await zip(HOME_DIR, zipPath);
+      setExportResult(zipPath);
+      setExportError(null);
+    } catch (err: any) {
+      setExportError(err.message);
+      setExportResult(null);
+    }
+  }, []);
+
   const renderItem = useCallback(({ item }: { item: Conversation }) => (
     <ConversationItem
       item={item}
@@ -99,31 +122,76 @@ export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }
         </RNAnimated.View>
         <RNAnimated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>对话历史</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={20} color={colors.text} />
+            <Text style={styles.headerTitle}>
+              {activeTab === 'conversations' ? '对话历史' : '文件管理器'}
+            </Text>
+            <View style={styles.headerActions}>
+              {activeTab === 'files' && (
+                <TouchableOpacity onPress={handleExportZip} style={styles.exportBtn}>
+                  <Archive size={16} color={colors.accent} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                <X size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.tabs}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'conversations' && styles.tabActive]}
+              onPress={() => setActiveTab('conversations')}
+            >
+              <MessageSquare size={14} color={activeTab === 'conversations' ? colors.accent : colors.textTertiary} />
+              <Text style={[styles.tabText, activeTab === 'conversations' && styles.tabTextActive]}>对话</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'files' && styles.tabActive]}
+              onPress={() => setActiveTab('files')}
+            >
+              <FolderOpen size={14} color={activeTab === 'files' ? colors.accent : colors.textTertiary} />
+              <Text style={[styles.tabText, activeTab === 'files' && styles.tabTextActive]}>文件</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.newBtn} onPress={onNew} activeOpacity={0.7}>
-            <Plus size={18} color="#000" />
-            <Text style={styles.newBtnText}>新建对话</Text>
-          </TouchableOpacity>
+          {activeTab === 'conversations' ? (
+            <>
+              <TouchableOpacity style={styles.newBtn} onPress={onNew} activeOpacity={0.7}>
+                <Plus size={18} color="#000" />
+                <Text style={styles.newBtnText}>新建对话</Text>
+              </TouchableOpacity>
 
-          {conversations.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>暂无对话记录</Text>
-            </View>
+              {conversations.length === 0 ? (
+                <View style={styles.empty}>
+                  <Text style={styles.emptyText}>暂无对话记录</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={conversations}
+                  renderItem={renderItem}
+                  keyExtractor={keyExtractor}
+                  contentContainerStyle={styles.list}
+                />
+              )}
+            </>
           ) : (
-            <FlatList
-              data={conversations}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              contentContainerStyle={styles.list}
-            />
+            <FileTree homePath={HOME_DIR} onExport={handleExportZip} />
           )}
         </RNAnimated.View>
       </View>
+
+      {/* 导出结果弹窗 */}
+      <Modal visible={!!exportResult || !!exportError} transparent animationType="fade" onRequestClose={() => { setExportResult(null); setExportError(null); }}>
+        <View style={styles.exportOverlay}>
+          <View style={styles.exportModal}>
+            <Text style={styles.exportTitle}>{exportError ? '导出失败' : '导出成功'}</Text>
+            <Text style={styles.exportPath}>{exportError || exportResult}</Text>
+            <TouchableOpacity style={styles.exportCloseBtn} onPress={() => { setExportResult(null); setExportError(null); }}>
+              <Text style={styles.exportCloseText}>确定</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -158,11 +226,44 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.lg,
     fontWeight: '700',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   closeBtn: {
     width: 32,
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tabs: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: radius.sm,
+    padding: 2,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm - 2,
+  },
+  tabActive: {
+    backgroundColor: colors.surfaceElevated,
+  },
+  tabText: {
+    color: colors.textTertiary,
+    fontSize: fontSizes.sm,
+  },
+  tabTextActive: {
+    color: colors.accent,
+    fontWeight: '600',
   },
   newBtn: {
     flexDirection: 'row',
@@ -229,5 +330,50 @@ const styles = StyleSheet.create({
   emptyText: {
     color: colors.textTertiary,
     fontSize: fontSizes.sm,
+  },
+  exportBtn: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  exportModal: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 280,
+    alignItems: 'center',
+  },
+  exportTitle: {
+    color: colors.text,
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  exportPath: {
+    color: colors.textSecondary,
+    fontSize: fontSizes.sm,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    fontFamily: 'monospace',
+  },
+  exportCloseBtn: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  exportCloseText: {
+    color: '#FFF',
+    fontSize: fontSizes.md,
+    fontWeight: '600',
   },
 });

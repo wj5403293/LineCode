@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, ActivityIndicator, TouchableOpacity, Clipboard, Alert, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { colors, spacing } from '../../constants/theme';
 import { mdStyle } from './markdownStyles';
@@ -13,6 +13,11 @@ interface Props {
 
 export default React.memo(function TextBlock({ content, streaming, codeWrap }: Props) {
   if (!content && !streaming) return null;
+
+  const handleLongPress = useCallback(() => {
+    Clipboard.setString(content);
+    Alert.alert('已复制', '文本已复制到剪贴板');
+  }, [content]);
 
   const customRules = {
     fence: (node: any) => {
@@ -34,7 +39,11 @@ export default React.memo(function TextBlock({ content, streaming, codeWrap }: P
     );
   }
 
-  return <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>;
+  return (
+    <TouchableOpacity activeOpacity={0.8} onLongPress={handleLongPress}>
+      <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
+    </TouchableOpacity>
+  );
 });
 
 const styles = StyleSheet.create({

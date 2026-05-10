@@ -6,6 +6,7 @@ import ModelListScreen from '../screens/ModelListScreen';
 import ModelAddScreen from '../screens/ModelAddScreen';
 import OutputSettingsScreen from '../screens/OutputSettingsScreen';
 import LLMSettingsScreen from '../screens/LLMSettingsScreen';
+import MCPSettingsScreen from '../screens/MCPSettingsScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -14,6 +15,7 @@ export type RootStackParamList = {
   ModelAdd: undefined;
   OutputSettings: undefined;
   LLMSettings: undefined;
+  MCPSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -38,6 +40,7 @@ export default function RootNavigator() {
             onModels={() => navigation.navigate('ModelList')}
             onOutput={() => navigation.navigate('OutputSettings')}
             onLLM={() => navigation.navigate('LLMSettings')}
+            onMCP={() => navigation.navigate('MCPSettings')}
           />
         )}
       </Stack.Screen>
@@ -63,6 +66,11 @@ export default function RootNavigator() {
       <Stack.Screen name="LLMSettings">
         {({ navigation }) => (
           <LLMSettingsScreen onBack={() => navigation.goBack()} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="MCPSettings">
+        {({ navigation }) => (
+          <MCPSettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
     </Stack.Navigator>

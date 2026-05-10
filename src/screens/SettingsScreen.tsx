@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Box, Monitor, Cpu, Brain } from 'lucide-react-native';
+import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench } from 'lucide-react-native';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -10,22 +10,25 @@ interface Props {
   onModels: () => void;
   onOutput: () => void;
   onLLM: () => void;
+  onMCP: () => void;
 }
 
 const SETTINGS_ITEMS = [
   { id: 'models', label: '模型管理', desc: '添加、删除和切换模型', icon: Box },
   { id: 'llm', label: 'LLM 设置', desc: '显示模式和交流语气', icon: Brain },
+  { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
   { id: 'about', label: '关于', desc: 'LineCode v1.0.0-alpha.1', icon: Cpu },
 ];
 
-export default function SettingsScreen({ onBack, onModels, onOutput, onLLM }: Props) {
+export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP }: Props) {
   const insets = useSafeAreaInsets();
 
   const handlePress = (id: string) => {
     if (id === 'models') onModels();
     if (id === 'output') onOutput();
     if (id === 'llm') onLLM();
+    if (id === 'mcp') onMCP();
   };
 
   return (

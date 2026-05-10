@@ -97,6 +97,6 @@ const styles = StyleSheet.create({
   },
   stopBtn: {
     backgroundColor: '#FF453A',
-    borderRadius: 6,
+    borderRadius: 16,
   },
 });

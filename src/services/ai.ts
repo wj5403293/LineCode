@@ -1,6 +1,7 @@
-import { Model, ContentBlock, MessageRole } from '../types';
+import { Model, ContentBlock, MessageRole, ToolCall } from '../types';
 import { SYSTEM_PROMPT } from '../constants/prompt';
 import { ToneMode } from './settings';
+import { mcpService } from './MCPService';
 
 export { SYSTEM_PROMPT };
 
@@ -9,10 +10,12 @@ export interface ChatMessage {
   content: string;
   toolCallId?: string;
   toolName?: string;
+  toolCalls?: ToolCall[];
 }
 
 interface StreamCallbacks {
   onBlocks?: (blocks: ContentBlock[]) => void;
+  onToolCalls?: (toolCalls: ToolCall[]) => void;
 }
 
 const TONE_PROMPTS: Record<ToneMode, string> = {
@@ -39,8 +42,9 @@ abstract class StreamProcessor {
   abstract process(
     model: Model,
     messages: ChatMessage[],
+    tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }>;
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }>;
 
   protected createReader(res: Response): ReadableStreamDefaultReader<Uint8Array> {
     const reader = (res as any).body?.getReader();
@@ -57,9 +61,21 @@ class OpenAIStreamProcessor extends StreamProcessor {
   async process(
     model: Model,
     messages: ChatMessage[],
+    tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
     const baseUrl = model.baseUrl || 'https://api.openai.com/v1';
+
+    const body: any = {
+      model: model.modelId,
+      messages: this.formatMessages(messages),
+      stream: true,
+    };
+
+    if (tools.length > 0) {
+      body.tools = tools;
+      body.tool_choice = 'auto';
+    }
 
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -67,11 +83,7 @@ class OpenAIStreamProcessor extends StreamProcessor {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${model.apiKey}`,
       },
-      body: JSON.stringify({
-        model: model.modelId,
-        messages: this.formatMessages(messages),
-        stream: true,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -82,24 +94,39 @@ class OpenAIStreamProcessor extends StreamProcessor {
     return this.readStream(res, callbacks);
   }
 
-  private formatMessages(messages: ChatMessage[]): { role: string; content: string }[] {
-    return messages
-      .filter(m => m.role !== 'tool')
-      .map(m => ({
-        role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content,
-      }));
+  private formatMessages(messages: ChatMessage[]): any[] {
+    return messages.map(m => {
+      if (m.role === 'system') {
+        return { role: 'system', content: m.content };
+      }
+      if (m.role === 'tool') {
+        return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+      }
+      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: 'assistant',
+          content: m.content || null,
+          tool_calls: m.toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        };
+      }
+      return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content };
+    });
   }
 
   private async readStream(
     res: Response,
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
     const reader = this.createReader(res);
     const decoder = this.createDecoder();
     let full = '';
     let buffer = '';
     const blocks: ContentBlock[] = [{ type: 'text', content: '' }];
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
 
     while (true) {
       const { done, value } = await reader.read();
@@ -113,16 +140,44 @@ class OpenAIStreamProcessor extends StreamProcessor {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const json = JSON.parse(line.slice(6));
-            const delta = json.choices?.[0]?.delta?.content || '';
-            full += delta;
-            blocks[blocks.length - 1].content = full;
-            callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            const delta = json.choices?.[0]?.delta;
+
+            if (delta?.content) {
+              full += delta.content;
+              blocks[blocks.length - 1].content = full;
+              callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            }
+
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                if (!toolCallsMap.has(idx)) {
+                  toolCallsMap.set(idx, { id: tc.id || '', name: '', arguments: '' });
+                }
+                const existing = toolCallsMap.get(idx)!;
+                if (tc.id) existing.id = tc.id;
+                if (tc.function?.name) existing.name = tc.function.name;
+                if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              }
+            }
           } catch {}
         }
       }
     }
 
-    return { text: full, blocks };
+    const toolCalls = toolCallsMap.size > 0
+      ? Array.from(toolCallsMap.values()).map(tc => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.arguments,
+        }))
+      : [];
+
+    if (toolCalls.length > 0) {
+      callbacks?.onToolCalls?.(toolCalls);
+    }
+
+    return { text: full, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
   }
 }
 
@@ -130,8 +185,9 @@ class AnthropicStreamProcessor extends StreamProcessor {
   async process(
     model: Model,
     messages: ChatMessage[],
+    tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
     const baseUrl = model.baseUrl || 'https://api.anthropic.com';
     const { system, messages: userMessages } = this.formatMessages(messages);
 
@@ -142,11 +198,15 @@ class AnthropicStreamProcessor extends StreamProcessor {
       stream: true,
     };
 
-    if (system) {
-      body.system = system;
-    }
+    if (system) body.system = system;
 
-    console.log('[LineCode] Anthropic request:', { model: model.modelId, messageCount: userMessages.length, hasSystem: !!system });
+    if (tools.length > 0) {
+      body.tools = tools.map((t: any) => ({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters,
+      }));
+    }
 
     const res = await fetch(`${baseUrl}/v1/messages`, {
       method: 'POST',
@@ -168,16 +228,37 @@ class AnthropicStreamProcessor extends StreamProcessor {
 
   private formatMessages(messages: ChatMessage[]): {
     system?: string;
-    messages: { role: 'user' | 'assistant'; content: string }[];
+    messages: { role: 'user' | 'assistant'; content: any }[];
   } {
     let system: string | undefined;
-    const formatted: { role: 'user' | 'assistant'; content: string }[] = [];
+    const formatted: { role: 'user' | 'assistant'; content: any }[] = [];
 
     for (const msg of messages) {
       if (msg.role === 'system') {
         system = msg.content;
+      } else if (msg.role === 'tool') {
+        formatted.push({
+          role: 'user',
+          content: [{
+            type: 'tool_result',
+            tool_use_id: msg.toolCallId,
+            content: msg.content,
+          }],
+        });
+      } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        const content: any[] = [];
+        if (msg.content) content.push({ type: 'text', text: msg.content });
+        for (const tc of msg.toolCalls) {
+          content.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: JSON.parse(tc.arguments),
+          });
+        }
+        formatted.push({ role: 'assistant', content });
       } else if (msg.role === 'user' || msg.role === 'assistant') {
-        formatted.push({ role: msg.role, content: msg.content });
+        formatted.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
       }
     }
 
@@ -187,17 +268,19 @@ class AnthropicStreamProcessor extends StreamProcessor {
   private async readStream(
     res: Response,
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
     const reader = this.createReader(res);
     const decoder = this.createDecoder();
     let buffer = '';
     const blocks: ContentBlock[] = [];
-    let currentBlockType: 'thinking' | 'text' | null = null;
+    let currentBlockType: 'thinking' | 'text' | 'tool_use' | null = null;
     let currentBlockIndex = -1;
+    const toolCalls: ToolCall[] = [];
+    let currentToolCall: { id: string; name: string; input: string } | null = null;
 
-    const ensureBlock = (type: 'thinking' | 'text'): number => {
+    const ensureBlock = (type: 'thinking' | 'text' | 'tool_use'): number => {
       if (currentBlockType !== type) {
-        blocks.push({ type, content: '' });
+        blocks.push({ type: type === 'tool_use' ? 'tool_use' : type, content: '' });
         currentBlockType = type;
         currentBlockIndex = blocks.length - 1;
       }
@@ -222,8 +305,20 @@ class AnthropicStreamProcessor extends StreamProcessor {
 
           if (json.type === 'content_block_start') {
             const blockType = json.content_block?.type;
-            if (blockType === 'thinking') ensureBlock('thinking');
-            else if (blockType === 'text') ensureBlock('text');
+            if (blockType === 'thinking') {
+              ensureBlock('thinking');
+            } else if (blockType === 'text') {
+              ensureBlock('text');
+            } else if (blockType === 'tool_use') {
+              currentToolCall = {
+                id: json.content_block.id,
+                name: json.content_block.name,
+                input: '',
+              };
+              ensureBlock('tool_use');
+              blocks[currentBlockIndex].id = json.content_block.id;
+              blocks[currentBlockIndex].name = json.content_block.name;
+            }
           } else if (json.type === 'content_block_delta') {
             if (json.delta?.type === 'thinking_delta') {
               const idx = ensureBlock('thinking');
@@ -233,17 +328,33 @@ class AnthropicStreamProcessor extends StreamProcessor {
               const idx = ensureBlock('text');
               blocks[idx].content += json.delta.text || '';
               callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            } else if (json.delta?.type === 'input_json_delta') {
+              if (currentToolCall) {
+                currentToolCall.input += json.delta.partial_json || '';
+              }
             }
           } else if (json.type === 'content_block_stop') {
+            if (currentToolCall) {
+              toolCalls.push({
+                id: currentToolCall.id,
+                name: currentToolCall.name,
+                arguments: currentToolCall.input || '{}',
+              });
+              blocks[currentBlockIndex].content = currentToolCall.input || '{}';
+              currentToolCall = null;
+            }
             currentBlockType = null;
           }
         } catch {}
       }
     }
 
+    if (toolCalls.length > 0) {
+      callbacks?.onToolCalls?.(toolCalls);
+    }
+
     const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
-    console.log('[LineCode] Stream done. Blocks:', blocks.length, 'Text:', fullText.length);
-    return { text: fullText, blocks };
+    return { text: fullText, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined };
   }
 }
 
@@ -253,20 +364,26 @@ class AIService {
     anthropic: new AnthropicStreamProcessor(),
   };
 
-  buildMessages(
+  async buildMessages(
     systemPrompt: string,
-    history: { role: MessageRole; content: string }[],
+    history: ChatMessage[],
     toneMode: ToneMode = 'coding',
-  ): ChatMessage[] {
+  ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
-    const fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '');
+    const toolPrompt = await mcpService.buildToolPrompt();
+    const fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '') + (toolPrompt ? `\n\n${toolPrompt}` : '');
 
     if (fullSystemPrompt) {
       messages.push({ role: 'system', content: fullSystemPrompt });
     }
 
     for (const msg of history) {
-      messages.push({ role: msg.role, content: msg.content });
+      messages.push({
+        role: msg.role,
+        content: msg.content,
+        toolCalls: msg.toolCalls,
+        toolCallId: msg.toolCallId,
+      });
     }
 
     return messages;
@@ -276,16 +393,30 @@ class AIService {
     model: Model,
     messages: ChatMessage[],
     callbacks?: StreamCallbacks,
-  ): Promise<{ text: string; blocks: ContentBlock[] }> {
-    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length);
+  ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[] }> {
+    const { createDefaultRegistry } = await import('../mcp/tools');
+    const registry = createDefaultRegistry();
+    const enabledTools = await mcpService.getEnabledTools();
+    const tools = registry.toJSONSchema(enabledTools);
+
+    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length);
     try {
       const processor = this.processors[model.provider];
       if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
-      return await processor.process(model, messages, callbacks);
+      return await processor.process(model, messages, tools, callbacks);
     } catch (err) {
       console.error('[LineCode] API error:', err);
       throw err;
     }
+  }
+
+  convertToChatMessages(messages: { role: MessageRole; content: string; toolCalls?: ToolCall[]; toolCallId?: string }[]): ChatMessage[] {
+    return messages.map(m => ({
+      role: m.role,
+      content: m.content,
+      toolCalls: m.toolCalls,
+      toolCallId: m.toolCallId,
+    }));
   }
 }
 

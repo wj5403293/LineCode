@@ -1,49 +1,74 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { ContentBlock } from '../../types';
+import { ContentBlock, ToolCall } from '../../types';
 import { colors, spacing, radius } from '../../constants/theme';
 import ThinkingBlock from './ThinkingBlock';
 import TextBlock from './TextBlock';
+import ToolCallBlock from '../mcp/ToolCallBlock';
 
 interface Props {
   content: string;
   blocks?: ContentBlock[];
+  toolCalls?: ToolCall[];
   streaming?: boolean;
   codeWrap?: boolean;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
+  homePath?: string;
 }
 
 export default React.memo(function AIBubbleCompact({
-  content, blocks, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable,
+  content, blocks, toolCalls, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable, homePath,
 }: Props) {
-  if (blocks && blocks.length > 0) {
-    return (
-      <View style={styles.row}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>AI</Text>
-        </View>
-        <View style={styles.bubble}>
-          {blocks.map((block, i) => (
-            block.type === 'thinking'
-              ? <ThinkingBlock
-                  key={i}
-                  content={block.content}
-                  streaming={streaming && i === blocks.length - 1}
-                  autoExpand={thinkingAutoExpand}
-                  scrollable={thinkingScrollable}
-                />
-              : <TextBlock
-                  key={i}
-                  content={block.content}
-                  streaming={streaming && i === blocks.length - 1}
-                  codeWrap={codeWrap}
-                />
+  const renderContent = () => {
+    if (blocks && blocks.length > 0) {
+      return blocks.map((block, i) => {
+        if (block.type === 'thinking') {
+          return (
+            <ThinkingBlock
+              key={i}
+              content={block.content}
+              streaming={streaming && i === blocks.length - 1}
+              autoExpand={thinkingAutoExpand}
+              scrollable={thinkingScrollable}
+            />
+          );
+        }
+        if (block.type === 'tool_use' && block.id && block.name) {
+          const tc: ToolCall = {
+            id: block.id,
+            name: block.name,
+            arguments: block.content || JSON.stringify(block.input || {}),
+          };
+          return <ToolCallBlock key={i} toolCall={tc} homePath={homePath || ''} streaming={streaming && i === blocks.length - 1} />;
+        }
+        if (block.type === 'tool_result') {
+          return null;
+        }
+        return (
+          <TextBlock
+            key={i}
+            content={block.content}
+            streaming={streaming && i === blocks.length - 1}
+            codeWrap={codeWrap}
+          />
+        );
+      });
+    }
+
+    if (toolCalls && toolCalls.length > 0) {
+      return (
+        <>
+          {content ? <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} /> : null}
+          {toolCalls.map((tc, i) => (
+            <ToolCallBlock key={i} toolCall={tc} homePath={homePath || ''} />
           ))}
-        </View>
-      </View>
-    );
-  }
+        </>
+      );
+    }
+
+    return <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />;
+  };
 
   return (
     <View style={styles.row}>
@@ -51,7 +76,7 @@ export default React.memo(function AIBubbleCompact({
         <Text style={styles.avatarText}>AI</Text>
       </View>
       <View style={styles.bubble}>
-        <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+        {renderContent()}
       </View>
     </View>
   );
