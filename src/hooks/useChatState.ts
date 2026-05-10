@@ -182,18 +182,19 @@ export function useChatState(toneMode: ToneMode) {
       }
     } catch (err: any) {
       console.error('[LineCode] sendMessage error:', err);
+      const errMsg = err?.message || String(err) || '请求失败';
       setMessages(prev => {
         const last = prev[prev.length - 1];
         if (last?.streaming) {
           return prev.map(m => m.id === last.id
-            ? { ...m, content: `错误: ${err.message || '请求失败'}`, streaming: false }
+            ? { ...m, content: `请求失败: ${errMsg}`, streaming: false }
             : m
           );
         }
         return [...prev, {
           id: `err_${Date.now()}`,
           role: 'assistant' as const,
-          content: `错误: ${err.message || '请求失败'}`,
+          content: `请求失败: ${errMsg}`,
           timestamp: Date.now(),
         }];
       });

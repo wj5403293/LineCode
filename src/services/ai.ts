@@ -87,8 +87,14 @@ class OpenAIStreamProcessor extends StreamProcessor {
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`OpenAI ${res.status}: ${err}`);
+      let errText = '';
+      try {
+        const errJson = await res.json();
+        errText = errJson?.error?.message || JSON.stringify(errJson);
+      } catch {
+        errText = await res.text();
+      }
+      throw new Error(`OpenAI ${res.status}: ${errText}`);
     }
 
     return this.readStream(res, callbacks);
@@ -219,8 +225,14 @@ class AnthropicStreamProcessor extends StreamProcessor {
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Anthropic ${res.status}: ${err}`);
+      let errText = '';
+      try {
+        const errJson = await res.json();
+        errText = errJson?.error?.message || JSON.stringify(errJson);
+      } catch {
+        errText = await res.text();
+      }
+      throw new Error(`Anthropic ${res.status}: ${errText}`);
     }
 
     return this.readStream(res, callbacks);

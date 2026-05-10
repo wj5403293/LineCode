@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, FlatList, Modal, Animated as RNAnimated,
+  View, Text, TouchableOpacity, StyleSheet, FlatList, Modal, Animated as RNAnimated, Platform,
 } from 'react-native';
 import { Plus, X, Trash2, MessageSquare, FolderOpen, Archive } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
+import { createDocument, copyFile } from 'react-native-saf-x';
 import { Conversation, conversationStore } from '../services/conversation';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
 import FileTree from './FileTree';
@@ -95,7 +96,23 @@ export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }
       const zipPath = `${RNFS.DocumentDirectoryPath}/linecode_home_export.zip`;
       const { zip } = require('react-native-zip-archive');
       await zip(HOME_DIR, zipPath);
-      setExportResult(zipPath);
+
+      if (Platform.OS === 'android') {
+        const fileName = `linecode_home_export_${Date.now()}.zip`;
+        const destDoc = await createDocument('', {
+          initialName: fileName,
+          mimeType: 'application/zip',
+        });
+        if (!destDoc) {
+          setExportError('用户取消选择保存位置');
+          setExportResult(null);
+          return;
+        }
+        await copyFile(`file://${zipPath}`, destDoc.uri, { replaceIfDestinationExists: true });
+        setExportResult(`已保存到: ${destDoc.name}`);
+      } else {
+        setExportResult(zipPath);
+      }
       setExportError(null);
     } catch (err: any) {
       setExportError(err.message);

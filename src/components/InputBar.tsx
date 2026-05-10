@@ -51,8 +51,8 @@ export default React.memo(function InputBar({ onSend, onStop, streaming }: Props
           activeOpacity={0.7}
         >
           {streaming
-            ? <Square size={14} color="#FFF" fill="#FFF" />
-            : <ArrowUp size={18} color={hasText ? '#FFF' : colors.textTertiary} strokeWidth={2.5} />}
+            ? <Square size={18} color="#FFF" fill="#FFF" />
+            : <ArrowUp size={22} color={hasText ? '#FFF' : colors.textTertiary} strokeWidth={2.5} />}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -85,9 +85,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -97,6 +97,6 @@ const styles = StyleSheet.create({
   },
   stopBtn: {
     backgroundColor: '#FF453A',
-    borderRadius: 16,
+    borderRadius: 20,
   },
 });
