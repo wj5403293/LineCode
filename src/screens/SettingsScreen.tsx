@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, ChevronRight, Box, Monitor, Cpu, Brain } from 'lucide-react-native';
+import { ChevronRight, Box, Monitor, Cpu, Brain } from 'lucide-react-native';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import ScreenHeader from '../components/ScreenHeader';
 
 interface Props {
   onBack: () => void;
@@ -29,13 +30,7 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM }: Pr
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
-          <ChevronLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>设置</Text>
-        <View style={styles.iconBtn} />
-      </View>
+      <ScreenHeader title="设置" onBack={onBack} />
 
       <View style={styles.list}>
         {SETTINGS_ITEMS.map(item => {
@@ -65,13 +60,6 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM }: Pr
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
-  },
-  iconBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '700' },
   list: { paddingTop: spacing.lg },
   item: {
     flexDirection: 'row', alignItems: 'center',

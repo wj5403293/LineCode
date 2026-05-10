@@ -1,22 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Model } from '../types';
 
-const MODELS_KEY = '@lineai_models';
-const SELECTED_KEY = '@lineai_selected_model';
+const KEYS = {
+  MODELS: '@lineai_models',
+  SELECTED_MODEL: '@lineai_selected_model',
+} as const;
 
-export async function getModels(): Promise<Model[]> {
-  const json = await AsyncStorage.getItem(MODELS_KEY);
-  return json ? JSON.parse(json) : [];
+class ModelStorage {
+  async getModels(): Promise<Model[]> {
+    const json = await AsyncStorage.getItem(KEYS.MODELS);
+    return json ? JSON.parse(json) : [];
+  }
+
+  async saveModels(models: Model[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.MODELS, JSON.stringify(models));
+  }
+
+  async getSelectedModelId(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.SELECTED_MODEL);
+  }
+
+  async setSelectedModelId(id: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.SELECTED_MODEL, id);
+  }
 }
 
-export async function saveModels(models: Model[]): Promise<void> {
-  await AsyncStorage.setItem(MODELS_KEY, JSON.stringify(models));
-}
-
-export async function getSelectedModelId(): Promise<string | null> {
-  return AsyncStorage.getItem(SELECTED_KEY);
-}
-
-export async function setSelectedModelId(id: string): Promise<void> {
-  await AsyncStorage.setItem(SELECTED_KEY, id);
-}
+export const modelStorage = new ModelStorage();

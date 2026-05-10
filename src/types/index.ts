@@ -29,4 +29,8 @@ export interface SystemPrompt {
   content: string;
 }
 
-export type Screen = 'chat' | 'settings' | 'model-list' | 'model-add' | 'output-settings' | 'llm-settings';
+export interface OptionItem {
+  id: string;
+  label: string;
+  desc?: string;
+}

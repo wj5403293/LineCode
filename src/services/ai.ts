@@ -35,225 +35,258 @@ const TONE_PROMPTS: Record<ToneMode, string> = {
 `,
 };
 
-// Build messages array with system prompt and history
-export function buildMessages(
-  systemPrompt: string,
-  history: { role: MessageRole; content: string }[],
-  toneMode: ToneMode = 'coding',
-): ChatMessage[] {
-  const messages: ChatMessage[] = [];
+abstract class StreamProcessor {
+  abstract process(
+    model: Model,
+    messages: ChatMessage[],
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }>;
 
-  // Inject tone prompt into system prompt
-  const fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '');
-
-  if (fullSystemPrompt) {
-    messages.push({ role: 'system', content: fullSystemPrompt });
+  protected createReader(res: Response): ReadableStreamDefaultReader<Uint8Array> {
+    const reader = (res as any).body?.getReader();
+    if (!reader) throw new Error('No response body');
+    return reader;
   }
 
-  for (const msg of history) {
-    messages.push({ role: msg.role, content: msg.content });
+  protected createDecoder(): TextDecoder {
+    return new (globalThis as any).TextDecoder();
   }
-
-  return messages;
 }
 
-export async function sendMessage(
-  model: Model,
-  messages: ChatMessage[],
-  callbacks?: StreamCallbacks,
-): Promise<{ text: string; blocks: ContentBlock[] }> {
-  console.log('[LineAI] Sending to', model.provider, model.modelId, 'messages:', messages.length);
-  try {
-    if (model.provider === 'openai') {
-      return await sendOpenAI(model, messages, callbacks);
+class OpenAIStreamProcessor extends StreamProcessor {
+  async process(
+    model: Model,
+    messages: ChatMessage[],
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+    const baseUrl = model.baseUrl || 'https://api.openai.com/v1';
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${model.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: model.modelId,
+        messages: this.formatMessages(messages),
+        stream: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`OpenAI ${res.status}: ${err}`);
     }
-    return await sendAnthropic(model, messages, callbacks);
-  } catch (err) {
-    console.error('[LineAI] API error:', err);
-    throw err;
+
+    return this.readStream(res, callbacks);
   }
-}
 
-function formatMessagesForOpenAI(messages: ChatMessage[]): { role: string; content: string }[] {
-  return messages
-    .filter(m => m.role !== 'tool')
-    .map(m => ({
-      role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content,
-    }));
-}
+  private formatMessages(messages: ChatMessage[]): { role: string; content: string }[] {
+    return messages
+      .filter(m => m.role !== 'tool')
+      .map(m => ({
+        role: m.role === 'system' ? 'system' : m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      }));
+  }
 
-function formatMessagesForAnthropic(messages: ChatMessage[]): {
-  system?: string;
-  messages: { role: 'user' | 'assistant'; content: string }[];
-} {
-  let system: string | undefined;
-  const formatted: { role: 'user' | 'assistant'; content: string }[] = [];
+  private async readStream(
+    res: Response,
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+    const reader = this.createReader(res);
+    const decoder = this.createDecoder();
+    let full = '';
+    let buffer = '';
+    const blocks: ContentBlock[] = [{ type: 'text', content: '' }];
 
-  for (const msg of messages) {
-    if (msg.role === 'system') {
-      system = msg.content;
-    } else if (msg.role === 'user' || msg.role === 'assistant') {
-      formatted.push({ role: msg.role, content: msg.content });
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const json = JSON.parse(line.slice(6));
+            const delta = json.choices?.[0]?.delta?.content || '';
+            full += delta;
+            blocks[blocks.length - 1].content = full;
+            callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+          } catch {}
+        }
+      }
     }
-  }
 
-  return { system, messages: formatted };
+    return { text: full, blocks };
+  }
 }
 
-async function sendOpenAI(
-  model: Model,
-  messages: ChatMessage[],
-  callbacks?: StreamCallbacks,
-): Promise<{ text: string; blocks: ContentBlock[] }> {
-  const baseUrl = model.baseUrl || 'https://api.openai.com/v1';
+class AnthropicStreamProcessor extends StreamProcessor {
+  async process(
+    model: Model,
+    messages: ChatMessage[],
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+    const baseUrl = model.baseUrl || 'https://api.anthropic.com';
+    const { system, messages: userMessages } = this.formatMessages(messages);
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${model.apiKey}`,
-    },
-    body: JSON.stringify({
+    const body: any = {
       model: model.modelId,
-      messages: formatMessagesForOpenAI(messages),
+      max_tokens: 4096,
+      messages: userMessages,
       stream: true,
-    }),
-  });
+    };
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${err}`);
+    if (system) {
+      body.system = system;
+    }
+
+    console.log('[LineAI] Anthropic request:', { model: model.modelId, messageCount: userMessages.length, hasSystem: !!system });
+
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': model.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Anthropic ${res.status}: ${err}`);
+    }
+
+    return this.readStream(res, callbacks);
   }
 
-  const reader = (res as any).body?.getReader();
-  if (!reader) throw new Error('No response body');
+  private formatMessages(messages: ChatMessage[]): {
+    system?: string;
+    messages: { role: 'user' | 'assistant'; content: string }[];
+  } {
+    let system: string | undefined;
+    const formatted: { role: 'user' | 'assistant'; content: string }[] = [];
 
-  const decoder = new (globalThis as any).TextDecoder();
-  let full = '';
-  let buffer = '';
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        system = msg.content;
+      } else if (msg.role === 'user' || msg.role === 'assistant') {
+        formatted.push({ role: msg.role, content: msg.content });
+      }
+    }
 
-  const blocks: ContentBlock[] = [{ type: 'text', content: '' }];
+    return { system, messages: formatted };
+  }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  private async readStream(
+    res: Response,
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+    const reader = this.createReader(res);
+    const decoder = this.createDecoder();
+    let buffer = '';
+    const blocks: ContentBlock[] = [];
+    let currentBlockType: 'thinking' | 'text' | null = null;
+    let currentBlockIndex = -1;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    const ensureBlock = (type: 'thinking' | 'text'): number => {
+      if (currentBlockType !== type) {
+        blocks.push({ type, content: '' });
+        currentBlockType = type;
+        currentBlockIndex = blocks.length - 1;
+      }
+      return currentBlockIndex;
+    };
 
-    for (const line of lines) {
-      if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+
         try {
-          const json = JSON.parse(line.slice(6));
-          const delta = json.choices?.[0]?.delta?.content || '';
-          full += delta;
-          blocks[blocks.length - 1].content = full;
-          callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+          const json = JSON.parse(data);
+
+          if (json.type === 'content_block_start') {
+            const blockType = json.content_block?.type;
+            if (blockType === 'thinking') ensureBlock('thinking');
+            else if (blockType === 'text') ensureBlock('text');
+          } else if (json.type === 'content_block_delta') {
+            if (json.delta?.type === 'thinking_delta') {
+              const idx = ensureBlock('thinking');
+              blocks[idx].content += json.delta.thinking || '';
+              callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            } else if (json.delta?.type === 'text_delta') {
+              const idx = ensureBlock('text');
+              blocks[idx].content += json.delta.text || '';
+              callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            }
+          } else if (json.type === 'content_block_stop') {
+            currentBlockType = null;
+          }
         } catch {}
       }
     }
-  }
 
-  return { text: full, blocks };
+    const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
+    console.log('[LineAI] Stream done. Blocks:', blocks.length, 'Text:', fullText.length);
+    return { text: fullText, blocks };
+  }
 }
 
-async function sendAnthropic(
-  model: Model,
-  messages: ChatMessage[],
-  callbacks?: StreamCallbacks,
-): Promise<{ text: string; blocks: ContentBlock[] }> {
-  const baseUrl = model.baseUrl || 'https://api.anthropic.com';
-  const { system, messages: userMessages } = formatMessagesForAnthropic(messages);
-
-  const body: any = {
-    model: model.modelId,
-    max_tokens: 4096,
-    messages: userMessages,
-    stream: true,
+class AIService {
+  private processors: Record<string, StreamProcessor> = {
+    openai: new OpenAIStreamProcessor(),
+    anthropic: new AnthropicStreamProcessor(),
   };
 
-  if (system) {
-    body.system = system;
-  }
+  buildMessages(
+    systemPrompt: string,
+    history: { role: MessageRole; content: string }[],
+    toneMode: ToneMode = 'coding',
+  ): ChatMessage[] {
+    const messages: ChatMessage[] = [];
+    const fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '');
 
-  console.log('[LineAI] Anthropic request:', { model: model.modelId, messageCount: userMessages.length, hasSystem: !!system });
-
-  const res = await fetch(`${baseUrl}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': model.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${err}`);
-  }
-
-  const reader = (res as any).body?.getReader();
-  if (!reader) throw new Error('No response body');
-
-  const decoder = new (globalThis as any).TextDecoder();
-  let buffer = '';
-  const blocks: ContentBlock[] = [];
-  let currentBlockType: 'thinking' | 'text' | null = null;
-  let currentBlockIndex = -1;
-
-  function ensureBlock(type: 'thinking' | 'text'): number {
-    if (currentBlockType !== type) {
-      blocks.push({ type, content: '' });
-      currentBlockType = type;
-      currentBlockIndex = blocks.length - 1;
+    if (fullSystemPrompt) {
+      messages.push({ role: 'system', content: fullSystemPrompt });
     }
-    return currentBlockIndex;
+
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+
+    return messages;
   }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const data = line.slice(6).trim();
-      if (data === '[DONE]') continue;
-
-      try {
-        const json = JSON.parse(data);
-
-        if (json.type === 'content_block_start') {
-          const blockType = json.content_block?.type;
-          if (blockType === 'thinking') {
-            ensureBlock('thinking');
-          } else if (blockType === 'text') {
-            ensureBlock('text');
-          }
-        } else if (json.type === 'content_block_delta') {
-          if (json.delta?.type === 'thinking_delta') {
-            const idx = ensureBlock('thinking');
-            blocks[idx].content += json.delta.thinking || '';
-            callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
-          } else if (json.delta?.type === 'text_delta') {
-            const idx = ensureBlock('text');
-            blocks[idx].content += json.delta.text || '';
-            callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
-          }
-        } else if (json.type === 'content_block_stop') {
-          currentBlockType = null;
-        }
-      } catch {}
+  async sendMessage(
+    model: Model,
+    messages: ChatMessage[],
+    callbacks?: StreamCallbacks,
+  ): Promise<{ text: string; blocks: ContentBlock[] }> {
+    console.log('[LineAI] Sending to', model.provider, model.modelId, 'messages:', messages.length);
+    try {
+      const processor = this.processors[model.provider];
+      if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
+      return await processor.process(model, messages, callbacks);
+    } catch (err) {
+      console.error('[LineAI] API error:', err);
+      throw err;
     }
   }
-
-  const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
-  console.log('[LineAI] Stream done. Blocks:', blocks.length, 'Text:', fullText.length);
-  return { text: fullText, blocks };
 }
+
+export const aiService = new AIService();

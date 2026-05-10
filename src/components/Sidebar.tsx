@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Modal, Animated as RNAnimated,
 } from 'react-native';
 import { Plus, X, Trash2, MessageSquare } from 'lucide-react-native';
-import { Conversation, getConversations, deleteConversation } from '../services/conversation';
+import { Conversation, conversationStore } from '../services/conversation';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
 
 const SIDEBAR_WIDTH = 300;
@@ -56,7 +56,7 @@ export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }
 
   useEffect(() => {
     if (visible) {
-      getConversations().then(setConversations);
+      conversationStore.getConversations().then(setConversations);
       RNAnimated.parallel([
         RNAnimated.timing(slideAnim, {
           toValue: 0,
@@ -76,7 +76,7 @@ export default function Sidebar({ visible, currentId, onClose, onSelect, onNew }
   }, [visible]);
 
   const handleDelete = useCallback(async (id: string) => {
-    await deleteConversation(id);
+    await conversationStore.deleteConversation(id);
     setConversations(prev => prev.filter(c => c.id !== id));
   }, []);
 

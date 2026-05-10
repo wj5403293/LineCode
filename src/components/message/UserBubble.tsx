@@ -1,0 +1,36 @@
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
+import Markdown from 'react-native-markdown-display';
+import { colors, spacing, radius } from '../../constants/theme';
+import { userMdStyle } from './markdownStyles';
+
+interface Props {
+  content: string;
+}
+
+export default React.memo(function UserBubble({ content }: Props) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.bubble}>
+        <Markdown style={userMdStyle}>{content}</Markdown>
+      </View>
+    </View>
+  );
+});
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.lg,
+    marginBottom: 6,
+  },
+  bubble: {
+    maxWidth: '80%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: radius.lg,
+    borderBottomRightRadius: 4,
+    backgroundColor: colors.userBubble,
+  },
+});

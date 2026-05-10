@@ -3,10 +3,10 @@ import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
 import { Model } from '../types';
-import { getModels, saveModels, setSelectedModelId } from '../services/storage';
+import { modelStorage } from '../services/storage';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import ScreenHeader from '../components/ScreenHeader';
 
 interface Props {
   onBack: () => void;
@@ -25,7 +25,7 @@ export default function ModelAddScreen({ onBack }: Props) {
   const handleSave = useCallback(async () => {
     if (!canSave) return;
 
-    const models = await getModels();
+    const models = await modelStorage.getModels();
     const newModel: Model = {
       id: String(Date.now()),
       name: name.trim(),
@@ -36,34 +36,30 @@ export default function ModelAddScreen({ onBack }: Props) {
     };
 
     const updated = [...models, newModel];
-    await saveModels(updated);
+    await modelStorage.saveModels(updated);
 
     if (updated.length === 1) {
-      await setSelectedModelId(newModel.id);
+      await modelStorage.setSelectedModelId(newModel.id);
     }
 
     onBack();
   }, [name, modelId, apiKey, baseUrl, provider, canSave, onBack]);
 
+  const rightAction = (
+    <TouchableOpacity
+      onPress={handleSave}
+      style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+      disabled={!canSave}
+    >
+      <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>保存</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
-          <ChevronLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>添加模型</Text>
-        <TouchableOpacity
-          onPress={handleSave}
-          style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
-          disabled={!canSave}
-        >
-          <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>保存</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="添加模型" onBack={onBack} rightAction={rightAction} />
 
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
-        {/* Provider Toggle */}
         <Text style={styles.label}>提供商</Text>
         <View style={styles.toggleRow}>
           {(['openai', 'anthropic'] as const).map(p => (
@@ -79,7 +75,6 @@ export default function ModelAddScreen({ onBack }: Props) {
           ))}
         </View>
 
-        {/* Name */}
         <Text style={styles.label}>名称</Text>
         <TextInput
           style={styles.input}
@@ -89,7 +84,6 @@ export default function ModelAddScreen({ onBack }: Props) {
           onChangeText={setName}
         />
 
-        {/* Model ID */}
         <Text style={styles.label}>模型 ID</Text>
         <TextInput
           style={styles.input}
@@ -99,7 +93,6 @@ export default function ModelAddScreen({ onBack }: Props) {
           onChangeText={setModelId}
         />
 
-        {/* API Key */}
         <Text style={styles.label}>API Key</Text>
         <TextInput
           style={styles.input}
@@ -110,7 +103,6 @@ export default function ModelAddScreen({ onBack }: Props) {
           secureTextEntry
         />
 
-        {/* Base URL */}
         <Text style={styles.label}>Base URL（可选）</Text>
         <TextInput
           style={styles.input}
@@ -127,13 +119,6 @@ export default function ModelAddScreen({ onBack }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
-  },
-  iconBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '700' },
   saveBtn: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { color: colors.accent, fontSize: fontSizes.md, fontWeight: '600' },

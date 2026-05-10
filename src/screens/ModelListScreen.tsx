@@ -3,11 +3,12 @@ import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Plus, Trash2, X } from 'lucide-react-native';
+import { Plus, Trash2, X } from 'lucide-react-native';
 import { Model } from '../types';
-import { getModels, saveModels, getSelectedModelId, setSelectedModelId } from '../services/storage';
+import { modelStorage } from '../services/storage';
 import ModelCard from '../components/ModelCard';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import ScreenHeader from '../components/ScreenHeader';
+import { colors, spacing, fontSizes } from '../constants/theme';
 
 interface Props {
   onBack: () => void;
@@ -23,18 +24,16 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
 
   useEffect(() => {
     const load = async () => {
-      const [m, sid] = await Promise.all([getModels(), getSelectedModelId()]);
+      const [m, sid] = await Promise.all([modelStorage.getModels(), modelStorage.getSelectedModelId()]);
       setModels(m);
       setSelectedId(sid);
     };
-    const unsubscribe = load();
-    return () => { unsubscribe; };
+    load();
   }, []);
 
-  // Reload when screen is focused
   useEffect(() => {
     const load = async () => {
-      const [m, sid] = await Promise.all([getModels(), getSelectedModelId()]);
+      const [m, sid] = await Promise.all([modelStorage.getModels(), modelStorage.getSelectedModelId()]);
       setModels(m);
       setSelectedId(sid);
     };
@@ -47,7 +46,7 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
       return;
     }
     setSelectedId(id);
-    await setSelectedModelId(id);
+    await modelStorage.setSelectedModelId(id);
   }, [multiSelect]);
 
   const handleLongPress = useCallback((id: string) => {
@@ -60,11 +59,11 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
       {
         text: '删除', style: 'destructive', onPress: async () => {
           const rest = models.filter(m => !multiSelect.includes(m.id));
-          await saveModels(rest);
+          await modelStorage.saveModels(rest);
           setModels(rest);
           if (selectedId && multiSelect.includes(selectedId)) {
             setSelectedId(null);
-            await setSelectedModelId('');
+            await modelStorage.setSelectedModelId('');
           }
           setMultiSelect([]);
         },
@@ -85,34 +84,30 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
 
   const keyExtractor = useCallback((item: Model) => item.id, []);
 
+  const headerRight = multiSelect.length > 0 ? (
+    <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
+      <Trash2 size={20} color={colors.danger} />
+    </TouchableOpacity>
+  ) : (
+    <TouchableOpacity onPress={onAdd} style={styles.iconBtn}>
+      <Plus size={20} color={colors.text} />
+    </TouchableOpacity>
+  );
+
+  const headerLeft = multiSelect.length > 0 ? (
+    <TouchableOpacity onPress={() => setMultiSelect([])} style={styles.iconBtn}>
+      <X size={20} color={colors.text} />
+    </TouchableOpacity>
+  ) : undefined;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        {multiSelect.length > 0 ? (
-          <>
-            <TouchableOpacity onPress={() => setMultiSelect([])} style={styles.iconBtn}>
-              <X size={20} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>已选 {multiSelect.length} 项</Text>
-            <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
-              <Trash2 size={20} color={colors.danger} />
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
-              <ChevronLeft size={22} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>模型</Text>
-            <TouchableOpacity onPress={onAdd} style={styles.iconBtn}>
-              <Plus size={20} color={colors.text} />
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+      <ScreenHeader
+        title={multiSelect.length > 0 ? `已选 ${multiSelect.length} 项` : '模型'}
+        onBack={multiSelect.length > 0 ? undefined : onBack}
+        rightAction={headerRight}
+      />
 
-      {/* Model List */}
       {models.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>还没有添加模型</Text>
@@ -132,13 +127,7 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
-  },
   iconBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { color: colors.text, fontSize: fontSizes.lg, fontWeight: '700' },
   list: { padding: spacing.lg },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { color: colors.textSecondary, fontSize: fontSizes.lg },
