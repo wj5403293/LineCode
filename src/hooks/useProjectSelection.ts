@@ -6,7 +6,7 @@ export interface ProjectOption {
 }
 
 const PROJECTS: ProjectOption[] = [
-  { id: '1', label: 'LineAI 主项目' },
+  { id: '1', label: 'LineCode 主项目' },
   { id: '2', label: '移动端 App' },
   { id: '3', label: '后端服务' },
   { id: '4', label: '组件库' },

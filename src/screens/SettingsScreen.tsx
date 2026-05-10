@@ -16,7 +16,7 @@ const SETTINGS_ITEMS = [
   { id: 'models', label: '模型管理', desc: '添加、删除和切换模型', icon: Box },
   { id: 'llm', label: 'LLM 设置', desc: '显示模式和交流语气', icon: Brain },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
-  { id: 'about', label: '关于', desc: 'LineAI v0.0.1', icon: Cpu },
+  { id: 'about', label: '关于', desc: 'LineCode v1.0.0-alpha.1', icon: Cpu },
 ];
 
 export default function SettingsScreen({ onBack, onModels, onOutput, onLLM }: Props) {

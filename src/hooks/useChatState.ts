@@ -122,7 +122,7 @@ export function useChatState(toneMode: ToneMode) {
         return updated;
       });
     } catch (err: any) {
-      console.error('[LineAI] sendMessage error:', err);
+      console.error('[LineCode] sendMessage error:', err);
       setMessages(prev => prev.map(m =>
         m.id === aiId ? { ...m, content: `错误: ${err.message || '请求失败'}`, streaming: false } : m,
       ));

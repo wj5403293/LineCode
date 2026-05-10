@@ -146,7 +146,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
       body.system = system;
     }
 
-    console.log('[LineAI] Anthropic request:', { model: model.modelId, messageCount: userMessages.length, hasSystem: !!system });
+    console.log('[LineCode] Anthropic request:', { model: model.modelId, messageCount: userMessages.length, hasSystem: !!system });
 
     const res = await fetch(`${baseUrl}/v1/messages`, {
       method: 'POST',
@@ -242,7 +242,7 @@ class AnthropicStreamProcessor extends StreamProcessor {
     }
 
     const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
-    console.log('[LineAI] Stream done. Blocks:', blocks.length, 'Text:', fullText.length);
+    console.log('[LineCode] Stream done. Blocks:', blocks.length, 'Text:', fullText.length);
     return { text: fullText, blocks };
   }
 }
@@ -277,13 +277,13 @@ class AIService {
     messages: ChatMessage[],
     callbacks?: StreamCallbacks,
   ): Promise<{ text: string; blocks: ContentBlock[] }> {
-    console.log('[LineAI] Sending to', model.provider, model.modelId, 'messages:', messages.length);
+    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length);
     try {
       const processor = this.processors[model.provider];
       if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
       return await processor.process(model, messages, callbacks);
     } catch (err) {
-      console.error('[LineAI] API error:', err);
+      console.error('[LineCode] API error:', err);
       throw err;
     }
   }
