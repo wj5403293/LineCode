@@ -1,6 +1,6 @@
 import { Model, ContentBlock, MessageRole, ToolCall } from '../types';
 import { SYSTEM_PROMPT } from '../constants/prompt';
-import { ToneMode } from './settings';
+import { ToneMode, ReasoningEffort } from './settings';
 import { mcpService } from './MCPService';
 
 export { SYSTEM_PROMPT };
@@ -18,6 +18,10 @@ interface StreamCallbacks {
   onBlocks?: (blocks: ContentBlock[]) => void;
   onToolCalls?: (toolCalls: ToolCall[]) => void;
   onToolCallDetected?: (toolCall: { id: string; name: string }) => void;
+}
+
+interface StreamOptions {
+  reasoningEffort?: ReasoningEffort;
 }
 
 const TONE_PROMPTS: Record<ToneMode, string> = {
@@ -46,6 +50,7 @@ abstract class StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
+    options?: StreamOptions,
   ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }>;
 
   protected createReader(res: Response): ReadableStreamDefaultReader<Uint8Array> {
@@ -65,8 +70,10 @@ class OpenAIStreamProcessor extends StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
+    options?: StreamOptions,
   ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const baseUrl = model.baseUrl || 'https://api.openai.com/v1';
+    const reasoningEffort = options?.reasoningEffort || 'medium';
 
     const body: any = {
       model: model.modelId,
@@ -74,10 +81,26 @@ class OpenAIStreamProcessor extends StreamProcessor {
       stream: true,
     };
 
+    const isDeepSeek = baseUrl.includes('deepseek') || model.modelId.includes('deepseek');
+    console.log('[LineCode] OpenAI isDeepSeek:', isDeepSeek, 'reasoningEffort:', reasoningEffort);
+    
+    if (reasoningEffort !== 'off') {
+      if (isDeepSeek) {
+        body.thinking = { type: 'enabled' };
+        if (reasoningEffort === 'high' || reasoningEffort === 'max') {
+          body.reasoning_effort = reasoningEffort;
+        }
+      } else {
+        body.reasoning = { effort: reasoningEffort };
+      }
+    }
+
     if (tools.length > 0) {
       body.tools = tools;
       body.tool_choice = 'auto';
     }
+
+    console.log('[LineCode] OpenAI request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
 
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -218,6 +241,14 @@ class OpenAIStreamProcessor extends StreamProcessor {
 
     if (toolCalls.length > 0) {
       callbacks?.onToolCalls?.(toolCalls);
+      for (const tc of toolCalls) {
+        blocks.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          content: tc.arguments,
+        });
+      }
     }
 
     return { text: full, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, reasoningContent: reasoningFull || undefined };
@@ -230,8 +261,10 @@ class AnthropicStreamProcessor extends StreamProcessor {
     messages: ChatMessage[],
     tools: Record<string, unknown>[],
     callbacks?: StreamCallbacks,
+    options?: StreamOptions,
   ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
     const baseUrl = model.baseUrl || 'https://api.anthropic.com';
+    const reasoningEffort = options?.reasoningEffort || 'medium';
     const { system, messages: userMessages } = this.formatMessages(messages);
 
     const body: any = {
@@ -242,6 +275,19 @@ class AnthropicStreamProcessor extends StreamProcessor {
     };
 
     if (system) body.system = system;
+
+    if (reasoningEffort !== 'off') {
+      const budgetMap: Record<Exclude<ReasoningEffort, 'off'>, number> = {
+        low: 1024,
+        medium: 4096,
+        high: 8192,
+        max: 16000,
+      };
+      body.thinking = {
+        type: 'enabled',
+        budget_tokens: budgetMap[reasoningEffort as Exclude<ReasoningEffort, 'off'>],
+      };
+    }
 
     if (tools.length > 0) {
       body.tools = tools.map((t: any) => ({
@@ -495,17 +541,25 @@ class AIService {
     model: Model,
     messages: ChatMessage[],
     callbacks?: StreamCallbacks,
+    reasoningEffort?: ReasoningEffort,
+    customTools?: Record<string, unknown>[],
   ): Promise<{ text: string; blocks: ContentBlock[]; toolCalls?: ToolCall[]; reasoningContent?: string }> {
-    const { createDefaultRegistry } = await import('../mcp/tools');
-    const registry = createDefaultRegistry();
-    const enabledTools = await mcpService.getEnabledTools();
-    const tools = registry.toJSONSchema(enabledTools);
+    let tools: Record<string, unknown>[];
+    
+    if (customTools) {
+      tools = customTools;
+    } else {
+      const { createDefaultRegistry } = await import('../mcp/tools');
+      const registry = createDefaultRegistry();
+      const enabledTools = await mcpService.getEnabledTools();
+      tools = registry.toJSONSchema(enabledTools);
+    }
 
-    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length);
+    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length, 'reasoningEffort:', reasoningEffort);
     try {
       const processor = this.processors[model.provider];
       if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
-      return await processor.process(model, messages, tools, callbacks);
+      return await processor.process(model, messages, tools, callbacks, { reasoningEffort });
     } catch (err) {
       console.error('[LineCode] API error:', err);
       throw err;

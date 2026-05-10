@@ -1,7 +1,8 @@
 import RNFS from 'react-native-fs';
-import { ToolCall, ToolResult } from '../types';
+import { ToolCall, ToolResult, ContentBlock } from '../types';
 import { createDefaultRegistry, ToolContext } from './tools';
 import { diffService } from '../services/DiffService';
+import { permissionService } from '../services/PermissionService';
 
 const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
 
@@ -17,7 +18,15 @@ export async function getHomePath(): Promise<string> {
   return HOME_DIR;
 }
 
-export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
+export interface ExecuteToolOptions {
+  onProgress?: (update: Partial<ContentBlock>) => void;
+  onConfirm?: (toolCall: ToolCall) => Promise<boolean>;
+}
+
+export async function executeTool(
+  toolCall: ToolCall,
+  options?: ExecuteToolOptions,
+): Promise<ToolResult> {
   const registry = createDefaultRegistry();
   const tool = registry.get(toolCall.name);
 
@@ -25,6 +34,15 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
     return {
       toolCallId: toolCall.id,
       content: `未知工具: ${toolCall.name}`,
+      isError: true,
+    };
+  }
+
+  const permResult = permissionService.canExecuteTool(toolCall.name, tool.category);
+  if (!permResult.allowed) {
+    return {
+      toolCallId: toolCall.id,
+      content: permResult.reason || '权限不足',
       isError: true,
     };
   }
@@ -41,10 +59,13 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
   }
 
   const homePath = await getHomePath();
-  const context: ToolContext = { homePath };
+  const context: ToolContext = { 
+    homePath, 
+    onProgress: options?.onProgress,
+    onConfirm: options?.onConfirm,
+  };
 
-  // 对写入操作，先备份旧内容用于 diff
-  if (tool.category === 'write') {
+  if (tool.category === 'write' && tool.name !== 'file_delete') {
     const filePath = String(input.file_path || '');
     const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
 
@@ -52,12 +73,20 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
       let oldContent = '';
       const exists = await RNFS.exists(fullPath);
       if (exists) {
-        oldContent = await RNFS.readFile(fullPath, 'utf8');
+        try {
+          const items = await RNFS.readDir(fullPath);
+          return {
+            toolCallId: toolCall.id,
+            content: `路径是一个目录，无法写入文件: ${filePath}\n如需创建文件，请指定完整文件路径。`,
+            isError: true,
+          };
+        } catch {
+          oldContent = await RNFS.readFile(fullPath, 'utf8');
+        }
       }
 
       const result = await tool.execute(input, context);
 
-      // 记录 diff
       if (!result.isError) {
         const newContent = String(input.content || '');
         if (oldContent !== newContent) {
@@ -75,7 +104,6 @@ export async function executeTool(toolCall: ToolCall): Promise<ToolResult> {
     }
   }
 
-  // 读取操作直接执行
   try {
     const result = await tool.execute(input, context);
     return { ...result, toolCallId: toolCall.id };

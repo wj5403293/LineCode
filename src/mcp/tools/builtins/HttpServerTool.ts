@@ -9,7 +9,7 @@ export class HttpServerTool extends BaseTool {
   readonly name = 'http_server';
   readonly description = '启动或停止本地 HTTP 文件服务器。可以指定端口和根目录。';
   readonly category = 'system' as const;
-  readonly requiresConfirmation = true;
+  readonly requiresConfirmation = false;
   readonly parameters = {
     type: 'object',
     properties: {

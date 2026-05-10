@@ -50,6 +50,7 @@ export default React.memo(function AIBubbleFullscreen({
                 homePath={homePath}
                 result={tr?.content}
                 isError={tr?.isError}
+                block={block}
               />
             );
           }

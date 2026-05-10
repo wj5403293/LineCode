@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Header from '../components/Header';
@@ -16,6 +16,8 @@ import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../hooks/useSettings';
 import { useConversationManager } from '../hooks/useConversationManager';
 import { useProjectSelection } from '../hooks/useProjectSelection';
+import { settingsService } from '../services/settings';
+import { permissionService } from '../services/PermissionService';
 
 interface Props {
   onGoSettings: () => void;
@@ -23,13 +25,22 @@ interface Props {
 
 export default function ChatScreen({ onGoSettings }: Props) {
   const insets = useSafeAreaInsets();
-  const { codeWrap, displayMode, toneMode, thinkingScrollable, thinkingAutoExpand } = useSettings();
-  const chat = useChatState(toneMode);
+  const { codeWrap, displayMode, toneMode, thinkingScrollable, thinkingAutoExpand, reasoningEffort, permissionMode } = useSettings();
+  const chat = useChatState(toneMode, reasoningEffort);
   const { dialog, openDialog, closeDialog } = useDialog();
   const conversation = useConversationManager();
   const { projects, selectedProject, handleProjectSelect } = useProjectSelection();
 
   const containerStyle = useMemo(() => [styles.container, { paddingTop: insets.top }], [insets.top]);
+
+  useEffect(() => {
+    permissionService.setMode(permissionMode);
+  }, [permissionMode]);
+
+  const handlePermissionSelect = useCallback(async (id: string) => {
+    await settingsService.setPermissionMode(id as any);
+    closeDialog();
+  }, [closeDialog]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => (
     <MessageBubble
@@ -124,7 +135,7 @@ export default function ChatScreen({ onGoSettings }: Props) {
         <InputBar onSend={chat.handleSend} onStop={chat.handleStop} streaming={chat.streaming} />
 
         <Dialog visible={dialog === 'project'} title="项目" options={projects} selectedId={selectedProject.id} onSelect={handleProjectDialogSelect} onClose={closeDialog} />
-        <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId="" onSelect={() => {}} onClose={closeDialog} />
+        <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
 
         <Sidebar
@@ -136,8 +147,8 @@ export default function ChatScreen({ onGoSettings }: Props) {
         />
 
         <BatchDeleteConfirm
-          visible={!!chat.pendingToolCall}
-          toolCalls={chat.pendingToolCall?.toolCalls || []}
+          visible={!!chat.pendingToolCall && chat.pendingToolCall.toolCalls.some(tc => tc.name === 'file_delete')}
+          toolCalls={chat.pendingToolCall?.toolCalls.filter(tc => tc.name === 'file_delete') || []}
           homePath={chat.homePath}
           onConfirm={chat.handleToolConfirm}
         />

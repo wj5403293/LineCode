@@ -49,6 +49,7 @@ export default React.memo(function AIBubbleCompact({
               homePath={homePath}
               result={tr?.content}
               isError={tr?.isError}
+              block={block}
             />
           );
         }

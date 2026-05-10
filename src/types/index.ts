@@ -1,11 +1,23 @@
+export interface AgentToolCall {
+  name: string;
+  input: Record<string, unknown>;
+  result?: string;
+  isError?: boolean;
+}
+
 export interface ContentBlock {
-  type: 'thinking' | 'text' | 'tool_use' | 'tool_result';
+  type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'agent';
   content: string;
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
   toolCallId?: string;
   isError?: boolean;
+  agentType?: 'explore' | 'sub-coding';
+  agentStatus?: 'running' | 'done' | 'error';
+  agentOutput?: string;
+  agentThinking?: string;
+  agentToolCalls?: AgentToolCall[];
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -20,6 +32,18 @@ export interface ToolResult {
   toolCallId: string;
   content: string;
   isError?: boolean;
+}
+
+export interface AgentInstance {
+  id: number;
+  type: 'explore' | 'sub-coding';
+  name: string;
+  status: 'running' | 'done' | 'error';
+  startTime: number;
+  endTime?: number;
+  input: string;
+  output: string;
+  toolCalls: number;
 }
 
 export interface Message {

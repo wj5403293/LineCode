@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench } from 'lucide-react-native';
 import { colors, spacing, fontSizes, radius } from '../constants/theme';
@@ -35,7 +35,7 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScreenHeader title="设置" onBack={onBack} />
 
-      <View style={styles.list}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {SETTINGS_ITEMS.map(item => {
           const Icon = item.icon;
           return (
@@ -56,14 +56,15 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  list: { paddingTop: spacing.lg },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingTop: spacing.lg, paddingBottom: 100 },
   item: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,

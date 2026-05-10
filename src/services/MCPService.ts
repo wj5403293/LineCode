@@ -18,6 +18,13 @@ const DEFAULT_CONFIGS: MCPConfig[] = [
     enabled: true,
     tools: ['http_server'],
   },
+  {
+    id: 'agent',
+    name: 'Agent',
+    description: '分派 Agent 处理任务',
+    enabled: true,
+    tools: ['agent'],
+  },
 ];
 
 class MCPService {
@@ -33,6 +40,17 @@ class MCPService {
       const fileOps = (parsed as MCPConfig[]).find(c => c.id === 'file_ops');
       if (fileOps && !fileOps.tools.includes('file_delete')) {
         fileOps.tools = ['file_read', 'file_write', 'file_edit', 'file_delete', 'glob'];
+        await this.save();
+      }
+      const hasAgent = (parsed as MCPConfig[]).some(c => c.id === 'agent');
+      if (!hasAgent && this.configs) {
+        this.configs.push({
+          id: 'agent',
+          name: 'Agent',
+          description: '分派 Agent 处理任务',
+          enabled: true,
+          tools: ['agent'],
+        });
         await this.save();
       }
     } else {

@@ -6,7 +6,7 @@ export class FileWriteTool extends BaseTool {
   readonly name = 'file_write';
   readonly description = '将内容写入文件。如果文件或目录不存在会自动创建。';
   readonly category = 'write' as const;
-  readonly requiresConfirmation = true;
+  readonly requiresConfirmation = false;
   readonly parameters = {
     type: 'object',
     properties: {
@@ -27,11 +27,19 @@ export class FileWriteTool extends BaseTool {
         await this.mkdirRecursive(dir);
       }
 
-      // 读取旧内容（用于 diff）
       let oldContent = '';
       const fileExists = await RNFS.exists(filePath);
       if (fileExists) {
-        oldContent = await RNFS.readFile(filePath, 'utf8');
+        try {
+          const items = await RNFS.readDir(filePath);
+          return { 
+            content: `路径是一个目录，无法写入文件: ${input.file_path}\n如需创建文件，请指定完整文件路径。`, 
+            toolCallId: '', 
+            isError: true 
+          };
+        } catch {
+          oldContent = await RNFS.readFile(filePath, 'utf8');
+        }
       }
 
       // 写入新内容
@@ -44,7 +52,7 @@ export class FileWriteTool extends BaseTool {
         : `成功更新文件 ${input.file_path} (${lineCount} 行)`;
 
       return {
-        content: header + '\n\n文件操作已完成。请检查是否需要继续其他操作，或向用户报告结果。',
+        content: header,
         toolCallId: '',
       };
     } catch (err: any) {

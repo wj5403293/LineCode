@@ -1,7 +1,9 @@
-import { ToolCategory, ToolResult } from '../../types';
+import { ToolCategory, ToolResult, ContentBlock, ToolCall } from '../../types';
 
 export interface ToolContext {
   homePath: string;
+  onProgress?: (update: Partial<ContentBlock>) => void;
+  onConfirm?: (toolCall: ToolCall) => Promise<boolean>;
 }
 
 export abstract class BaseTool<TInput = Record<string, unknown>> {

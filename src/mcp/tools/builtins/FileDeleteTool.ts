@@ -47,9 +47,6 @@ export class FileDeleteTool extends BaseTool {
     if (errors.length > 0) {
       content += `\n\n失败 ${errors.length} 项:\n${errors.join('\n')}`;
     }
-    if (results.length > 0) {
-      content += '\n\n删除操作已完成。请继续其他操作或向用户报告结果。';
-    }
 
     return {
       content: content || '没有删除任何文件',

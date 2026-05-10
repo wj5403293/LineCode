@@ -4,8 +4,8 @@ import { Message, Model, ContentBlock, ToolCall } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage } from '../services/ai';
 import { conversationStore } from '../services/conversation';
-import { ToneMode } from '../services/settings';
-import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor';
+import { ToneMode, ReasoningEffort } from '../services/settings';
+import { executeTool, needsConfirmation, getHomePath, ExecuteToolOptions } from '../mcp/ToolExecutor';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -13,7 +13,7 @@ interface PendingToolCall {
   text: string;
 }
 
-export function useChatState(toneMode: ToneMode) {
+export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffort) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [model, setModel] = useState<Model | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +180,7 @@ export function useChatState(toneMode: ToneMode) {
             }));
             scrollToBottom(false);
           },
-        });
+        }, reasoningEffort);
 
         // 构建 assistant 消息（包含 toolCalls）
         const assistantMsg: Message = {
@@ -224,7 +224,26 @@ export function useChatState(toneMode: ToneMode) {
 
         for (const tc of normalToolCalls) {
           console.log('[LineCode] Executing tool:', tc.name, 'id:', tc.id);
-          const toolResult = await executeTool(tc);
+          
+          const toolResult = await executeTool(tc, {
+            onProgress: (update: Partial<ContentBlock>) => {
+              if (tc.name === 'agent') {
+                setMessages(prev => prev.map(m => {
+                  if (m.role === 'assistant' && m.blocks) {
+                    const updatedBlocks = m.blocks.map(b => {
+                      if (b.type === 'tool_use' && b.id === tc.id) {
+                        return { ...b, ...update };
+                      }
+                      return b;
+                    });
+                    return { ...m, blocks: updatedBlocks };
+                  }
+                  return m;
+                }));
+              }
+            },
+          });
+          
           console.log('[LineCode] Tool result:', toolResult.content?.substring(0, 100));
 
           const toolMsg: Message = {
@@ -328,7 +347,26 @@ export function useChatState(toneMode: ToneMode) {
 
     for (const tc of toolCalls) {
       console.log('[LineCode] Executing tool:', tc.name, 'id:', tc.id);
-      const toolResult = await executeTool(tc);
+      
+      const toolResult = await executeTool(tc, {
+        onProgress: (update: Partial<ContentBlock>) => {
+          if (tc.name === 'agent') {
+            setMessages(prev => prev.map(m => {
+              if (m.role === 'assistant' && m.blocks) {
+                const updatedBlocks = m.blocks.map(b => {
+                  if (b.type === 'tool_use' && b.id === tc.id) {
+                    return { ...b, ...update };
+                  }
+                  return b;
+                });
+                return { ...m, blocks: updatedBlocks };
+              }
+              return m;
+            }));
+          }
+        },
+      });
+      
       console.log('[LineCode] Tool result:', toolResult.content?.substring(0, 100));
 
       const toolMsg: Message = {
@@ -395,7 +433,7 @@ export function useChatState(toneMode: ToneMode) {
             }));
             scrollToBottom(false);
           },
-        });
+        }, reasoningEffort);
 
         const assistantMsg: Message = {
           id: aiId,
@@ -430,7 +468,24 @@ export function useChatState(toneMode: ToneMode) {
         }
 
         for (const tc of normalToolCalls) {
-          const toolResult = await executeTool(tc);
+          const toolResult = await executeTool(tc, {
+            onProgress: (update: Partial<ContentBlock>) => {
+              if (tc.name === 'agent') {
+                setMessages(prev => prev.map(m => {
+                  if (m.role === 'assistant' && m.blocks) {
+                    const updatedBlocks = m.blocks.map(b => {
+                      if (b.type === 'tool_use' && b.id === tc.id) {
+                        return { ...b, ...update };
+                      }
+                      return b;
+                    });
+                    return { ...m, blocks: updatedBlocks };
+                  }
+                  return m;
+                }));
+              }
+            },
+          });
           const toolMsg: Message = {
             id: `tool_${tc.id}_${Date.now()}`,
             role: 'tool',

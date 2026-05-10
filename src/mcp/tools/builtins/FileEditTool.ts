@@ -6,7 +6,7 @@ export class FileEditTool extends BaseTool {
   readonly name = 'file_edit';
   readonly description = '编辑文件内容。通过搜索替换的方式修改文件。';
   readonly category = 'write' as const;
-  readonly requiresConfirmation = true;
+  readonly requiresConfirmation = false;
   readonly parameters = {
     type: 'object',
     properties: {
@@ -25,6 +25,15 @@ export class FileEditTool extends BaseTool {
         return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
       }
 
+      try {
+        const items = await RNFS.readDir(filePath);
+        return { 
+          content: `路径是一个目录，无法编辑文件: ${input.file_path}\n如需编辑文件，请指定具体文件路径。`, 
+          toolCallId: '', 
+          isError: true 
+        };
+      } catch {}
+
       const content = await RNFS.readFile(filePath, 'utf8');
       if (!content.includes(input.old_string)) {
         return { content: `未找到匹配的文本`, toolCallId: '', isError: true };
@@ -35,7 +44,7 @@ export class FileEditTool extends BaseTool {
       await RNFS.writeFile(filePath, newContent, 'utf8');
 
       return {
-        content: `成功编辑文件 ${input.file_path} (${count} 处匹配已替换)\n\n文件操作已完成。请检查是否需要继续其他操作，或向用户报告结果。`,
+        content: `成功编辑文件 ${input.file_path} (${count} 处匹配已替换)`,
         toolCallId: '',
       };
     } catch (err: any) {
