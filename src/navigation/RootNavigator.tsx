@@ -7,6 +7,8 @@ import ModelAddScreen from '../screens/ModelAddScreen';
 import OutputSettingsScreen from '../screens/OutputSettingsScreen';
 import LLMSettingsScreen from '../screens/LLMSettingsScreen';
 import MCPSettingsScreen from '../screens/MCPSettingsScreen';
+import AboutScreen from '../screens/AboutScreen';
+import LicensesScreen from '../screens/LicensesScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -16,6 +18,8 @@ export type RootStackParamList = {
   OutputSettings: undefined;
   LLMSettings: undefined;
   MCPSettings: undefined;
+  About: undefined;
+  Licenses: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,6 +45,7 @@ export default function RootNavigator() {
             onOutput={() => navigation.navigate('OutputSettings')}
             onLLM={() => navigation.navigate('LLMSettings')}
             onMCP={() => navigation.navigate('MCPSettings')}
+            onAbout={() => navigation.navigate('About')}
           />
         )}
       </Stack.Screen>
@@ -71,6 +76,16 @@ export default function RootNavigator() {
       <Stack.Screen name="MCPSettings">
         {({ navigation }) => (
           <MCPSettingsScreen onBack={() => navigation.goBack()} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="About">
+        {({ navigation }) => (
+          <AboutScreen onOpenLicenses={() => navigation.navigate('Licenses')} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Licenses">
+        {({ navigation }) => (
+          <LicensesScreen />
         )}
       </Stack.Screen>
     </Stack.Navigator>

@@ -11,6 +11,7 @@ interface Props {
   onOutput: () => void;
   onLLM: () => void;
   onMCP: () => void;
+  onAbout: () => void;
 }
 
 const SETTINGS_ITEMS = [
@@ -18,10 +19,10 @@ const SETTINGS_ITEMS = [
   { id: 'llm', label: 'LLM 设置', desc: '显示模式和交流语气', icon: Brain },
   { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
-  { id: 'about', label: '关于', desc: 'LineCode v1.0.0-alpha.1', icon: Cpu },
+  { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },
 ];
 
-export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP }: Props) {
+export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout }: Props) {
   const insets = useSafeAreaInsets();
 
   const handlePress = (id: string) => {
@@ -29,6 +30,7 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
     if (id === 'output') onOutput();
     if (id === 'llm') onLLM();
     if (id === 'mcp') onMCP();
+    if (id === 'about') onAbout();
   };
 
   return (
