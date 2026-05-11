@@ -5,6 +5,7 @@ import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
 import AgentBlock from './AgentBlock';
+import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, parseToolInput } from '../../mcp/toolUtils';
 
 interface Props {
   toolCall: ToolCall;
@@ -14,19 +15,10 @@ interface Props {
   block?: ContentBlock;
 }
 
-const READ_TOOLS = new Set(['file_read', 'glob']);
-const WRITE_TOOLS = new Set(['file_write', 'file_edit']);
-const DELETE_TOOLS = new Set(['file_delete']);
-const HTTP_TOOLS = new Set(['http_server']);
-const AGENT_TOOLS = new Set(['agent']);
-
 export default React.memo(function ToolCallBlock({ toolCall, result, isError, homePath, block }: Props) {
-  let input: Record<string, unknown> = {};
-  try {
-    input = JSON.parse(toolCall.arguments);
-  } catch {}
+  const input = parseToolInput(toolCall);
 
-  if (AGENT_TOOLS.has(toolCall.name)) {
+  if (isAgentTool(toolCall.name)) {
     const agentType = (input.type as 'explore' | 'sub-coding') || 'explore';
     const agentStatus = block?.agentStatus || (result ? (isError ? 'error' : 'done') : 'running');
     const agentOutput = block?.agentOutput || result;
@@ -46,11 +38,11 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     );
   }
 
-  if (READ_TOOLS.has(toolCall.name)) {
+  if (isReadTool(toolCall.name)) {
     return <ToolCallRead name={toolCall.name} input={input} result={result} isError={isError} />;
   }
 
-  if (WRITE_TOOLS.has(toolCall.name)) {
+  if (isWriteTool(toolCall.name)) {
     return (
       <ToolCallWrite
         name={toolCall.name}
@@ -63,7 +55,7 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     );
   }
 
-  if (DELETE_TOOLS.has(toolCall.name)) {
+  if (isDeleteTool(toolCall.name)) {
     return (
       <ToolCallDelete
         input={input}
@@ -73,7 +65,7 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     );
   }
 
-  if (HTTP_TOOLS.has(toolCall.name)) {
+  if (isHttpTool(toolCall.name)) {
     return <ToolCallHttpServer input={input} result={result} isError={isError} />;
   }
 

@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { diffService } from '../../../services/DiffService';
 
 export class FileWriteTool extends BaseTool {
   readonly name = 'file_write';
@@ -21,7 +22,6 @@ export class FileWriteTool extends BaseTool {
       const filePath = this.resolvePath(input.file_path, context.homePath);
       const dir = filePath.substring(0, filePath.lastIndexOf('/'));
 
-      // 确保目录存在（递归创建）
       const dirExists = await RNFS.exists(dir);
       if (!dirExists) {
         await this.mkdirRecursive(dir);
@@ -42,8 +42,11 @@ export class FileWriteTool extends BaseTool {
         }
       }
 
-      // 写入新内容
       await RNFS.writeFile(filePath, input.content, 'utf8');
+
+      if (fileExists && oldContent !== input.content) {
+        await diffService.recordDiff(filePath, oldContent, input.content);
+      }
 
       const isNewFile = !fileExists;
       const lineCount = input.content.split('\n').length;

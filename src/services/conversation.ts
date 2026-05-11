@@ -2,26 +2,81 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message } from '../types';
 
 const KEYS = {
-  CONVERSATIONS: '@lineai_conversations',
+  CONVERSATION_LIST: '@lineai_conversation_list',
   CURRENT: '@lineai_current_conversation',
+  CONVERSATION_PREFIX: '@lineai_conv_',
 } as const;
 
-export interface Conversation {
+export interface ConversationMeta {
   id: string;
   title: string;
-  messages: Message[];
   createdAt: number;
   updatedAt: number;
 }
 
+export interface Conversation extends ConversationMeta {
+  messages: Message[];
+}
+
 class ConversationStore {
-  async getConversations(): Promise<Conversation[]> {
-    const json = await AsyncStorage.getItem(KEYS.CONVERSATIONS);
+  private cache: Map<string, Conversation> = new Map();
+
+  async getConversationList(): Promise<ConversationMeta[]> {
+    const json = await AsyncStorage.getItem(KEYS.CONVERSATION_LIST);
     return json ? JSON.parse(json) : [];
   }
 
-  async saveConversations(conversations: Conversation[]): Promise<void> {
-    await AsyncStorage.setItem(KEYS.CONVERSATIONS, JSON.stringify(conversations));
+  private async saveConversationList(list: ConversationMeta[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.CONVERSATION_LIST, JSON.stringify(list));
+  }
+
+  async getConversation(id: string): Promise<Conversation | null> {
+    if (this.cache.has(id)) {
+      return this.cache.get(id)!;
+    }
+    try {
+      const json = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + id);
+      if (json) {
+        const conv = JSON.parse(json) as Conversation;
+        this.cache.set(id, conv);
+        return conv;
+      }
+    } catch (err) {
+      console.error('[LineCode] Failed to get conversation:', id, err);
+    }
+    return null;
+  }
+
+  private async saveConversation(conv: Conversation): Promise<void> {
+    this.cache.set(conv.id, conv);
+    try {
+      await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, JSON.stringify(conv));
+    } catch (err) {
+      console.error('[LineCode] Failed to save conversation:', conv.id, err);
+    }
+  }
+
+  private async deleteConversationData(id: string): Promise<void> {
+    this.cache.delete(id);
+    try {
+      await AsyncStorage.removeItem(KEYS.CONVERSATION_PREFIX + id);
+    } catch (err) {
+      console.error('[LineCode] Failed to delete conversation:', id, err);
+    }
+  }
+
+  async getConversations(): Promise<Conversation[]> {
+    const list = await this.getConversationList();
+    const conversations: Conversation[] = [];
+    for (const meta of list) {
+      const conv = await this.getConversation(meta.id);
+      if (conv) {
+        conversations.push(conv);
+      } else {
+        conversations.push({ ...meta, messages: [] });
+      }
+    }
+    return conversations;
   }
 
   async getCurrentConversationId(): Promise<string | null> {
@@ -41,26 +96,45 @@ class ConversationStore {
       createdAt: now,
       updatedAt: now,
     };
-    const conversations = await this.getConversations();
-    conversations.unshift(conv);
-    await this.saveConversations(conversations);
+
+    const list = await this.getConversationList();
+    list.unshift({ id: conv.id, title: conv.title, createdAt: conv.createdAt, updatedAt: conv.updatedAt });
+    await this.saveConversationList(list);
+    await this.saveConversation(conv);
     await this.setCurrentConversationId(conv.id);
     return conv;
   }
 
   async updateConversation(id: string, updates: Partial<Conversation>): Promise<void> {
-    const conversations = await this.getConversations();
-    const index = conversations.findIndex(c => c.id === id);
-    if (index >= 0) {
-      conversations[index] = { ...conversations[index], ...updates, updatedAt: Date.now() };
-      await this.saveConversations(conversations);
+    const conv = await this.getConversation(id);
+    if (conv) {
+      const updated: Conversation = { ...conv, ...updates, updatedAt: Date.now() };
+      await this.saveConversation(updated);
+
+      const list = await this.getConversationList();
+      const index = list.findIndex(m => m.id === id);
+      if (index >= 0) {
+        list[index] = { id: updated.id, title: updated.title, createdAt: updated.createdAt, updatedAt: updated.updatedAt };
+        await this.saveConversationList(list);
+      }
     }
   }
 
   async deleteConversation(id: string): Promise<void> {
-    const conversations = await this.getConversations();
-    const filtered = conversations.filter(c => c.id !== id);
-    await this.saveConversations(filtered);
+    const list = await this.getConversationList();
+    const filtered = list.filter(m => m.id !== id);
+    await this.saveConversationList(filtered);
+    await this.deleteConversationData(id);
+  }
+
+  async clearAll(): Promise<void> {
+    const list = await this.getConversationList();
+    for (const meta of list) {
+      await this.deleteConversationData(meta.id);
+    }
+    await AsyncStorage.removeItem(KEYS.CONVERSATION_LIST);
+    await AsyncStorage.removeItem(KEYS.CURRENT);
+    this.cache.clear();
   }
 }
 

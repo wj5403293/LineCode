@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { FileCode, Check, X, AlertCircle } from 'lucide-react-native';
+import { FileCode, Check, X, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { colors, spacing, fontSizes, radius } from '../../constants/theme';
 import DiffView from './DiffView';
 import { diffService } from '../../services/DiffService';
@@ -20,21 +20,22 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
   const fileName = filePath.split('/').pop() || filePath;
   const [confirmed, setConfirmed] = useState<boolean | null>(null);
   const [diffRecord, setDiffRecord] = useState<DiffRecord | null>(null);
+  const [diffExpanded, setDiffExpanded] = useState(false);
 
   const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
   const langLabel = ext ? ext.toUpperCase() : 'TXT';
 
-  const isComplete = !!result && !streaming;
+  const isComplete = !streaming && !!result;
 
   useEffect(() => {
-    if (isComplete && !isError) {
+    if (isComplete && !isError && filePath) {
       const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
       diffService.getDiffChain(fullPath).then(chain => {
         const last = chain.filter(d => !d.reverted).pop();
         if (last) {
           setDiffRecord(last);
         }
-      });
+      }).catch(() => {});
     }
   }, [isComplete, isError, filePath, homePath]);
 
@@ -58,7 +59,10 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
         <Text style={styles.fileName} numberOfLines={1}>{fileName}</Text>
         <View style={styles.actions}>
           {streaming && (
-            <ActivityIndicator size="small" color={colors.accent} />
+            <View style={styles.streamingBadge}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={styles.streamingText}>编写中</Text>
+            </View>
           )}
           {!streaming && !isComplete && (
             <ActivityIndicator size="small" color={colors.textTertiary} />
@@ -90,18 +94,30 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
         </View>
       </View>
 
-      {/* 写入完成且有 diff */}
       {hasDiff && diffRecord && (
-        <>
-          <View style={styles.divider} />
-          <DiffView
-            oldContent={diffRecord.oldContent}
-            newContent={diffRecord.newContent}
-          />
-        </>
+        <View style={styles.diffSection}>
+          <TouchableOpacity
+            style={styles.diffHeader}
+            onPress={() => setDiffExpanded(prev => !prev)}
+            activeOpacity={0.7}
+          >
+            {diffExpanded ? (
+              <ChevronDown size={12} color={colors.accent} />
+            ) : (
+              <ChevronRight size={12} color={colors.accent} />
+            )}
+            <Text style={styles.diffLabel}>查看变更</Text>
+          </TouchableOpacity>
+
+          {diffExpanded && (
+            <DiffView
+              oldContent={diffRecord.oldContent}
+              newContent={diffRecord.newContent}
+            />
+          )}
+        </View>
       )}
 
-      {/* 错误信息 */}
       {isError && result && (
         <View style={styles.errorSection}>
           <AlertCircle size={14} color="#F85149" />
@@ -109,7 +125,6 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
         </View>
       )}
 
-      {/* 正常结果信息 */}
       {isComplete && !isError && result && confirmed !== null && (
         <Text style={styles.result}>{result}</Text>
       )}
@@ -156,6 +171,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  streamingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(48,209,88,0.15)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  streamingText: {
+    color: colors.accent,
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+  },
   confirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -196,20 +225,21 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
-  progressSection: {
+  diffSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  diffHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 4,
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.sm,
   },
-  progressText: {
-    color: colors.textTertiary,
+  diffLabel: {
+    color: colors.accent,
     fontSize: fontSizes.xs,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    fontWeight: '500',
   },
   errorSection: {
     flexDirection: 'row',

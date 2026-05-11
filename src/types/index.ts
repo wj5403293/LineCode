@@ -58,6 +58,7 @@ export interface Message {
   timestamp: number;
   streaming?: boolean;
   reasoningContent?: string;
+  isError?: boolean;
 }
 
 export interface Model {
