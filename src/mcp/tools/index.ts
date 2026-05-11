@@ -6,6 +6,7 @@ import { FileDeleteTool } from './builtins/FileDeleteTool';
 import { GlobTool } from './builtins/GlobTool';
 import { HttpServerTool } from './builtins/HttpServerTool';
 import { AgentTool } from './builtins/AgentTool';
+import { AgentPipelineTool } from './builtins/AgentPipelineTool';
 
 export function createDefaultRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -16,6 +17,7 @@ export function createDefaultRegistry(): ToolRegistry {
   registry.register(new GlobTool());
   registry.register(new HttpServerTool());
   registry.register(new AgentTool());
+  registry.register(new AgentPipelineTool());
   return registry;
 }
 

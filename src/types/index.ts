@@ -3,6 +3,9 @@ export interface AgentToolCall {
   input: Record<string, unknown>;
   result?: string;
   isError?: boolean;
+  isLocked?: boolean;
+  lockedBy?: string;
+  lockedFilePath?: string;
 }
 
 export interface ContentBlock {
@@ -14,10 +17,14 @@ export interface ContentBlock {
   toolCallId?: string;
   isError?: boolean;
   agentType?: 'explore' | 'sub-coding';
-  agentStatus?: 'running' | 'done' | 'error';
+  agentStatus?: 'running' | 'done' | 'error' | 'waiting_unlock';
   agentOutput?: string;
   agentThinking?: string;
   agentToolCalls?: AgentToolCall[];
+  waitingForUnlock?: {
+    filePath: string;
+    lockedBy: string;
+  };
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';

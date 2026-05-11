@@ -5,7 +5,7 @@ export const TOOL_CATEGORIES = {
   WRITE: new Set(['file_write', 'file_edit']),
   DELETE: new Set(['file_delete']),
   HTTP: new Set(['http_server']),
-  AGENT: new Set(['agent']),
+  AGENT: new Set(['agent', 'agent_pipeline']),
 } as const;
 
 export function getToolCategory(name: string): ToolCategory | null {

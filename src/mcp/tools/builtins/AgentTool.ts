@@ -1,9 +1,11 @@
+import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult, AgentInstance, Model, ToolCall, ContentBlock, AgentToolCall } from '../../../types';
 import { aiService, ChatMessage } from '../../../services/ai';
 import { fileLock } from '../../../services/FileLock';
 import { modelStorage } from '../../../services/storage';
-import { createDefaultRegistry } from '../index';
+import { createDefaultRegistry, ToolRegistry } from '../index';
+import { agentToolManager } from '../../AgentToolManager';
 
 type AgentType = 'explore' | 'sub-coding';
 
@@ -17,13 +19,20 @@ const AGENT_PROMPTS: Record<AgentType, string> = {
 - 你必须始终使用中文进行思考和交流`,
 
   'sub-coding': `你是一个编程 Agent。你的任务是完成具体的编程任务。
-规则：
-- 仔细分析需求，理解上下文
+
+重要规则：
+- 你只负责自己被分配的任务区域，不要修改其他区域的文件
+- 如果遇到错误，先判断是否是自己任务范围内的原因：
+  - 如果是自己的代码问题，修复它
+  - 如果不是自己任务范围导致的错误，不要修改，可能是其他 Agent 还在编写中
 - 编写高质量、可维护的代码
 - 完成后进行简单的验证
-- 如果遇到问题，清晰地报告错误
-- 只处理自己任务范围内的文件，不要修改与任务无关的文件
-- 你必须始终使用中文进行思考和交流`,
+- 你必须始终使用中文进行思考和交流
+
+文件操作规则：
+- 只修改任务明确指定的文件
+- 如果需要修改多个文件，确保它们都在你的任务范围内
+- 如果文件被锁定或修改失败，等待后重试或报告问题`,
 };
 
 const AGENT_MAX_ITERATIONS = 20;
@@ -49,6 +58,11 @@ export class AgentTool extends BaseTool {
   private runningCount = 0;
   private maxConcurrent = 5;
   private aborted = false;
+  private currentAgentRegistry: ToolRegistry | null = null;
+  private currentAgentId: number = 0;
+  private waitingForUnlock: { filePath: string; lockedBy: string } | null = null;
+  private unlockWaitResolve: ((continue_: boolean) => void) | null = null;
+  private currentHomePath: string = '';
 
   setListener(listener: (agents: AgentInstance[]) => void) {
     this.agentsListener = listener;
@@ -60,10 +74,136 @@ export class AgentTool extends BaseTool {
 
   abort() {
     this.aborted = true;
+    if (this.unlockWaitResolve) {
+      this.unlockWaitResolve(false);
+      this.unlockWaitResolve = null;
+    }
+    this.waitingForUnlock = null;
+  }
+
+  continueAfterUnlock() {
+    if (this.unlockWaitResolve) {
+      this.unlockWaitResolve(true);
+      this.unlockWaitResolve = null;
+    }
+    this.waitingForUnlock = null;
+  }
+
+  getWaitingForUnlock() {
+    return this.waitingForUnlock;
   }
 
   private notifyChange() {
     this.agentsListener?.([...this.agents]);
+  }
+
+  private injectFileLock(agentId: number, agentName: string, homePath: string): void {
+    const fileWriteTool = this.currentAgentRegistry?.get('file_write');
+    const fileEditTool = this.currentAgentRegistry?.get('file_edit');
+
+    const wrapWithLock = (origExecute: Function, toolName: string) => {
+      return async (input: Record<string, unknown>, ctx: ToolContext) => {
+        const filePath = String(input.file_path || '');
+        const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
+
+        let currentContent = '';
+        try {
+          const exists = await RNFS.exists(fullPath);
+          if (exists) {
+            try {
+              const items = await RNFS.readDir(fullPath);
+              return {
+                content: `路径是一个目录，无法写入文件: ${filePath}`,
+                isError: true,
+                toolCallId: '',
+              };
+            } catch {
+              currentContent = await RNFS.readFile(fullPath, 'utf8');
+            }
+          }
+        } catch {
+          // 文件不存在，用空字符串
+        }
+
+        const status = fileLock.acquire(fullPath, agentId, agentName, currentContent);
+
+        if (status === 'ok') {
+          try {
+            return await origExecute(input, ctx);
+          } finally {
+            // 保持锁定，Agent 结束时统一释放
+          }
+        }
+
+        if (status === 'modified') {
+          return {
+            content: `文件 ${filePath} 已被其他 Agent 修改，请重新读取文件后再操作。`,
+            isError: true,
+            toolCallId: '',
+          };
+        }
+
+        // status === 'wait'，文件被其他 Agent 锁定
+        const lockInfo = fileLock.isLockedByOther(fullPath, agentId);
+        const lockedBy = lockInfo.locked ? lockInfo.by : '未知';
+        
+        this.waitingForUnlock = { filePath, lockedBy };
+        
+        const shouldContinue = await new Promise<boolean>(resolve => {
+          this.unlockWaitResolve = resolve;
+        });
+        
+        if (!shouldContinue || this.aborted) {
+          return {
+            content: '用户取消了等待',
+            isError: true,
+            toolCallId: '',
+          };
+        }
+
+        // 重新读取文件内容
+        try {
+          const exists = await RNFS.exists(fullPath);
+          if (exists) {
+            try {
+              const items = await RNFS.readDir(fullPath);
+              return {
+                content: `路径是一个目录，无法写入文件: ${filePath}`,
+                isError: true,
+                toolCallId: '',
+              };
+            } catch {
+              currentContent = await RNFS.readFile(fullPath, 'utf8');
+            }
+          }
+        } catch {
+          // 文件不存在，用空字符串
+        }
+
+        // 再次尝试获取锁
+        const retryStatus = fileLock.acquire(fullPath, agentId, agentName, currentContent);
+        if (retryStatus === 'ok') {
+          try {
+            return await origExecute(input, ctx);
+          } finally {
+            // 保持锁定
+          }
+        }
+
+        return {
+          content: `无法获取文件锁: ${retryStatus}`,
+          isError: true,
+          toolCallId: '',
+        };
+      };
+    };
+
+    if (fileWriteTool) {
+      (fileWriteTool as any).execute = wrapWithLock((fileWriteTool as any).execute.bind(fileWriteTool), 'file_write');
+    }
+    if (fileEditTool) {
+      (fileEditTool as any).execute = wrapWithLock((fileEditTool as any).execute.bind(fileEditTool), 'file_edit');
+    }
   }
 
   private async executeToolCall(
@@ -71,7 +211,7 @@ export class AgentTool extends BaseTool {
     homePath: string, 
     onConfirm?: (toolCall: ToolCall) => Promise<boolean>
   ): Promise<ToolResult> {
-    const registry = createDefaultRegistry();
+    const registry = this.currentAgentRegistry || createDefaultRegistry();
     const tool = registry.get(toolCall.name);
 
     if (!tool) {
@@ -159,18 +299,28 @@ export class AgentTool extends BaseTool {
     this.agents.push(agent);
     this.runningCount++;
     this.aborted = false;
+    agentToolManager.setCurrent(this);
     this.notifyChange();
+
+    this.currentAgentRegistry = createDefaultRegistry();
+    this.currentAgentId = agent.id;
+    
+    if (type === 'sub-coding') {
+      this.injectFileLock(agent.id, description, context.homePath);
+    }
 
     const toolCallRecords: AgentToolCall[] = [];
     let thinkingContent = '';
 
     const progressUpdate = (update: Partial<ContentBlock>) => {
+      const waitingInfo = this.waitingForUnlock;
       onProgress?.({
         agentType: type,
-        agentStatus: update.agentStatus || 'running',
+        agentStatus: waitingInfo ? 'waiting_unlock' : (update.agentStatus || 'running'),
         agentOutput: update.agentOutput,
         agentThinking: update.agentThinking ?? thinkingContent,
         agentToolCalls: update.agentToolCalls ?? [...toolCallRecords],
+        waitingForUnlock: waitingInfo || undefined,
       });
     };
 
@@ -187,8 +337,7 @@ export class AgentTool extends BaseTool {
         { role: 'user', content: agentPrompt },
       ];
 
-      const registry = createDefaultRegistry();
-      const allTools = registry.getAll().filter(t => t.name !== 'agent');
+      const allTools = this.currentAgentRegistry!.getAll().filter(t => t.name !== 'agent');
       const tools = allTools.map(t => t.toJSON());
 
       for (let iteration = 0; iteration < AGENT_MAX_ITERATIONS; iteration++) {
@@ -303,6 +452,9 @@ export class AgentTool extends BaseTool {
     } finally {
       this.runningCount--;
       fileLock.unlockAll(agent.id);
+      this.currentAgentRegistry = null;
+      this.currentAgentId = 0;
+      agentToolManager.setCurrent(null);
       this.notifyChange();
     }
 

@@ -6,6 +6,7 @@ import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
 import AgentBlock from './AgentBlock';
 import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, parseToolInput } from '../../mcp/toolUtils';
+import { agentToolManager } from '../../mcp/AgentToolManager';
 
 interface Props {
   toolCall: ToolCall;
@@ -24,6 +25,8 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     const agentOutput = block?.agentOutput || result;
     const agentThinking = block?.agentThinking;
     const agentToolCalls = block?.agentToolCalls;
+    const waitingForUnlock = block?.waitingForUnlock;
+    
     return (
       <AgentBlock
         name={String(input.description || 'Agent')}
@@ -34,6 +37,9 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
         toolCalls={agentToolCalls}
         streaming={!result && !block?.agentOutput}
         homePath={homePath}
+        waitingForUnlock={waitingForUnlock}
+        onContinueAfterUnlock={() => agentToolManager.continueAfterUnlock()}
+        onCancelWait={() => agentToolManager.abort()}
       />
     );
   }

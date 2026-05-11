@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { Bot, ChevronRight, ChevronDown, CheckCircle, XCircle } from 'lucide-react-native';
+import { Bot, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock } from 'lucide-react-native';
 import { colors, spacing, fontSizes } from '../../../constants/theme';
 
 interface AgentHeaderProps {
   name: string;
   agentType: 'explore' | 'sub-coding';
-  status: 'running' | 'done' | 'error';
+  status: 'running' | 'done' | 'error' | 'waiting_unlock';
   expanded: boolean;
   onToggle: () => void;
 }
@@ -31,6 +31,8 @@ export function AgentHeader({ name, agentType, status, expanded, onToggle }: Age
           <ActivityIndicator size="small" color={colors.accent} />
         ) : status === 'done' ? (
           <CheckCircle size={14} color="#3FB950" />
+        ) : status === 'waiting_unlock' ? (
+          <Clock size={14} color="#FF9800" />
         ) : (
           <XCircle size={14} color="#F85149" />
         )}
