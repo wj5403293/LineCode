@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { FileCode, Check, X, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 import DiffView from './DiffView';
 import { diffService } from '../../services/DiffService';
 import { DiffRecord } from '../../types';
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default React.memo(function ToolCallWrite({ name, input, result, isError, homePath, streaming }: Props) {
+  const { colors } = useTheme();
   const filePath = String(input.file_path || '');
   const fileName = filePath.split('/').pop() || filePath;
   const [confirmed, setConfirmed] = useState<boolean | null>(null);
@@ -50,18 +52,18 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.codeBg }]}>
       <View style={styles.header}>
-        <View style={styles.langBadge}>
+        <View style={[styles.langBadge, { backgroundColor: colors.accentMuted }]}>
           <FileCode size={12} color={colors.accent} />
-          <Text style={styles.langText}>{langLabel}</Text>
+          <Text style={[styles.langText, { color: colors.accent }]}>{langLabel}</Text>
         </View>
-        <Text style={styles.fileName} numberOfLines={1}>{fileName}</Text>
+        <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>{fileName}</Text>
         <View style={styles.actions}>
           {streaming && (
-            <View style={styles.streamingBadge}>
+            <View style={[styles.streamingBadge, { backgroundColor: colors.accentMuted2 }]}>
               <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={styles.streamingText}>编写中</Text>
+              <Text style={[styles.streamingText, { color: colors.accent }]}>编写中</Text>
             </View>
           )}
           {!streaming && !isComplete && (
@@ -69,33 +71,33 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
           )}
           {isComplete && confirmed === null && !isError && (
             <>
-              <TouchableOpacity style={styles.rejectBtn} onPress={handleReject} activeOpacity={0.7}>
-                <X size={14} color="#F85149" />
-                <Text style={styles.rejectText}>拒绝</Text>
+              <TouchableOpacity style={[styles.rejectBtn, { backgroundColor: colors.dangerMuted }]} onPress={handleReject} activeOpacity={0.7}>
+                <X size={14} color={colors.danger} />
+                <Text style={[styles.rejectText, { color: colors.danger }]}>拒绝</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.7}>
-                <Check size={14} color="#FFF" />
-                <Text style={styles.confirmText}>同意</Text>
+              <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.accent }]} onPress={handleConfirm} activeOpacity={0.7}>
+                <Check size={14} color={colors.textOnColor} />
+                <Text style={[styles.confirmText, { color: colors.textOnColor }]}>同意</Text>
               </TouchableOpacity>
             </>
           )}
           {confirmed === true && (
             <View style={styles.statusBadge}>
-              <Check size={12} color="#3FB950" />
-              <Text style={styles.statusText}>已同意</Text>
+              <Check size={12} color={colors.success} />
+              <Text style={[styles.statusText, { color: colors.success }]}>已同意</Text>
             </View>
           )}
           {confirmed === false && (
             <View style={styles.statusBadge}>
-              <X size={12} color="#F85149" />
-              <Text style={[styles.statusText, { color: '#F85149' }]}>已拒绝</Text>
+              <X size={12} color={colors.danger} />
+              <Text style={[styles.statusText, { color: colors.danger }]}>已拒绝</Text>
             </View>
           )}
         </View>
       </View>
 
       {hasDiff && diffRecord && (
-        <View style={styles.diffSection}>
+        <View style={[styles.diffSection, { borderTopColor: colors.codeBorder }]}>
           <TouchableOpacity
             style={styles.diffHeader}
             onPress={() => setDiffExpanded(prev => !prev)}
@@ -106,7 +108,7 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
             ) : (
               <ChevronRight size={12} color={colors.accent} />
             )}
-            <Text style={styles.diffLabel}>查看变更</Text>
+            <Text style={[styles.diffLabel, { color: colors.accent }]}>查看变更</Text>
           </TouchableOpacity>
 
           {diffExpanded && (
@@ -119,14 +121,14 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
       )}
 
       {isError && result && (
-        <View style={styles.errorSection}>
-          <AlertCircle size={14} color="#F85149" />
-          <Text style={styles.errorText}>{result}</Text>
+        <View style={[styles.errorSection, { borderTopColor: colors.codeBorder }]}>
+          <AlertCircle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{result}</Text>
         </View>
       )}
 
       {isComplete && !isError && result && confirmed !== null && (
-        <Text style={styles.result}>{result}</Text>
+        <Text style={[styles.result, { color: colors.textSecondary, borderTopColor: colors.codeBorder }]}>{result}</Text>
       )}
     </View>
   );
@@ -134,7 +136,6 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
@@ -150,18 +151,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(48,209,88,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   langText: {
-    color: colors.accent,
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
   fileName: {
-    color: colors.text,
     fontSize: fontSizes.sm,
     fontFamily: 'monospace',
     flex: 1,
@@ -175,13 +173,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(48,209,88,0.15)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 4,
   },
   streamingText: {
-    color: colors.accent,
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
@@ -189,13 +185,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.accent,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 4,
   },
   confirmText: {
-    color: '#FFF',
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
@@ -203,13 +197,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(248,81,73,0.15)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 4,
   },
   rejectText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
@@ -221,13 +213,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   statusText: {
-    color: '#3FB950',
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
   diffSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   diffHeader: {
     flexDirection: 'row',
@@ -237,7 +227,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   diffLabel: {
-    color: colors.accent,
     fontSize: fontSizes.xs,
     fontWeight: '500',
   },
@@ -248,18 +237,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   errorText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     flex: 1,
   },
   result: {
-    color: colors.textSecondary,
     fontSize: fontSizes.xs,
     padding: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
   },
 });

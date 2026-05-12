@@ -1,7 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MCPConfig } from '../types';
+import { permissionService } from './PermissionService';
+import { MCPExecutionMode, settingsService } from './settings';
 
 const STORAGE_KEY = '@linecode_mcp_configs';
+
+// 按权限模式过滤：只读模式下只允许 read 类工具
+const TOOL_CATEGORIES: Record<string, 'read' | 'write' | 'system'> = {
+  file_read: 'read',
+  glob: 'read',
+  file_write: 'write',
+  file_edit: 'write',
+  file_delete: 'write',
+  http_server: 'system',
+  agent: 'system',
+  agent_pipeline: 'system',
+  shell_execute: 'system',
+};
+
+function isToolAllowed(toolName: string, mode: string): boolean {
+  if (mode !== 'readonly') return true;
+  return TOOL_CATEGORIES[toolName] === 'read';
+}
 
 const DEFAULT_CONFIGS: MCPConfig[] = [
   {
@@ -23,7 +43,14 @@ const DEFAULT_CONFIGS: MCPConfig[] = [
     name: 'Agent',
     description: '分派 Agent 处理任务',
     enabled: true,
-    tools: ['agent'],
+    tools: ['agent', 'agent_pipeline'],
+  },
+  {
+    id: 'shell',
+    name: 'SSH Shell',
+    description: '通过 SSH 执行 shell 命令',
+    enabled: true,
+    tools: ['shell_execute'],
   },
 ];
 
@@ -49,7 +76,23 @@ class MCPService {
           name: 'Agent',
           description: '分派 Agent 处理任务',
           enabled: true,
-          tools: ['agent'],
+          tools: ['agent', 'agent_pipeline'],
+        });
+        await this.save();
+      }
+      const agent = (parsed as MCPConfig[]).find(c => c.id === 'agent');
+      if (agent && !agent.tools.includes('agent_pipeline')) {
+        agent.tools = ['agent', 'agent_pipeline'];
+        await this.save();
+      }
+      const hasShell = (parsed as MCPConfig[]).some(c => c.id === 'shell');
+      if (!hasShell && this.configs) {
+        this.configs.push({
+          id: 'shell',
+          name: 'SSH Shell',
+          description: '通过 SSH 执行 shell 命令',
+          enabled: true,
+          tools: ['shell_execute'],
         });
         await this.save();
       }
@@ -71,7 +114,18 @@ class MCPService {
 
   async getEnabledTools(): Promise<string[]> {
     const configs = await this.getConfigs();
-    return configs.filter(c => c.enabled).flatMap(c => c.tools);
+    const executionMode = await this.getExecutionMode();
+    if (executionMode === 'ssh') {
+      const shell = configs.find(c => c.id === 'shell');
+      return shell?.enabled ? ['shell_execute'] : [];
+    }
+
+    const mode = permissionService.getMode();
+    return configs
+      .filter(c => c.enabled)
+      .filter(c => c.id !== 'shell')
+      .flatMap(c => c.tools)
+      .filter(t => isToolAllowed(t, mode));
   }
 
   async getEnabledToolNames(): Promise<Set<string>> {
@@ -81,20 +135,47 @@ class MCPService {
 
   async buildToolPrompt(): Promise<string> {
     const configs = await this.getConfigs();
-    const enabled = configs.filter(c => c.enabled);
+    const executionMode = await this.getExecutionMode();
+    if (executionMode === 'ssh') {
+      const shell = configs.find(c => c.id === 'shell');
+      if (!shell?.enabled) return '';
+      return [
+        '## 可用工具',
+        '当前执行目标是 SSH Shell。你只能使用 shell_execute 工具。',
+        '本地文件读写、搜索、Agent、Agent Pipeline 和 HTTP 服务器已禁用。',
+        '不要引用本地 home 工作目录；shell 命令默认在 SSH 会话的登录目录执行，需要目录信息时先执行 pwd 或 cd。',
+        '如需读取、写入或搜索文件，请通过 shell 命令在 SSH 环境内完成。',
+        '工具返回后必须继续根据结果判断下一步，直到任务完成后再回复用户。',
+      ].join('\n');
+    }
+
+    const mode = permissionService.getMode();
+    const enabled = configs.filter(c => c.enabled && c.id !== 'shell');
 
     if (enabled.length === 0) return '';
 
     const sections = enabled.map(config => {
-      const toolList = config.tools.map(t => `  - ${t}`).join('\n');
+      const tools = config.tools.filter(t => isToolAllowed(t, mode));
+      if (tools.length === 0) return '';
+      const toolList = tools.map(t => `  - ${t}`).join('\n');
       return `### ${config.name}\n${toolList}`;
-    });
+    }).filter(Boolean);
 
-    return `## 可用工具\n你可以使用以下工具：\n\n${sections.join('\n\n')}\n\n工具以 function calling 方式调用。`;
+    if (sections.length === 0) return '';
+
+    return `## 可用工具\n你可以使用以下工具：\n\n${sections.join('\n\n')}\n\n工具以 function calling 方式调用。工具返回后必须继续根据结果判断下一步，直到任务完成后再回复用户。`;
   }
 
   private async save(): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(this.configs));
+  }
+
+  async getExecutionMode(): Promise<MCPExecutionMode> {
+    return settingsService.getMCPExecutionMode();
+  }
+
+  async setExecutionMode(mode: MCPExecutionMode): Promise<void> {
+    await settingsService.setMCPExecutionMode(mode);
   }
 }
 

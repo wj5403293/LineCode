@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ContentBlock, ToolCall, ToolResult } from '../../types';
-import { colors, spacing, radius } from '../../constants/theme';
+import { spacing, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 import { ContentWithText } from './ContentBlockRenderer';
 import TextBlock from './TextBlock';
 
@@ -15,21 +16,40 @@ interface Props {
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
 export default React.memo(function AIBubbleCompact({
-  content, blocks, toolCalls, toolResults, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable, homePath,
+  content,
+  blocks,
+  toolCalls,
+  toolResults,
+  streaming,
+  codeWrap,
+  thinkingAutoExpand,
+  thinkingScrollable,
+  homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
 }: Props) {
+  const { colors } = useTheme();
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
   const hasContent = content && content.trim().length > 0;
 
   return (
     <View style={styles.row}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>AI</Text>
+      <View style={[styles.avatar, { backgroundColor: colors.accentDim }]}>
+        <Text style={[styles.avatarText, { color: colors.accent }]}>AI</Text>
       </View>
-      <View style={styles.bubble}>
+      <View style={[styles.bubble, { backgroundColor: colors.aiBubble }]}>
         {hasContent && !hasBlocks && !hasToolCalls && (
           <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
         )}
@@ -44,6 +64,11 @@ export default React.memo(function AIBubbleCompact({
             thinkingAutoExpand={thinkingAutoExpand}
             thinkingScrollable={thinkingScrollable}
             homePath={homePath}
+            shellConfirmToolCallId={shellConfirmToolCallId}
+            onShellCancel={onShellCancel}
+            onShellConfirm={onShellConfirm}
+            onShellDefaultExecute={onShellDefaultExecute}
+            onViewShellCommand={onViewShellCommand}
           />
         )}
       </View>
@@ -65,19 +90,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.lg,
     borderBottomLeftRadius: 4,
-    backgroundColor: colors.aiBubble,
   },
   avatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.accentDim,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,
   },
   avatarText: {
-    color: colors.accent,
     fontSize: 9,
     fontWeight: '700',
   },

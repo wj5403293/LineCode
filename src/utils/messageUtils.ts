@@ -71,6 +71,7 @@ export function finalizeAIMessage(
     blocks: ContentBlock[];
     toolCalls?: ToolCall[];
     reasoningContent?: string;
+    reasoningDetails?: Record<string, unknown>[];
   },
 ): Message {
   return {
@@ -82,6 +83,7 @@ export function finalizeAIMessage(
     timestamp: Date.now(),
     streaming: false,
     reasoningContent: result.reasoningContent,
+    reasoningDetails: result.reasoningDetails,
   };
 }
 

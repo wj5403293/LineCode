@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { ArrowUp, Square } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   onSend: (text: string) => void;
@@ -11,11 +12,16 @@ interface Props {
 
 export default React.memo(function InputBar({ onSend, onStop, streaming }: Props) {
   const [text, setText] = useState('');
+  const { colors } = useTheme();
   const hasText = text.trim().length > 0;
 
+  const sendBtnBg = useMemo(
+    () => streaming ? colors.danger : hasText ? colors.accent : colors.surfaceLight,
+    [streaming, hasText, colors.accent, colors.surfaceLight, colors.danger],
+  );
   const sendBtnStyle = useMemo(
-    () => [styles.sendBtn, streaming ? styles.stopBtn : hasText && styles.sendBtnActive],
-    [streaming, hasText],
+    () => [styles.sendBtn, { backgroundColor: sendBtnBg }, streaming && styles.stopBtn],
+    [streaming, sendBtnBg],
   );
 
   const handleSend = () => {
@@ -30,9 +36,9 @@ export default React.memo(function InputBar({ onSend, onStop, streaming }: Props
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.bg, borderTopColor: colors.border }]}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.border }]}
           value={text}
           onChangeText={setText}
           placeholder="输入消息..."
@@ -51,8 +57,8 @@ export default React.memo(function InputBar({ onSend, onStop, streaming }: Props
           activeOpacity={0.7}
         >
           {streaming
-            ? <Square size={18} color="#FFF" fill="#FFF" />
-            : <ArrowUp size={22} color={hasText ? '#FFF' : colors.textTertiary} strokeWidth={2.5} />}
+            ? <Square size={18} color={colors.textOnColor} fill={colors.textOnColor} />
+            : <ArrowUp size={22} color={hasText ? colors.textOnColor : colors.textTertiary} strokeWidth={2.5} />}
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -66,37 +72,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
-    backgroundColor: colors.bg,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
     gap: spacing.sm,
   },
   input: {
     flex: 1,
-    backgroundColor: colors.inputBg,
     borderRadius: 20,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    color: colors.text,
     fontSize: fontSizes.md,
     lineHeight: 20,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: colors.border,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnActive: {
-    backgroundColor: colors.accent,
-  },
   stopBtn: {
-    backgroundColor: '#FF453A',
     borderRadius: 20,
   },
 });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   title: string;
@@ -10,8 +11,10 @@ interface Props {
 }
 
 export default React.memo(function ScreenHeader({ title, onBack, rightAction }: Props) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: colors.border }]}>
       {onBack ? (
         <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
           <ChevronLeft size={22} color={colors.text} />
@@ -19,7 +22,7 @@ export default React.memo(function ScreenHeader({ title, onBack, rightAction }: 
       ) : (
         <View style={styles.iconBtn} />
       )}
-      <Text style={styles.title}>{title}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
       {rightAction ?? <View style={styles.iconBtn} />}
     </View>
   );
@@ -33,7 +36,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   iconBtn: {
     width: 36,
@@ -42,7 +44,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
   },

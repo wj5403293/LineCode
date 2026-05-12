@@ -1,9 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import Markdown from 'react-native-markdown-display';
-import { colors, spacing } from '../../constants/theme';
-import { mdStyle } from './markdownStyles';
+import { spacing } from '../../constants/theme';
+import { useTheme } from '../../theme';
+import { createMdStyle } from './markdownStyles';
 import CodeBlock from '../CodeBlock';
 
 interface Props {
@@ -13,6 +14,9 @@ interface Props {
 }
 
 export default React.memo(function TextBlock({ content, streaming, codeWrap }: Props) {
+  const { colors } = useTheme();
+  const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
+
   if (!content && !streaming) return null;
 
   const handleLongPress = useCallback(() => {

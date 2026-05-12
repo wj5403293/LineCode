@@ -9,6 +9,9 @@ import LLMSettingsScreen from '../screens/LLMSettingsScreen';
 import MCPSettingsScreen from '../screens/MCPSettingsScreen';
 import AboutScreen from '../screens/AboutScreen';
 import LicensesScreen from '../screens/LicensesScreen';
+import ThemeSettingsScreen from '../screens/ThemeSettingsScreen';
+import InAppBrowserScreen from '../screens/InAppBrowserScreen';
+import ShellCommandScreen from '../screens/ShellCommandScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -20,6 +23,9 @@ export type RootStackParamList = {
   MCPSettings: undefined;
   About: undefined;
   Licenses: undefined;
+  ThemeSettings: undefined;
+  InAppBrowser: { url: string };
+  ShellCommand: { command: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -34,7 +40,10 @@ export default function RootNavigator() {
     >
       <Stack.Screen name="Chat">
         {({ navigation }) => (
-          <ChatScreen onGoSettings={() => navigation.navigate('Settings')} />
+          <ChatScreen
+            onGoSettings={() => navigation.navigate('Settings')}
+            onViewShellCommand={(command) => navigation.navigate('ShellCommand', { command })}
+          />
         )}
       </Stack.Screen>
       <Stack.Screen name="Settings">
@@ -46,7 +55,13 @@ export default function RootNavigator() {
             onLLM={() => navigation.navigate('LLMSettings')}
             onMCP={() => navigation.navigate('MCPSettings')}
             onAbout={() => navigation.navigate('About')}
+            onTheme={() => navigation.navigate('ThemeSettings')}
           />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="ThemeSettings">
+        {({ navigation }) => (
+          <ThemeSettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="ModelList">
@@ -86,6 +101,22 @@ export default function RootNavigator() {
       <Stack.Screen name="Licenses">
         {({ navigation }) => (
           <LicensesScreen />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="InAppBrowser">
+        {({ navigation, route }) => (
+          <InAppBrowserScreen
+            url={route.params.url}
+            onBack={() => navigation.goBack()}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="ShellCommand">
+        {({ navigation, route }) => (
+          <ShellCommandScreen
+            command={route.params.command}
+            onBack={() => navigation.goBack()}
+          />
         )}
       </Stack.Screen>
     </Stack.Navigator>

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Eye, AlertCircle } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../../constants/theme';
+import { spacing, fontSizes } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface Props {
   name: string;
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default React.memo(function ToolCallRead({ name, input, result, isError }: Props) {
+  const { colors } = useTheme();
   const filePath = String(input.file_path || input.pattern || '');
 
   const handleLongPress = () => {
@@ -23,17 +25,17 @@ export default React.memo(function ToolCallRead({ name, input, result, isError }
 
   return (
     <TouchableOpacity
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.codeBg }]}
       onLongPress={handleLongPress}
       activeOpacity={0.7}
       disabled={!result}
     >
-      <Eye size={14} color={isError ? '#F85149' : colors.textTertiary} />
-      <Text style={[styles.path, isError && styles.pathError]} numberOfLines={1}>{filePath}</Text>
+      <Eye size={14} color={isError ? colors.danger : colors.textTertiary} />
+      <Text style={[styles.path, { color: isError ? colors.danger : colors.textTertiary }]} numberOfLines={1}>{filePath}</Text>
       {isError && result && (
         <View style={styles.errorRow}>
-          <AlertCircle size={12} color="#F85149" />
-          <Text style={styles.errorText}>{result}</Text>
+          <AlertCircle size={12} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{result}</Text>
         </View>
       )}
     </TouchableOpacity>
@@ -44,18 +46,13 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 6,
     marginVertical: 2,
     gap: 4,
   },
   path: {
-    color: colors.textTertiary,
     fontSize: fontSizes.sm,
     fontFamily: 'monospace',
-  },
-  pathError: {
-    color: '#F85149',
   },
   errorRow: {
     flexDirection: 'row',
@@ -64,7 +61,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   errorText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     flex: 1,
   },

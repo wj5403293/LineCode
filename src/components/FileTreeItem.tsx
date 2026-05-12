@@ -4,7 +4,8 @@ import {
   Folder, FolderOpen, FileText, FileCode, FileJson, File,
   Image, Settings as SettingsIcon, Plus,
 } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 import { FileTreeNode } from '../hooks/useFileTree';
 
 interface Props {
@@ -20,33 +21,34 @@ interface Props {
   onContextMenu?: (path: string, name: string, isDir: boolean) => void;
 }
 
-function getFileIcon(name: string, isDir: boolean, expanded?: boolean) {
+const FILE_ICON_COLORS: Record<string, string> = {
+  js: '#F0DB4F', jsx: '#F0DB4F', ts: '#F0DB4F', tsx: '#F0DB4F',
+  json: '#F0DB4F',
+  html: '#E34C26', htm: '#E34C26',
+  css: '#264DE4', scss: '#264DE4',
+  png: '#A855F7', jpg: '#A855F7', jpeg: '#A855F7', svg: '#A855F7', gif: '#A855F7',
+};
+
+function getFileIcon(name: string, isDir: boolean, expanded: boolean | undefined, accentColor: string, textSecondary: string, textTertiary: string) {
   if (isDir) {
     return expanded
-      ? <FolderOpen size={16} color={colors.accent} />
-      : <Folder size={16} color={colors.textSecondary} />;
+      ? <FolderOpen size={16} color={accentColor} />
+      : <Folder size={16} color={textSecondary} />;
   }
 
   const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
-  switch (ext) {
-    case 'js': case 'jsx': case 'ts': case 'tsx':
-      return <FileCode size={14} color='#F0DB4F' />;
-    case 'json':
-      return <FileJson size={14} color='#F0DB4F' />;
-    case 'html': case 'htm':
-      return <FileCode size={14} color='#E34C26' />;
-    case 'css': case 'scss':
-      return <FileCode size={14} color='#264DE4' />;
-    case 'png': case 'jpg': case 'jpeg': case 'svg': case 'gif':
-      return <Image size={14} color='#A855F7' />;
-    case 'md':
-      return <FileText size={14} color={colors.textSecondary} />;
-    default:
-      return <File size={14} color={colors.textTertiary} />;
+  if (ext && FILE_ICON_COLORS[ext]) {
+    return <FileCode size={14} color={FILE_ICON_COLORS[ext]} />;
   }
+  if (ext === 'md') {
+    return <FileText size={14} color={textSecondary} />;
+  }
+  return <File size={14} color={textTertiary} />;
 }
 
 export default React.memo(function FileTreeItem({ node, depth, isRoot, onExpand, onSelect, onDelete, onRename, onCreate, onRootAction, onContextMenu }: Props) {
+  const { colors } = useTheme();
+
   const handlePress = () => {
     if (node.isDirectory) {
       onExpand(node.path);
@@ -71,8 +73,8 @@ export default React.memo(function FileTreeItem({ node, depth, isRoot, onExpand,
         onLongPress={handleLongPress}
         activeOpacity={0.7}
       >
-        {getFileIcon(node.name, node.isDirectory, node.expanded)}
-        <Text style={styles.name} numberOfLines={1}>{node.name}</Text>
+        {getFileIcon(node.name, node.isDirectory, node.expanded, colors.accent, colors.textSecondary, colors.textTertiary)}
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{node.name}</Text>
         {isRoot && (
           <TouchableOpacity onPress={() => onRootAction?.()} style={styles.addBtn}>
             <Plus size={14} color={colors.textTertiary} />
@@ -106,7 +108,6 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   name: {
-    color: colors.text,
     fontSize: fontSizes.sm,
     flex: 1,
   },

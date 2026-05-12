@@ -6,6 +6,7 @@ export const TOOL_CATEGORIES = {
   DELETE: new Set(['file_delete']),
   HTTP: new Set(['http_server']),
   AGENT: new Set(['agent', 'agent_pipeline']),
+  SHELL: new Set(['shell_execute']),
 } as const;
 
 export function getToolCategory(name: string): ToolCategory | null {
@@ -14,6 +15,7 @@ export function getToolCategory(name: string): ToolCategory | null {
   if (TOOL_CATEGORIES.DELETE.has(name)) return 'write';
   if (TOOL_CATEGORIES.HTTP.has(name)) return 'system';
   if (TOOL_CATEGORIES.AGENT.has(name)) return 'system';
+  if (TOOL_CATEGORIES.SHELL.has(name)) return 'system';
   return null;
 }
 
@@ -35,6 +37,10 @@ export function isHttpTool(name: string): boolean {
 
 export function isAgentTool(name: string): boolean {
   return TOOL_CATEGORIES.AGENT.has(name);
+}
+
+export function isShellTool(name: string): boolean {
+  return TOOL_CATEGORIES.SHELL.has(name);
 }
 
 export function parseToolInput(toolCall: ToolCall | AgentToolCall): Record<string, unknown> {

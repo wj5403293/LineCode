@@ -1,7 +1,8 @@
 import React, { useEffect, useCallback, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Trash2, Edit3, FilePlus, FolderPlus, Archive } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 import { useFileTree } from '../hooks/useFileTree';
 import FileTreeItem from './FileTreeItem';
 
@@ -14,6 +15,7 @@ interface Props {
 type ModalType = 'create_file' | 'create_folder' | 'rename' | 'delete' | 'context_menu' | 'root_menu' | null;
 
 export default React.memo(function FileTree({ homePath, onFileSelect, onExport }: Props) {
+  const { colors } = useTheme();
   const { tree, loadTree, expandNode, createItem, deleteItem, renameItem } = useFileTree(homePath);
   const [modalType, setModalType] = useState<ModalType>(null);
   const [modalTarget, setModalTarget] = useState('');
@@ -67,9 +69,7 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
       } else if (modalType === 'create_folder') {
         if (modalValue) await createItem(modalParent, modalValue, true);
       }
-    } catch (err: any) {
-      // 静默处理
-    }
+    } catch (err: any) {}
     setModalType(null);
     setModalValue('');
   }, [modalType, modalTarget, modalValue, modalParent, deleteItem, renameItem, createItem]);
@@ -77,7 +77,7 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
   if (!tree) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>加载中...</Text>
+        <Text style={[styles.emptyText, { color: colors.textTertiary }]}>加载中...</Text>
       </View>
     );
   }
@@ -97,10 +97,9 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
         onContextMenu={handleContextMenu}
       />
 
-      {/* 右键菜单 */}
       <Modal visible={modalType === 'context_menu'} transparent animationType="fade" onRequestClose={() => setModalType(null)}>
-        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setModalType(null)}>
-          <View style={styles.menuContent}>
+        <TouchableOpacity style={[styles.menuOverlay, { backgroundColor: colors.overlay }]} activeOpacity={1} onPress={() => setModalType(null)}>
+          <View style={[styles.menuContent, { backgroundColor: colors.surfaceElevated }]}>
             {modalTargetIsDir && (
               <>
                 <MenuItem icon={<FilePlus size={16} color={colors.text} />} label="新建文件" onPress={() => openCreate('file')} />
@@ -108,15 +107,14 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
               </>
             )}
             <MenuItem icon={<Edit3 size={16} color={colors.text} />} label="重命名" onPress={openRename} />
-            <MenuItem icon={<Trash2 size={16} color="#F85149" />} label="删除" labelStyle={{ color: '#F85149' }} onPress={openDelete} />
+            <MenuItem icon={<Trash2 size={16} color={colors.danger} />} label="删除" labelStyle={{ color: colors.danger }} onPress={openDelete} />
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* 根目录菜单 */}
       <Modal visible={modalType === 'root_menu'} transparent animationType="fade" onRequestClose={() => setModalType(null)}>
-        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setModalType(null)}>
-          <View style={styles.menuContent}>
+        <TouchableOpacity style={[styles.menuOverlay, { backgroundColor: colors.overlay }]} activeOpacity={1} onPress={() => setModalType(null)}>
+          <View style={[styles.menuContent, { backgroundColor: colors.surfaceElevated }]}>
             <MenuItem icon={<FilePlus size={16} color={colors.text} />} label="新建文件" onPress={() => { setModalTarget(homePath); openCreate('file'); }} />
             <MenuItem icon={<FolderPlus size={16} color={colors.text} />} label="新建文件夹" onPress={() => { setModalTarget(homePath); openCreate('folder'); }} />
             <MenuItem icon={<Archive size={16} color={colors.accent} />} label="导出 ZIP" onPress={() => { setModalType(null); onExport?.(); }} />
@@ -124,15 +122,14 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
         </TouchableOpacity>
       </Modal>
 
-      {/* 输入弹窗 */}
       <Modal visible={modalType === 'create_file' || modalType === 'create_folder' || modalType === 'rename'} transparent animationType="fade" onRequestClose={() => setModalType(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surfaceElevated }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
               {modalType === 'rename' ? '重命名' : modalType === 'create_file' ? '新建文件' : '新建文件夹'}
             </Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
               value={modalValue}
               onChangeText={setModalValue}
               placeholder={modalType === 'rename' ? '输入新名称' : '输入名称'}
@@ -141,28 +138,27 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
             />
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalType(null)}>
-                <Text style={styles.modalCancelText}>取消</Text>
+                <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleModalConfirm}>
-                <Text style={styles.modalConfirmText}>确定</Text>
+              <TouchableOpacity style={[styles.modalConfirmBtn, { backgroundColor: colors.accent }]} onPress={handleModalConfirm}>
+                <Text style={[styles.modalConfirmText, { color: colors.textOnColor }]}>确定</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* 删除确认 */}
       <Modal visible={modalType === 'delete'} transparent animationType="fade" onRequestClose={() => setModalType(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>确认删除</Text>
-            <Text style={styles.modalDesc}>确定要删除 "{modalTargetName}" 吗？此操作不可撤销。</Text>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surfaceElevated }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>确认删除</Text>
+            <Text style={[styles.modalDesc, { color: colors.textSecondary }]}>确定要删除 "{modalTargetName}" 吗？此操作不可撤销。</Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalType(null)}>
-                <Text style={styles.modalCancelText}>取消</Text>
+                <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalConfirmBtn, { backgroundColor: '#FF453A' }]} onPress={handleModalConfirm}>
-                <Text style={styles.modalConfirmText}>删除</Text>
+              <TouchableOpacity style={[styles.modalConfirmBtn, { backgroundColor: colors.danger }]} onPress={handleModalConfirm}>
+                <Text style={[styles.modalConfirmText, { color: colors.textOnColor }]}>删除</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -173,10 +169,11 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
 });
 
 function MenuItem({ icon, label, labelStyle, onPress }: { icon: React.ReactNode; label: string; labelStyle?: any; onPress: () => void }) {
+  const { colors } = useTheme();
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
       {icon}
-      <Text style={[styles.menuLabel, labelStyle]}>{label}</Text>
+      <Text style={[styles.menuLabel, { color: colors.text }, labelStyle]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -193,18 +190,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: colors.textTertiary,
     fontSize: fontSizes.sm,
   },
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
   menuContent: {
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.md,
     padding: spacing.sm,
     width: 200,
@@ -218,43 +212,35 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   menuLabel: {
-    color: colors.text,
     fontSize: fontSizes.md,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
   modalContent: {
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.lg,
     padding: spacing.xl,
     width: '100%',
     maxWidth: 300,
   },
   modalTitle: {
-    color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
   modalDesc: {
-    color: colors.textSecondary,
     fontSize: fontSizes.md,
     marginBottom: spacing.lg,
   },
   modalInput: {
-    backgroundColor: colors.surfaceLight,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    color: colors.text,
     fontSize: fontSizes.md,
     borderWidth: 1,
-    borderColor: colors.borderLight,
     marginBottom: spacing.lg,
   },
   modalActions: {
@@ -268,17 +254,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   modalCancelText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.md,
   },
   modalConfirmBtn: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
   },
   modalConfirmText: {
-    color: '#FFF',
     fontSize: fontSizes.md,
     fontWeight: '600',
   },

@@ -4,6 +4,7 @@ import { ToolResult, AgentInstance, Model, ToolCall, ContentBlock, AgentToolCall
 import { aiService, ChatMessage } from '../../../services/ai';
 import { fileLock } from '../../../services/FileLock';
 import { modelStorage } from '../../../services/storage';
+import { settingsService } from '../../../services/settings';
 import { createDefaultRegistry, ToolRegistry } from '../index';
 import { agentToolManager } from '../../AgentToolManager';
 
@@ -337,8 +338,11 @@ export class AgentTool extends BaseTool {
         { role: 'user', content: agentPrompt },
       ];
 
-      const allTools = this.currentAgentRegistry!.getAll().filter(t => t.name !== 'agent');
+      const allTools = this.currentAgentRegistry!.getAll().filter(t =>
+        t.name !== 'agent' && t.name !== 'shell_execute'
+      );
       const tools = allTools.map(t => t.toJSON());
+      const preserveReasoning = await settingsService.getPreserveReasoning();
 
       for (let iteration = 0; iteration < AGENT_MAX_ITERATIONS; iteration++) {
         if (this.aborted) {
@@ -359,7 +363,7 @@ export class AgentTool extends BaseTool {
               output = textBlocks.map(b => b.content).join('');
               const newThinking = thinkingBlocks.map(b => b.content).join('');
               if (newThinking) {
-                thinkingContent += newThinking;
+                thinkingContent = newThinking;
               }
               
               agent.output = output;
@@ -373,6 +377,8 @@ export class AgentTool extends BaseTool {
           },
           'medium',
           tools,
+          undefined,
+          preserveReasoning,
         );
 
         if (result.reasoningContent) {
@@ -391,6 +397,7 @@ export class AgentTool extends BaseTool {
           content: result.text,
           toolCalls: result.toolCalls,
           reasoningContent: result.reasoningContent,
+          reasoningDetails: result.reasoningDetails,
         };
         messages.push(assistantMsg);
 

@@ -90,6 +90,7 @@ export function useChatStream(
       blocks: ContentBlock[];
       toolCalls?: ToolCall[];
       reasoningContent?: string;
+      reasoningDetails?: Record<string, unknown>[];
     },
   ): Message => ({
     id: aiId,
@@ -100,6 +101,7 @@ export function useChatStream(
     timestamp: Date.now(),
     streaming: false,
     reasoningContent: result.reasoningContent,
+    reasoningDetails: result.reasoningDetails,
   }), []);
 
   const createToolMessage = useCallback((

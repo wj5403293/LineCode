@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { View, ScrollView, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Clock, X } from 'lucide-react-native';
-import { colors, spacing, radius } from '../../constants/theme';
-import { mdStyle } from '../message/markdownStyles';
+import { spacing, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
+import { createMdStyle } from '../message/markdownStyles';
 import { AgentToolCall } from '../../types';
 import { AgentHeader } from './agent/AgentHeader';
 import { AgentThinking } from './agent/AgentThinking';
@@ -40,6 +41,8 @@ export default React.memo(function AgentBlock({
   onContinueAfterUnlock,
   onCancelWait,
 }: Props) {
+  const { colors } = useTheme();
+  const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
   const [expanded, setExpanded] = useState(true);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
   const [waitSeconds, setWaitSeconds] = useState(0);
@@ -81,7 +84,7 @@ export default React.memo(function AgentBlock({
   const isWaitingUnlock = status === 'waiting_unlock';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.accentMuted, borderColor: colors.accentMuted2 }]}>
       <AgentHeader
         name={name}
         agentType={agentType}
@@ -90,54 +93,8 @@ export default React.memo(function AgentBlock({
         onToggle={handleToggle}
       />
 
-      {hasFileChanges && (
-        <View style={styles.fileChangesSection}>
-          <View style={styles.divider} />
-          <Text style={styles.toolsLabel}>文件变更</Text>
-          <View style={styles.toolsList}>
-            {fileChanges.map((tc, i) => (
-              <ToolCallRenderer
-                key={i}
-                name={tc.name}
-                input={tc.input}
-                result={tc.result}
-                isError={tc.isError}
-                homePath={homePath}
-                streaming={!tc.result}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {isWaitingUnlock && waitingForUnlock && (
-        <View style={styles.waitingSection}>
-          <View style={styles.divider} />
-          <View style={styles.waitingContent}>
-            <View style={styles.waitingHeader}>
-              <Clock size={16} color="#FF9800" />
-              <Text style={styles.waitingTitle}>等待文件解锁</Text>
-            </View>
-            <Text style={styles.waitingFilePath} numberOfLines={1}>
-              {waitingForUnlock.filePath}
-            </Text>
-            <Text style={styles.waitingInfo}>
-              正在被 Agent "{waitingForUnlock.lockedBy}" 锁定
-            </Text>
-            <View style={styles.waitingStatus}>
-              <ActivityIndicator size="small" color="#FF9800" />
-              <Text style={styles.waitingTime}>已等待 {formatTime(waitSeconds)}</Text>
-            </View>
-            <TouchableOpacity style={styles.cancelButton} onPress={onCancelWait} activeOpacity={0.7}>
-              <X size={14} color={colors.textSecondary} />
-              <Text style={styles.cancelButtonText}>取消等待</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {expanded && (
-        <View style={styles.content}>
+        <View style={[styles.content, { borderTopColor: colors.codeBorder }]}>
           <ScrollView style={styles.outputScroll} nestedScrollEnabled>
             <AgentThinking
               thinking={thinking}
@@ -148,7 +105,7 @@ export default React.memo(function AgentBlock({
 
             {toolCalls && toolCalls.length > 0 && (
               <View style={styles.allToolsSection}>
-                <Text style={styles.toolsLabel}>工具调用</Text>
+                <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>工具调用</Text>
                 <View style={styles.toolsList}>
                   {toolCalls.map((tc, i) => (
                     <ToolCallRenderer
@@ -169,13 +126,59 @@ export default React.memo(function AgentBlock({
               <Markdown style={mdStyle}>{output}</Markdown>
             ) : isRunning ? (
               <View style={styles.streamingContainer}>
-                <ActivityIndicator size="small" color={agentType === 'explore' ? colors.accent : '#F85149'} />
-                <Text style={styles.streamingText}>正在执行任务...</Text>
+                <ActivityIndicator size="small" color={agentType === 'explore' ? colors.accent : colors.danger} />
+                <Text style={[styles.streamingText, { color: colors.textTertiary }]}>正在执行任务...</Text>
               </View>
             ) : status === 'error' ? (
-              <Text style={styles.errorText}>执行失败</Text>
+              <Text style={[styles.errorText, { color: colors.danger }]}>执行失败</Text>
             ) : null}
           </ScrollView>
+        </View>
+      )}
+
+      {hasFileChanges && (
+        <View style={styles.fileChangesSection}>
+          <View style={[styles.divider, { backgroundColor: colors.codeBorder }]} />
+          <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>文件变更</Text>
+          <View style={styles.toolsList}>
+            {fileChanges.map((tc, i) => (
+              <ToolCallRenderer
+                key={i}
+                name={tc.name}
+                input={tc.input}
+                result={tc.result}
+                isError={tc.isError}
+                homePath={homePath}
+                streaming={!tc.result}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {isWaitingUnlock && waitingForUnlock && (
+        <View style={styles.waitingSection}>
+          <View style={[styles.divider, { backgroundColor: colors.codeBorder }]} />
+          <View style={[styles.waitingContent, { backgroundColor: colors.processingMuted }]}>
+            <View style={styles.waitingHeader}>
+              <Clock size={16} color={colors.processing} />
+              <Text style={[styles.waitingTitle, { color: colors.processing }]}>等待文件解锁</Text>
+            </View>
+            <Text style={[styles.waitingFilePath, { color: colors.text }]} numberOfLines={1}>
+              {waitingForUnlock.filePath}
+            </Text>
+            <Text style={[styles.waitingInfo, { color: colors.textSecondary }]}>
+              正在被 Agent "{waitingForUnlock.lockedBy}" 锁定
+            </Text>
+            <View style={styles.waitingStatus}>
+              <ActivityIndicator size="small" color={colors.processing} />
+              <Text style={[styles.waitingTime, { color: colors.processing }]}>已等待 {formatTime(waitSeconds)}</Text>
+            </View>
+            <TouchableOpacity style={[styles.cancelButton, { backgroundColor: colors.codeBorder }]} onPress={onCancelWait} activeOpacity={0.7}>
+              <X size={14} color={colors.textSecondary} />
+              <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>取消等待</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>
@@ -184,18 +187,15 @@ export default React.memo(function AgentBlock({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(48,209,88,0.04)',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(48,209,88,0.15)',
   },
   content: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
     paddingTop: spacing.sm,
     maxHeight: 400,
   },
@@ -208,17 +208,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   streamingText: {
-    color: colors.textTertiary,
     fontSize: 12,
     fontStyle: 'italic',
   },
   errorText: {
-    color: '#F85149',
     fontSize: 12,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     marginVertical: spacing.sm,
   },
   fileChangesSection: {
@@ -228,11 +225,7 @@ const styles = StyleSheet.create({
   allToolsSection: {
     marginBottom: spacing.sm,
   },
-  toolsSection: {
-    marginBottom: spacing.sm,
-  },
   toolsLabel: {
-    color: colors.textTertiary,
     fontSize: 11,
     marginBottom: spacing.xs,
   },
@@ -244,7 +237,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   waitingContent: {
-    backgroundColor: 'rgba(255,152,0,0.1)',
     borderRadius: radius.sm,
     padding: spacing.md,
   },
@@ -255,18 +247,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   waitingTitle: {
-    color: '#FF9800',
     fontSize: 14,
     fontWeight: '600',
   },
   waitingFilePath: {
-    color: colors.text,
     fontSize: 12,
     fontFamily: 'monospace',
     marginBottom: spacing.xs,
   },
   waitingInfo: {
-    color: colors.textSecondary,
     fontSize: 12,
     marginBottom: spacing.sm,
   },
@@ -277,7 +266,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   waitingTime: {
-    color: '#FF9800',
     fontSize: 13,
     fontWeight: '500',
   },
@@ -286,12 +274,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
   },
   cancelButtonText: {
-    color: colors.textSecondary,
     fontSize: 13,
   },
 });

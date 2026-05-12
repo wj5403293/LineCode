@@ -35,6 +35,8 @@ export interface ToolCall {
   arguments: string;
 }
 
+export type ReasoningDetail = Record<string, unknown>;
+
 export interface ToolResult {
   toolCallId: string;
   content: string;
@@ -65,13 +67,14 @@ export interface Message {
   timestamp: number;
   streaming?: boolean;
   reasoningContent?: string;
+  reasoningDetails?: ReasoningDetail[];
   isError?: boolean;
 }
 
 export interface Model {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'codex';
   modelId: string;
   apiKey: string;
   baseUrl?: string;

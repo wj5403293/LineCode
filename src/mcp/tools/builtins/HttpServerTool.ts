@@ -1,9 +1,9 @@
+import { NativeModules } from 'react-native';
+import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 
-let serverInstance: any = null;
-let serverPort = 0;
-let serverRoot = '';
+const Server = NativeModules.SimpleHttpServer;
 
 export class HttpServerTool extends BaseTool {
   readonly name = 'http_server';
@@ -14,7 +14,7 @@ export class HttpServerTool extends BaseTool {
     type: 'object',
     properties: {
       action: { type: 'string', enum: ['start', 'stop'], description: '操作类型' },
-      port: { type: 'number', description: '端口号（默认 8080）' },
+      port: { type: 'number', description: '端口号（默认 0 自动分配空闲端口）' },
       root: { type: 'string', description: '服务器根目录（相对路径或绝对路径）' },
     },
     required: ['action'],
@@ -24,97 +24,60 @@ export class HttpServerTool extends BaseTool {
     if (input.action === 'stop') {
       return this.stopServer();
     }
-    return this.startServer(input.port || 8080, input.root, context.homePath);
+    return this.startServer(input.port || 0, input.root, context.homePath);
   }
 
   private async startServer(port: number, root: string | undefined, homePath: string): Promise<ToolResult> {
     try {
-      if (serverInstance) {
-        return { content: `服务器已在运行: http://localhost:${serverPort}`, toolCallId: '' };
+      if (!Server) {
+        return { content: 'HTTP 服务器模块未就绪', toolCallId: '', isError: true };
+      }
+
+      const activePort: number = await Server.getPort();
+      if (activePort > 0) {
+        return { content: `服务器已在运行: http://localhost:${activePort}`, toolCallId: '' };
       }
 
       const rootPath = root
         ? (root.startsWith('/') ? root : `${homePath}/${root}`)
         : homePath;
 
-      const RNFS = require('react-native-fs');
+      const dirExists = await RNFS.exists(rootPath);
+      if (!dirExists) {
+        return { content: `目录不存在: ${rootPath}`, toolCallId: '', isError: true };
+      }
 
-      // 使用 Node.js http 模块（React Native 有 polyfill）
-      const http = require('http');
-
-      const server = http.createServer(async (req: any, res: any) => {
-        try {
-          let reqPath = decodeURIComponent(req.url || '/');
-          if (reqPath === '/') reqPath = '/index.html';
-
-          const filePath = rootPath + reqPath;
-          const exists = await RNFS.exists(filePath);
-          if (!exists) {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
-            return;
-          }
-
-          const stat = await RNFS.stat(filePath);
-          if (stat.isDirectory()) {
-            const files = await RNFS.readDir(filePath);
-            const links = files.map((f: any) => {
-              const sep = reqPath.endsWith('/') ? '' : '/';
-              const icon = f.isDirectory() ? '📁' : '📄';
-              return `<li>${icon} <a href="${reqPath}${sep}${f.name}">${f.name}${f.isDirectory() ? '/' : ''}</a></li>`;
-            }).join('');
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>LineCode Server</title></head><body><h2>📂 ${reqPath}</h2><ul>${links}</ul></body></html>`);
-            return;
-          }
-
-          const content = await RNFS.readFile(filePath, 'utf8');
-          const ext = filePath.includes('.') ? filePath.split('.').pop()?.toLowerCase() : '';
-          const mimeTypes: Record<string, string> = {
-            '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript',
-            '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
-            '.svg': 'image/svg+xml', '.txt': 'text/plain', '.md': 'text/markdown',
-          };
-          res.writeHead(200, { 'Content-Type': mimeTypes['.' + ext] || 'application/octet-stream' });
-          res.end(content);
-        } catch (err: any) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('Internal Server Error: ' + err.message);
-        }
-      });
-
-      await new Promise<void>((resolve, reject) => {
-        server.listen(port, '0.0.0.0', () => {
-          serverInstance = server;
-          serverPort = port;
-          serverRoot = rootPath;
-          resolve();
-        });
-        server.on('error', reject);
-      });
+      const actualPort: number = await Server.start(port, rootPath);
 
       return {
-        content: `HTTP 服务器已启动\n端口: ${port}\n根目录: ${rootPath}\n访问: http://localhost:${port}`,
+        content: `HTTP 服务器已启动\n端口: ${actualPort}\n根目录: ${rootPath}\n访问: http://localhost:${actualPort}`,
         toolCallId: '',
       };
     } catch (err: any) {
-      return { content: `启动服务器失败: ${err.message}`, toolCallId: '', isError: true };
+      return { content: `启动服务器失败: ${err?.message || String(err)}`, toolCallId: '', isError: true };
     }
   }
 
-  private stopServer(): ToolResult {
-    if (!serverInstance) {
-      return { content: '服务器未在运行', toolCallId: '', isError: true };
+  private async stopServer(): Promise<ToolResult> {
+    try {
+      if (!Server) {
+        return { content: 'HTTP 服务器模块未就绪', toolCallId: '', isError: true };
+      }
+
+      const activePort: number = await Server.getPort();
+      if (!activePort) {
+        return { content: '服务器未在运行', toolCallId: '', isError: true };
+      }
+
+      await Server.stop();
+      return { content: `服务器已停止 (端口 ${activePort})`, toolCallId: '' };
+    } catch (err: any) {
+      return { content: `停止服务器失败: ${err?.message || String(err)}`, toolCallId: '', isError: true };
     }
-    serverInstance.close();
-    const port = serverPort;
-    serverInstance = null;
-    serverPort = 0;
-    return { content: `服务器已停止 (端口 ${port})`, toolCallId: '' };
   }
 }
 
 export function getServerInfo(): { port: number; root: string } | null {
-  if (!serverInstance) return null;
-  return { port: serverPort, root: serverRoot };
+  // getServerInfo 改为异步获取，这里返回 null 表示需要调用异步方法
+  return null;
 }

@@ -2,13 +2,15 @@ import React, { useState, useCallback } from 'react';
 import { Text, Pressable, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Copy, Check } from 'lucide-react-native';
-import { colors, fontSizes } from '../../constants/theme';
+import { fontSizes } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface Props {
   text: string;
 }
 
 export default React.memo(function CopyButton({ text }: Props) {
+  const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -22,7 +24,7 @@ export default React.memo(function CopyButton({ text }: Props) {
       {copied
         ? <Check size={13} color={colors.accent} />
         : <Copy size={13} color={colors.textTertiary} />}
-      <Text style={styles.label}>{copied ? '已复制' : '复制'}</Text>
+      <Text style={[styles.label, { color: colors.textTertiary }]}>{copied ? '已复制' : '复制'}</Text>
     </Pressable>
   );
 });
@@ -34,7 +36,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   label: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
   },
 });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface License {
   name: string;
@@ -11,6 +12,12 @@ interface License {
 }
 
 const LICENSES: License[] = [
+  {
+    name: 'openai/codex',
+    version: 'source reference',
+    license: 'Apache-2.0',
+    licenseText: 'Apache License 2.0\n\nOpenAI Codex is licensed under the Apache License, Version 2.0. The full license text is available at https://www.apache.org/licenses/LICENSE-2.0',
+  },
   {
     name: '@react-native-async-storage/async-storage',
     version: '1.24.0',
@@ -116,18 +123,19 @@ const LICENSES: License[] = [
 ];
 
 function LicenseItem({ item }: { item: License }) {
+  const { colors } = useTheme();
   const [expanded, setExpanded] = React.useState(false);
 
   return (
-    <View style={styles.item}>
+    <View style={[styles.item, { backgroundColor: colors.surfaceElevated }]}>
       <TouchableOpacity
         style={styles.itemHeader}
         onPress={() => setExpanded(prev => !prev)}
         activeOpacity={0.7}
       >
         <View style={styles.itemInfo}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>{item.version} · {item.license}</Text>
+          <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
+          <Text style={[styles.itemMeta, { color: colors.textSecondary }]}>{item.version} · {item.license}</Text>
         </View>
         {expanded ? (
           <ChevronDown size={18} color={colors.textTertiary} />
@@ -137,7 +145,7 @@ function LicenseItem({ item }: { item: License }) {
       </TouchableOpacity>
       {expanded && (
         <View style={styles.licenseText}>
-          <Text style={styles.licenseTextContent}>{item.licenseText}</Text>
+          <Text style={[styles.licenseTextContent, { color: colors.textSecondary }]}>{item.licenseText}</Text>
         </View>
       )}
     </View>
@@ -145,8 +153,9 @@ function LicenseItem({ item }: { item: License }) {
 }
 
 export default function LicensesScreen() {
+  const { colors } = useTheme();
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.surface }]} contentContainerStyle={styles.content}>
       {LICENSES.map((item, index) => (
         <LicenseItem key={index} item={item} />
       ))}
@@ -157,13 +166,11 @@ export default function LicensesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
   },
   content: {
     padding: spacing.md,
   },
   item: {
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.md,
     marginBottom: spacing.sm,
     overflow: 'hidden',
@@ -177,12 +184,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemName: {
-    color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '500',
   },
   itemMeta: {
-    color: colors.textSecondary,
     fontSize: fontSizes.sm,
     marginTop: 2,
   },
@@ -191,7 +196,6 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   licenseTextContent: {
-    color: colors.textSecondary,
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
     lineHeight: 18,

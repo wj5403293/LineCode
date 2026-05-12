@@ -13,6 +13,11 @@ interface ContentBlockRendererProps {
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
 export function ContentBlockRenderer({
@@ -24,6 +29,11 @@ export function ContentBlockRenderer({
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
 }: ContentBlockRendererProps) {
   if (blocks && blocks.length > 0) {
     return (
@@ -55,6 +65,11 @@ export function ContentBlockRenderer({
                 result={tr?.content}
                 isError={tr?.isError}
                 block={block}
+                pending={block.id === shellConfirmToolCallId && !tr}
+                onShellCancel={onShellCancel}
+                onShellConfirm={onShellConfirm}
+                onShellDefaultExecute={onShellDefaultExecute}
+                onViewShellCommand={onViewShellCommand}
               />
             );
           }
@@ -86,6 +101,11 @@ export function ContentBlockRenderer({
               homePath={homePath}
               result={tr?.content}
               isError={tr?.isError}
+              pending={tc.id === shellConfirmToolCallId && !tr}
+              onShellCancel={onShellCancel}
+              onShellConfirm={onShellConfirm}
+              onShellDefaultExecute={onShellDefaultExecute}
+              onViewShellCommand={onViewShellCommand}
             />
           );
         })}
@@ -106,6 +126,11 @@ interface ContentWithTextProps {
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
 export function ContentWithText({
@@ -118,6 +143,11 @@ export function ContentWithText({
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
 }: ContentWithTextProps) {
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
@@ -137,6 +167,11 @@ export function ContentWithText({
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}
+        shellConfirmToolCallId={shellConfirmToolCallId}
+        onShellCancel={onShellCancel}
+        onShellConfirm={onShellConfirm}
+        onShellDefaultExecute={onShellDefaultExecute}
+        onViewShellCommand={onViewShellCommand}
       />
     </>
   );

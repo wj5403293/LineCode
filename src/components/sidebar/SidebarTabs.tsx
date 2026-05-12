@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { MessageSquare, FolderOpen } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 type TabType = 'conversations' | 'files';
 
@@ -11,21 +12,23 @@ interface SidebarTabsProps {
 }
 
 export function SidebarTabs({ activeTab, onTabChange }: SidebarTabsProps) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.tabs}>
+    <View style={[styles.tabs, { backgroundColor: colors.surfaceLight }]}>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'conversations' && styles.tabActive]}
+        style={[styles.tab, activeTab === 'conversations' && { backgroundColor: colors.surfaceElevated }]}
         onPress={() => onTabChange('conversations')}
       >
         <MessageSquare size={14} color={activeTab === 'conversations' ? colors.accent : colors.textTertiary} />
-        <Text style={[styles.tabText, activeTab === 'conversations' && styles.tabTextActive]}>对话</Text>
+        <Text style={[styles.tabText, { color: activeTab === 'conversations' ? colors.accent : colors.textTertiary }, activeTab === 'conversations' && styles.tabTextActive]}>对话</Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.tab, activeTab === 'files' && styles.tabActive]}
+        style={[styles.tab, activeTab === 'files' && { backgroundColor: colors.surfaceElevated }]}
         onPress={() => onTabChange('files')}
       >
         <FolderOpen size={14} color={activeTab === 'files' ? colors.accent : colors.textTertiary} />
-        <Text style={[styles.tabText, activeTab === 'files' && styles.tabTextActive]}>文件</Text>
+        <Text style={[styles.tabText, { color: activeTab === 'files' ? colors.accent : colors.textTertiary }, activeTab === 'files' && styles.tabTextActive]}>文件</Text>
       </TouchableOpacity>
     </View>
   );
@@ -36,7 +39,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    backgroundColor: colors.surfaceLight,
     borderRadius: radius.sm,
     padding: 2,
   },
@@ -49,15 +51,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.sm - 2,
   },
-  tabActive: {
-    backgroundColor: colors.surfaceElevated,
-  },
   tabText: {
-    color: colors.textTertiary,
     fontSize: fontSizes.sm,
   },
   tabTextActive: {
-    color: colors.accent,
     fontWeight: '600',
   },
 });

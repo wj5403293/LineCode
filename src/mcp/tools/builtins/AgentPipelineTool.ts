@@ -4,6 +4,7 @@ import { ToolResult, AgentInstance, Model, ToolCall, ContentBlock, AgentToolCall
 import { aiService, ChatMessage } from '../../../services/ai';
 import { fileLock } from '../../../services/FileLock';
 import { modelStorage } from '../../../services/storage';
+import { settingsService } from '../../../services/settings';
 import { createDefaultRegistry, ToolRegistry } from '../index';
 
 type AgentType = 'explore' | 'sub-coding';
@@ -199,8 +200,11 @@ export class AgentPipelineTool extends BaseTool {
     let toolCallCount = 0;
 
     const registry = createDefaultRegistry();
-    const agentTools = registry.getAll().filter(t => t.name !== 'agent' && t.name !== 'agent_pipeline');
+    const agentTools = registry.getAll().filter(t =>
+      t.name !== 'agent' && t.name !== 'agent_pipeline' && t.name !== 'shell_execute'
+    );
     const tools = agentTools.map(t => t.toJSON());
+    const preserveReasoning = await settingsService.getPreserveReasoning();
 
     let contextPrompt = '';
     if (pipelineAgent.depends_on && pipelineAgent.depends_on.length > 0) {
@@ -244,7 +248,7 @@ export class AgentPipelineTool extends BaseTool {
               output = textBlocks.map(b => b.content).join('');
               const newThinking = thinkingBlocks.map(b => b.content).join('');
               if (newThinking) {
-                thinkingContent += newThinking;
+                thinkingContent = newThinking;
               }
               
               agent.output = output;
@@ -258,6 +262,8 @@ export class AgentPipelineTool extends BaseTool {
           },
           'medium',
           tools,
+          undefined,
+          preserveReasoning,
         );
 
         if (result.reasoningContent) {
@@ -276,6 +282,7 @@ export class AgentPipelineTool extends BaseTool {
           content: result.text,
           toolCalls: result.toolCalls,
           reasoningContent: result.reasoningContent,
+          reasoningDetails: result.reasoningDetails,
         };
         messages.push(assistantMsg);
 

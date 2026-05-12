@@ -14,6 +14,7 @@ import css from 'highlight.js/lib/languages/css';
 import sql from 'highlight.js/lib/languages/sql';
 import yaml from 'highlight.js/lib/languages/yaml';
 import markdown from 'highlight.js/lib/languages/markdown';
+import type { SyntaxColors } from '../../theme';
 
 const LANGUAGES: [string, any][] = [
   ['javascript', javascript], ['js', javascript],
@@ -37,34 +38,10 @@ for (const [name, lang] of LANGUAGES) {
   hljs.registerLanguage(name, lang);
 }
 
-export const TOKEN_COLORS: Record<string, string> = {
-  keyword: '#FF7B72',
-  string: '#A5D6FF',
-  comment: '#8B949E',
-  number: '#79C0FF',
-  function: '#D2A8FF',
-  title: '#D2A8FF',
-  params: '#C9D1D9',
-  built_in: '#79C0FF',
-  literal: '#79C0FF',
-  type: '#FFA657',
-  class: '#FFA657',
-  attr: '#79C0FF',
-  selector: '#7EE787',
-  tag: '#7EE787',
-  name: '#7EE787',
-  symbol: '#79C0FF',
-  bullet: '#79C0FF',
-  code: '#A5D6FF',
-  regexp: '#A5D6FF',
-  link: '#A5D6FF',
-  meta: '#8B949E',
-  deletion: '#FFA198',
-  addition: '#AFF5B4',
-  default: '#C9D1D9',
-};
-
-export function parseHighlightedHTML(html: string): Array<{ text: string; color: string }> {
+export function parseHighlightedHTML(
+  html: string,
+  tokenColors: Record<string, string>,
+): Array<{ text: string; color: string }> {
   const tokens: Array<{ text: string; color: string }> = [];
   const regex = /<span class="hljs-([^"]+)">(.*?)<\/span>|([^<]+)/g;
   let match;
@@ -73,12 +50,12 @@ export function parseHighlightedHTML(html: string): Array<{ text: string; color:
     if (match[1]) {
       tokens.push({
         text: match[2].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
-        color: TOKEN_COLORS[match[1]] || TOKEN_COLORS.default,
+        color: tokenColors[match[1]] || tokenColors.default,
       });
     } else if (match[3]) {
       tokens.push({
         text: match[3].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
-        color: TOKEN_COLORS.default,
+        color: tokenColors.default,
       });
     }
   }
@@ -86,15 +63,19 @@ export function parseHighlightedHTML(html: string): Array<{ text: string; color:
   return tokens;
 }
 
-export function highlight(code: string, language?: string): Array<Array<{ text: string; color: string }>> {
+export function highlight(
+  code: string,
+  tokenColors: Record<string, string>,
+  language?: string,
+): Array<Array<{ text: string; color: string }>> {
   try {
     const result = language
       ? hljs.highlight(code, { language })
       : hljs.highlightAuto(code);
 
     const htmlLines = result.value.split('\n');
-    return htmlLines.map(line => parseHighlightedHTML(line));
+    return htmlLines.map(line => parseHighlightedHTML(line, tokenColors));
   } catch {
-    return code.split('\n').map(line => [{ text: line, color: TOKEN_COLORS.default }]);
+    return code.split('\n').map(line => [{ text: line, color: tokenColors.default }]);
   }
 }

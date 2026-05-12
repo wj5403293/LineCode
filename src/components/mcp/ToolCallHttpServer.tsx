@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, NativeModules } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Compass, ExternalLink, AlertCircle } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
-import { getServerInfo } from '../../mcp/tools/builtins/HttpServerTool';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
+import { openURL } from '../../utils/openURL';
 
 interface Props {
   input: Record<string, unknown>;
@@ -11,30 +13,41 @@ interface Props {
 }
 
 export default React.memo(function ToolCallHttpServer({ input, result, isError }: Props) {
-  const serverInfo = getServerInfo();
-  const address = serverInfo ? `http://localhost:${serverInfo.port}` : null;
+  const { colors } = useTheme();
+  const navigation = useNavigation<any>();
+  const [port, setPort] = useState<number>(0);
 
-  const handleOpen = () => {
-    if (address) Linking.openURL(address);
-  };
+  useEffect(() => {
+    NativeModules.SimpleHttpServer?.getPort().then((p: number) => {
+      if (p > 0) setPort(p);
+    }).catch(() => {});
+  }, [result]);
+
+  const address = port > 0 ? `http://localhost:${port}` : null;
+
+  const handleOpen = useCallback(() => {
+    if (address) {
+      openURL(address, (url) => navigation.navigate('InAppBrowser', { url }));
+    }
+  }, [address, navigation]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.codeBg }]}>
       <View style={styles.row}>
-        <Compass size={16} color={isError ? '#F85149' : colors.accent} />
-        <Text style={styles.label}>HTTP 服务器</Text>
+        <Compass size={16} color={isError ? colors.danger : colors.accent} />
+        <Text style={[styles.label, { color: colors.text }]}>HTTP 服务器</Text>
         {address && (
           <TouchableOpacity style={styles.linkBtn} onPress={handleOpen} activeOpacity={0.7}>
-            <Text style={styles.address}>{address}</Text>
+            <Text style={[styles.address, { color: colors.accent }]}>{address}</Text>
             <ExternalLink size={12} color={colors.accent} />
           </TouchableOpacity>
         )}
       </View>
-      {result && !isError && <Text style={styles.result}>{result}</Text>}
+      {result && !isError && <Text style={[styles.result, { color: colors.textSecondary }]}>{result}</Text>}
       {isError && result && (
         <View style={styles.errorRow}>
-          <AlertCircle size={14} color="#F85149" />
-          <Text style={styles.errorText}>{result}</Text>
+          <AlertCircle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{result}</Text>
         </View>
       )}
     </View>
@@ -43,7 +56,6 @@ export default React.memo(function ToolCallHttpServer({ input, result, isError }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: radius.sm,
     marginVertical: 4,
     padding: spacing.md,
@@ -54,7 +66,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   label: {
-    color: colors.text,
     fontSize: fontSizes.sm,
     fontWeight: '600',
   },
@@ -65,12 +76,10 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   address: {
-    color: colors.accent,
     fontSize: fontSizes.sm,
     fontFamily: 'monospace',
   },
   result: {
-    color: colors.textSecondary,
     fontSize: fontSizes.xs,
     marginTop: spacing.sm,
   },
@@ -81,7 +90,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   errorText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     flex: 1,
   },

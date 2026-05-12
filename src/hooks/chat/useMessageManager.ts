@@ -14,6 +14,7 @@ export function useMessageManager() {
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
       reasoningContent: m.reasoningContent,
+      reasoningDetails: m.reasoningDetails,
     }));
   }, []);
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, TextInput, Modal, StyleSheet } from 'react-native';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -23,21 +24,22 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.title}>{title}</Text>
-          {message && <Text style={styles.message}>{message}</Text>}
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.modal, { backgroundColor: colors.surfaceElevated }]}>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+          {message && <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelText}>{cancelText}</Text>
+              <Text style={[styles.cancelText, { color: colors.textSecondary }]}>{cancelText}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.confirmBtn, confirmColor && { backgroundColor: confirmColor }]}
+              style={[styles.confirmBtn, { backgroundColor: confirmColor || colors.accent }]}
               onPress={onConfirm}
             >
-              <Text style={styles.confirmText}>{confirmText}</Text>
+              <Text style={[styles.confirmText, { color: colors.textOnColor }]}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -69,13 +71,14 @@ export function InputModal({
   onConfirm,
   onCancel,
 }: InputModalProps) {
+  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.title}>{title}</Text>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.modal, { backgroundColor: colors.surfaceElevated }]}>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
@@ -84,10 +87,10 @@ export function InputModal({
           />
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelText}>{cancelText}</Text>
+              <Text style={[styles.cancelText, { color: colors.textSecondary }]}>{cancelText}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
-              <Text style={styles.confirmText}>{confirmText}</Text>
+            <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.accent }]} onPress={onConfirm}>
+              <Text style={[styles.confirmText, { color: colors.textOnColor }]}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -110,10 +113,11 @@ interface MenuModalProps {
 }
 
 export function MenuModal({ visible, items, onClose }: MenuModalProps) {
+  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.menuContent}>
+      <TouchableOpacity style={[styles.menuOverlay, { backgroundColor: colors.overlay }]} activeOpacity={1} onPress={onClose}>
+        <View style={[styles.menuContent, { backgroundColor: colors.surfaceElevated }]}>
           {items.map((item, index) => (
             <TouchableOpacity
               key={index}
@@ -122,7 +126,7 @@ export function MenuModal({ visible, items, onClose }: MenuModalProps) {
               activeOpacity={0.7}
             >
               {item.icon}
-              <Text style={[styles.menuLabel, item.labelStyle]}>{item.label}</Text>
+              <Text style={[styles.menuLabel, { color: colors.text }, item.labelStyle]}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -134,38 +138,31 @@ export function MenuModal({ visible, items, onClose }: MenuModalProps) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
   modal: {
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.lg,
     padding: spacing.xl,
     width: '100%',
     maxWidth: 300,
   },
   title: {
-    color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
   message: {
-    color: colors.textSecondary,
     fontSize: fontSizes.md,
     marginBottom: spacing.lg,
   },
   input: {
-    backgroundColor: colors.surfaceLight,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    color: colors.text,
     fontSize: fontSizes.md,
     borderWidth: 1,
-    borderColor: colors.borderLight,
     marginBottom: spacing.lg,
   },
   actions: {
@@ -179,29 +176,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   cancelText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.md,
   },
   confirmBtn: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
-    backgroundColor: colors.accent,
   },
   confirmText: {
-    color: '#FFF',
     fontSize: fontSizes.md,
     fontWeight: '600',
   },
   menuOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
   },
   menuContent: {
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.md,
     padding: spacing.sm,
     width: 200,
@@ -215,7 +207,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   menuLabel: {
-    color: colors.text,
     fontSize: fontSizes.md,
   },
 });

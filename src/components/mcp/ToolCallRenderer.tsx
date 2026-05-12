@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AgentToolCall } from '../../types';
-import { isReadTool, isWriteTool, isDeleteTool, isHttpTool } from '../../mcp/toolUtils';
+import { isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool } from '../../mcp/toolUtils';
+import { useTheme } from '../../theme';
 import ToolCallRead from './ToolCallRead';
 import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
+import ToolCallShell from './ToolCallShell';
 
 interface ToolCallRendererProps {
   name: string;
@@ -24,6 +26,8 @@ export function ToolCallRenderer({
   homePath,
   streaming,
 }: ToolCallRendererProps) {
+  const { colors } = useTheme();
+
   if (isReadTool(name)) {
     return (
       <ToolCallRead
@@ -68,11 +72,15 @@ export function ToolCallRenderer({
     );
   }
 
+  if (isShellTool(name)) {
+    return <ToolCallShell input={input} result={result} isError={isError} />;
+  }
+
   return (
-    <View style={styles.toolCallItem}>
-      <Text style={styles.toolName}>{name}</Text>
+    <View style={[styles.toolCallItem, { backgroundColor: colors.codeBg }]}>
+      <Text style={[styles.toolName, { color: colors.textTertiary }]}>{name}</Text>
       {result && (
-        <Text style={[styles.toolResult, isError && styles.toolResultError]} numberOfLines={3}>
+        <Text style={[styles.toolResult, { color: colors.textSecondary }, isError && { color: colors.danger }]} numberOfLines={3}>
           {result}
         </Text>
       )}
@@ -82,23 +90,17 @@ export function ToolCallRenderer({
 
 const styles = StyleSheet.create({
   toolCallItem: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,
     marginBottom: 2,
   },
   toolName: {
-    color: '#9CA3AF',
     fontSize: 12,
     fontFamily: 'monospace',
   },
   toolResult: {
-    color: '#6B7280',
     fontSize: 10,
     marginTop: 2,
-  },
-  toolResultError: {
-    color: '#F85149',
   },
 });

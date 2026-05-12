@@ -12,8 +12,12 @@ export class AnthropicStreamProcessor extends StreamProcessor {
   ): Promise<StreamResult> {
     const baseUrl = model.baseUrl || 'https://api.anthropic.com';
     const reasoningEffort = options?.reasoningEffort || 'medium';
+    const preserveReasoning = options?.preserveReasoning || false;
     const abortSignal = options?.abortSignal;
-    const { system, messages: userMessages } = this.formatMessages(messages);
+    const hasToolExchange = messages.some(m =>
+      m.role === 'tool' || (m.role === 'assistant' && !!m.toolCalls?.length)
+    );
+    const { system, messages: userMessages } = this.formatMessages(messages, preserveReasoning && !hasToolExchange);
 
     const body: any = {
       model: model.modelId,
@@ -45,16 +49,28 @@ export class AnthropicStreamProcessor extends StreamProcessor {
       }));
     }
 
-    const res = await fetch(`${baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': model.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(body),
-      signal: abortSignal,
-    });
+    const requestUrl = `${baseUrl}/v1/messages`;
+
+    let res: Response;
+    try {
+      res = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': model.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
+        signal: abortSignal,
+      });
+    } catch (err: any) {
+      if (err.name === 'AbortError') throw err;
+      throw new Error(
+        `网络请求失败: ${err.message}\n\n` +
+        `请求地址: ${requestUrl}\n` +
+        `提示: 请检查网络连接、Base URL 是否正确，以及是否需要配置代理/VPN`
+      );
+    }
 
     console.log('[LineCode] Anthropic request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
     body.messages.forEach((msg: any, i: number) => {
@@ -64,20 +80,25 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     console.log('[LineCode] HTTP response status:', res.status, res.statusText);
 
     if (!res.ok) {
-      let errText = '';
+      const rawText = await res.text();
+      let errText = rawText;
       try {
-        const errJson = await res.json();
-        errText = errJson?.error?.message || JSON.stringify(errJson);
-      } catch {
-        errText = await res.text();
-      }
-      throw new Error(`Anthropic ${res.status}: ${errText}`);
+        const errJson = JSON.parse(rawText);
+        if (errJson?.error?.message) {
+          errText = errJson.error.message;
+        }
+      } catch {}
+      throw new Error(
+        `Anthropic ${res.status}: ${errText}\n\n` +
+        `请求地址: ${requestUrl}\n` +
+        `提示: 如果收到 404，请检查 Base URL 是否正确（如 https://api.anthropic.com）`
+      );
     }
 
     return this.readStream(res, callbacks, abortSignal);
   }
 
-  private formatMessages(messages: ChatMessage[]): {
+  private formatMessages(messages: ChatMessage[], preserveReasoning: boolean): {
     system?: string;
     messages: { role: 'user' | 'assistant'; content: any }[];
   } {
@@ -108,7 +129,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
         });
       } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
         const content: any[] = [];
-        if (msg.reasoningContent) {
+        if (preserveReasoning && msg.reasoningContent) {
           console.log('[LineCode] Adding thinking block to Anthropic message:', msg.reasoningContent.substring(0, 50));
           content.push({ type: 'thinking', thinking: msg.reasoningContent });
         }
@@ -123,7 +144,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
         }
         console.log('[LineCode] Anthropic assistant message content blocks:', content.length);
         formatted.push({ role: 'assistant', content });
-      } else if (msg.role === 'assistant' && msg.reasoningContent) {
+      } else if (msg.role === 'assistant' && preserveReasoning && msg.reasoningContent) {
         formatted.push({
           role: 'assistant',
           content: [
@@ -145,6 +166,8 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     abortSignal?: AbortSignal,
   ): Promise<StreamResult> {
     const reader = this.createReader(res);
+    abortSignal?.addEventListener('abort', () => reader.cancel(), { once: true });
+
     const decoder = this.createDecoder();
     let buffer = '';
     const blocks: ContentBlock[] = [];
@@ -164,10 +187,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
 
     try {
       while (true) {
-        if (abortSignal?.aborted) {
-          reader.cancel();
-          break;
-        }
+        if (abortSignal?.aborted) break;
 
         const { done, value } = await reader.read();
         console.log('[LineCode] Anthropic Stream read - done:', done, 'value length:', value?.length || 0);

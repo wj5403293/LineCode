@@ -5,7 +5,8 @@ import { Monitor, Zap, Smile, Brain, Expand, ScrollText, MessageCircle, Sparkles
 import {
   settingsService, DisplayMode, ToneMode, ReasoningEffort, REASONING_EFFORT_DESC,
 } from '../services/settings';
-import { colors, spacing, radius } from '../constants/theme';
+import { spacing, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
 import OptionRow from '../components/OptionRow';
@@ -24,18 +25,21 @@ export default function LLMSettingsScreen({ onBack }: Props) {
   const [thinkingScrollEnabled, setThinkingScrollEnabled] = useState(true);
   const [thinkingAutoExpandEnabled, setThinkingAutoExpandEnabled] = useState(false);
   const [reasoningEffort, setReasoningEffortState] = useState<ReasoningEffort>('medium');
+  const [preserveReasoningEnabled, setPreserveReasoningEnabled] = useState(false);
+  const { colors } = useTheme();
 
   useEffect(() => {
     Promise.all([
       settingsService.getDisplayMode(), settingsService.getToneMode(),
       settingsService.getThinkingScroll(), settingsService.getThinkingAutoExpand(),
-      settingsService.getReasoningEffort(),
-    ]).then(([d, t, s, a, r]) => {
+      settingsService.getReasoningEffort(), settingsService.getPreserveReasoning(),
+    ]).then(([d, t, s, a, r, p]) => {
       setCurrentDisplayMode(d);
       setCurrentToneMode(t);
       setThinkingScrollEnabled(s);
       setThinkingAutoExpandEnabled(a);
       setReasoningEffortState(r);
+      setPreserveReasoningEnabled(p);
     });
   }, []);
 
@@ -64,14 +68,19 @@ export default function LLMSettingsScreen({ onBack }: Props) {
     await settingsService.setReasoningEffort(effort);
   }, []);
 
+  const handlePreserveReasoning = useCallback(async (value: boolean) => {
+    setPreserveReasoningEnabled(value);
+    await settingsService.setPreserveReasoning(value);
+  }, []);
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
       <ScreenHeader title="LLM 设置" onBack={onBack} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <SectionHeader title="思考深度" />
-          <View style={styles.optionGroup}>
+          <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
             {REASONING_EFFORTS.map(effort => (
               <OptionRow
                 key={effort}
@@ -87,7 +96,7 @@ export default function LLMSettingsScreen({ onBack }: Props) {
 
         <View style={styles.section}>
           <SectionHeader title="显示逻辑" />
-          <View style={styles.optionGroup}>
+          <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
             <OptionRow
               icon={<Monitor size={20} color={displayMode === 'fullscreen' ? colors.accent : colors.textSecondary} />}
               label="全屏模式"
@@ -107,7 +116,7 @@ export default function LLMSettingsScreen({ onBack }: Props) {
 
         <View style={styles.section}>
           <SectionHeader title="交流语气" />
-          <View style={styles.optionGroup}>
+          <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
             <OptionRow
               icon={<Zap size={20} color={toneMode === 'coding' ? colors.accent : colors.textSecondary} />}
               label="编程模式"
@@ -127,7 +136,7 @@ export default function LLMSettingsScreen({ onBack }: Props) {
 
         <View style={styles.section}>
           <SectionHeader title="思考过程" />
-          <View style={styles.optionGroup}>
+          <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
             <SwitchRow
               icon={<ScrollText size={20} color={colors.textSecondary} />}
               label="滚动显示"
@@ -142,6 +151,13 @@ export default function LLMSettingsScreen({ onBack }: Props) {
               value={thinkingAutoExpandEnabled}
               onValueChange={handleThinkingAutoExpand}
             />
+            <SwitchRow
+              icon={<Brain size={20} color={colors.textSecondary} />}
+              label="保留完整 reasoning"
+              desc="将历史思考发回兼容模型，适合多轮工具调用"
+              value={preserveReasoningEnabled}
+              onValueChange={handlePreserveReasoning}
+            />
           </View>
         </View>
       </ScrollView>
@@ -150,13 +166,12 @@ export default function LLMSettingsScreen({ onBack }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1 },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 100 },
   section: { paddingTop: spacing.xl },
   optionGroup: {
     marginHorizontal: spacing.lg,
-    backgroundColor: colors.surfaceElevated,
     borderRadius: radius.md,
     overflow: 'hidden',
   },

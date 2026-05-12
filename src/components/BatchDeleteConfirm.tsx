@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Modal, ScrollView } from 'react-native';
 import { Trash2, AlertTriangle, Check, X } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 import RNFS from 'react-native-fs';
 import { ToolCall } from '../types';
 
@@ -19,6 +20,7 @@ interface PathInfo {
 }
 
 export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, homePath, onConfirm }: Props) {
+  const { colors } = useTheme();
   const [pathInfos, setPathInfos] = useState<PathInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +43,7 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
           const fullPath = path.startsWith('/') ? path : `${homePath}/${path}`;
           let isDirectory: boolean | null = null;
           let itemCount = 0;
-          
+
           try {
             const exists = await RNFS.exists(fullPath);
             if (exists) {
@@ -54,7 +56,7 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
               }
             }
           } catch {}
-          
+
           infos.push({ path, isDirectory, itemCount });
         }
         setPathInfos(infos);
@@ -85,34 +87,34 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
       animationType="fade"
       onRequestClose={handleCancel}
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <View style={styles.header}>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.dangerMuted2 }]}>
+          <View style={[styles.header, { backgroundColor: colors.dangerMuted }]}>
             <View style={styles.deleteBadge}>
-              <Trash2 size={16} color="#F85149" />
-              <Text style={styles.deleteText}>批量删除确认</Text>
+              <Trash2 size={16} color={colors.danger} />
+              <Text style={[styles.deleteText, { color: colors.danger }]}>批量删除确认</Text>
             </View>
-            <Text style={styles.countText}>
+            <Text style={[styles.countText, { color: colors.textSecondary }]}>
               {allPaths.length} 个项目
             </Text>
           </View>
 
           <View style={styles.warningSection}>
             <View style={styles.warningHeader}>
-              <AlertTriangle size={20} color="#F85149" />
-              <Text style={styles.warningTitle}>永久删除警告</Text>
+              <AlertTriangle size={20} color={colors.danger} />
+              <Text style={[styles.warningTitle, { color: colors.danger }]}>永久删除警告</Text>
             </View>
-            
+
             {loading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#F85149" />
-                <Text style={styles.loadingText}>正在检查文件...</Text>
+                <ActivityIndicator size="small" color={colors.danger} />
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>正在检查文件...</Text>
               </View>
             ) : (
               <>
                 <ScrollView style={styles.pathList} nestedScrollEnabled>
                   {pathInfos.map((info, i) => (
-                    <Text key={i} style={styles.pathItem} numberOfLines={1}>
+                    <Text key={i} style={[styles.pathItem, { color: colors.text }]} numberOfLines={1}>
                       {info.isDirectory === true ? '📁 ' : info.isDirectory === false ? '📄 ' : '❓ '}
                       {info.path}
                       {info.isDirectory && info.itemCount > 0 && ` (${info.itemCount} 项)`}
@@ -120,27 +122,27 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
                   ))}
                 </ScrollView>
 
-                <Text style={styles.summaryText}>
+                <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
                   即将删除: {fileCount > 0 && `${fileCount} 个文件`}
                   {fileCount > 0 && dirCount > 0 && ', '}
                   {dirCount > 0 && `${dirCount} 个目录`}
                   {totalItems > allPaths.length && ` (共 ${totalItems} 项)`}
                 </Text>
-                
-                <Text style={styles.warningPermanent}>
+
+                <Text style={[styles.warningPermanent, { color: colors.danger }]}>
                   此操作不可撤销，将永久删除！
                 </Text>
               </>
             )}
 
             <View style={styles.confirmActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.7}>
+              <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.codeBorder }]} onPress={handleCancel} activeOpacity={0.7}>
                 <X size={16} color={colors.textSecondary} />
-                <Text style={styles.cancelText}>取消</Text>
+                <Text style={[styles.cancelText, { color: colors.textSecondary }]}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmDeleteBtn} onPress={handleConfirm} activeOpacity={0.7} disabled={loading}>
-                <Trash2 size={16} color="#FFF" />
-                <Text style={styles.confirmDeleteText}>确认删除</Text>
+              <TouchableOpacity style={[styles.confirmDeleteBtn, { backgroundColor: colors.danger }]} onPress={handleConfirm} activeOpacity={0.7} disabled={loading}>
+                <Trash2 size={16} color={colors.textOnColor} />
+                <Text style={[styles.confirmDeleteText, { color: colors.textOnColor }]}>确认删除</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -153,19 +155,16 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
   },
   container: {
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     width: '100%',
     maxWidth: 400,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(248,81,73,0.3)',
   },
   header: {
     flexDirection: 'row',
@@ -173,7 +172,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    backgroundColor: 'rgba(248,81,73,0.1)',
   },
   deleteBadge: {
     flexDirection: 'row',
@@ -181,12 +179,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   deleteText: {
-    color: '#F85149',
     fontSize: fontSizes.md,
     fontWeight: '700',
   },
   countText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.sm,
   },
   warningSection: {
@@ -200,7 +196,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   warningTitle: {
-    color: '#F85149',
     fontSize: fontSizes.md,
     fontWeight: '600',
   },
@@ -212,7 +207,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.sm,
   },
   pathList: {
@@ -220,18 +214,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   pathItem: {
-    color: colors.text,
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
     paddingVertical: 2,
   },
   summaryText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.xs,
     marginBottom: spacing.xs,
   },
   warningPermanent: {
-    color: '#F85149',
     fontSize: fontSizes.sm,
     fontWeight: '600',
     marginBottom: spacing.md,
@@ -247,12 +238,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.sm,
   },
   cancelText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.md,
     fontWeight: '600',
   },
@@ -262,12 +251,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#F85149',
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.sm,
   },
   confirmDeleteText: {
-    color: '#FFF',
     fontSize: fontSizes.md,
     fontWeight: '600',
   },

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useEffect } from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { Alert, View, FlatList, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
 import MessageBubble from '../components/MessageBubble';
 import InputBar from '../components/InputBar';
@@ -9,57 +10,131 @@ import EmptyState from '../components/EmptyState';
 import Sidebar from '../components/Sidebar';
 import BatchDeleteConfirm from '../components/BatchDeleteConfirm';
 import { Message } from '../types';
-import { colors, spacing } from '../constants/theme';
+import { spacing } from '../constants/theme';
+import { useTheme } from '../theme';
 import { PERMISSIONS, MORE_OPTIONS } from '../constants/options';
 import { useChatState } from '../hooks/useChatState';
 import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../hooks/useSettings';
 import { useConversationManager } from '../hooks/useConversationManager';
 import { useProjectSelection } from '../hooks/useProjectSelection';
-import { settingsService } from '../services/settings';
+import { PermissionMode } from '../services/settings';
 import { permissionService } from '../services/PermissionService';
+import { setKeepAwake } from '../utils/keepAwake';
 
 interface Props {
   onGoSettings: () => void;
+  onViewShellCommand: (command: string) => void;
 }
 
-export default function ChatScreen({ onGoSettings }: Props) {
+export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) {
   const insets = useSafeAreaInsets();
-  const { codeWrap, displayMode, toneMode, thinkingScrollable, thinkingAutoExpand, reasoningEffort, permissionMode } = useSettings();
-  const chat = useChatState(toneMode, reasoningEffort);
+  const { colors } = useTheme();
+  const { codeWrap, displayMode, toneMode, thinkingScrollable, thinkingAutoExpand, reasoningEffort, preserveReasoning, permissionMode, updatePermissionMode } = useSettings();
+  const chat = useChatState(toneMode, reasoningEffort, preserveReasoning);
+  const {
+    reloadModel,
+    streaming,
+    homePath,
+    clearMessages,
+    setMessages,
+    setConversationId,
+    flatListRef,
+    messages,
+    handleSend,
+    handleStop,
+    pendingToolCall,
+    handleToolConfirm,
+    model,
+    loading,
+    scrollToBottom,
+    handleScrollBeginDrag,
+    handleScroll,
+  } = chat;
   const { dialog, openDialog, closeDialog } = useDialog();
   const conversation = useConversationManager();
+  const {
+    openSidebar,
+    closeSidebar,
+    sidebarVisible,
+    conversationId,
+    handleNewConversation: createConversation,
+    handleSelectConversation: selectConversation,
+  } = conversation;
   const { projects, selectedProject, handleProjectSelect } = useProjectSelection();
 
-  const containerStyle = useMemo(() => [styles.container, { paddingTop: insets.top }], [insets.top]);
+  useFocusEffect(
+    useCallback(() => {
+      reloadModel();
+    }, [reloadModel])
+  );
+
+  const containerStyle = useMemo(() => [styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }], [insets.top, colors.bg]);
 
   useEffect(() => {
     permissionService.setMode(permissionMode);
   }, [permissionMode]);
 
+  useEffect(() => {
+    setKeepAwake(streaming);
+    return () => setKeepAwake(false);
+  }, [streaming]);
+
   const handlePermissionSelect = useCallback(async (id: string) => {
-    await settingsService.setPermissionMode(id as any);
+    const mode = id as PermissionMode;
+    await updatePermissionMode(mode);
+    permissionService.setMode(mode);
     closeDialog();
-  }, [closeDialog]);
+  }, [closeDialog, updatePermissionMode]);
+
+  const shellConfirmToolCallId = pendingToolCall?.type === 'shell'
+    ? pendingToolCall.toolCalls.find(tc => tc.name === 'shell_execute')?.id
+    : undefined;
+
+  const handleShellAutoExecute = useCallback(() => {
+    Alert.alert(
+      '自动运行 shell 命令',
+      '本轮对话后续非危险 shell 命令会自动执行。应用会继续拦截明显危险命令，但模型生成的命令仍可能修改文件、安装依赖或产生网络请求。请确认你信任当前任务。',
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '确认自动运行', style: 'destructive', onPress: () => handleToolConfirm(true, true) },
+      ],
+    );
+  }, [handleToolConfirm]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => (
-    <MessageBubble
+      <MessageBubble
       message={item}
       codeWrap={codeWrap}
       displayMode={displayMode}
       thinkingAutoExpand={thinkingAutoExpand}
       thinkingScrollable={thinkingScrollable}
-      homePath={chat.homePath}
+      homePath={homePath}
+      shellConfirmToolCallId={shellConfirmToolCallId}
+      onShellCancel={() => handleToolConfirm(false)}
+      onShellConfirm={() => handleToolConfirm(true)}
+      onShellDefaultExecute={handleShellAutoExecute}
+      onViewShellCommand={onViewShellCommand}
     />
-  ), [codeWrap, displayMode, thinkingAutoExpand, thinkingScrollable, chat.homePath]);
+  ), [
+    codeWrap,
+    displayMode,
+    thinkingAutoExpand,
+    thinkingScrollable,
+    homePath,
+    shellConfirmToolCallId,
+    handleToolConfirm,
+    handleShellAutoExecute,
+    onViewShellCommand,
+  ]);
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
 
   const handleMoreSelect = useCallback((id: string) => {
     closeDialog();
     if (id === 'settings') onGoSettings();
-    if (id === 'clear') chat.clearMessages();
-  }, [onGoSettings, closeDialog, chat.clearMessages]);
+    if (id === 'clear') clearMessages();
+  }, [onGoSettings, closeDialog, clearMessages]);
 
   const handleProjectDialogSelect = useCallback((id: string) => {
     handleProjectSelect(id);
@@ -67,25 +142,25 @@ export default function ChatScreen({ onGoSettings }: Props) {
   }, [handleProjectSelect, closeDialog]);
 
   const handleNewConversation = useCallback(async () => {
-    await conversation.handleNewConversation();
-    chat.setMessages([]);
-  }, [conversation.handleNewConversation, chat.setMessages]);
+    await createConversation();
+    setMessages([]);
+  }, [createConversation, setMessages]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
-    const conv = await conversation.handleSelectConversation(id);
+    const conv = await selectConversation(id);
     if (conv) {
-      chat.setConversationId(conv.id);
-      chat.setMessages(conv.messages);
+      setConversationId(conv.id);
+      setMessages(conv.messages);
     }
-  }, [conversation.handleSelectConversation, chat.setConversationId, chat.setMessages]);
+  }, [selectConversation, setConversationId, setMessages]);
 
-  if (!chat.model && !chat.loading) {
+  if (!model && !loading) {
     return (
       <>
         <View style={containerStyle}>
           <Header
             projectLabel={selectedProject.label}
-            onPressMenu={conversation.openSidebar}
+            onPressMenu={openSidebar}
             onPressProject={() => openDialog('project')}
             onPressPermission={() => openDialog('permission')}
             onPressAdd={handleNewConversation}
@@ -95,9 +170,9 @@ export default function ChatScreen({ onGoSettings }: Props) {
           <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
         </View>
         <Sidebar
-          visible={conversation.sidebarVisible}
-          currentId={conversation.conversationId}
-          onClose={conversation.closeSidebar}
+          visible={sidebarVisible}
+          currentId={conversationId}
+          onClose={closeSidebar}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
         />
@@ -110,7 +185,7 @@ export default function ChatScreen({ onGoSettings }: Props) {
       <View style={containerStyle}>
         <Header
           projectLabel={selectedProject.label}
-          onPressMenu={conversation.openSidebar}
+          onPressMenu={openSidebar}
           onPressProject={() => openDialog('project')}
           onPressPermission={() => openDialog('permission')}
           onPressAdd={handleNewConversation}
@@ -118,39 +193,42 @@ export default function ChatScreen({ onGoSettings }: Props) {
         />
 
         <FlatList
-          ref={chat.flatListRef}
-          data={chat.messages}
+          ref={flatListRef}
+          data={messages}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           style={styles.list}
           contentContainerStyle={styles.listContent}
-          onContentSizeChange={() => chat.scrollToBottom()}
-          onScroll={chat.handleScroll}
+          onContentSizeChange={() => scrollToBottom(false)}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScroll={handleScroll}
+          onScrollEndDrag={handleScroll}
+          onMomentumScrollEnd={handleScroll}
           scrollEventThrottle={16}
           removeClippedSubviews
           maxToRenderPerBatch={10}
           windowSize={10}
         />
 
-        <InputBar onSend={chat.handleSend} onStop={chat.handleStop} streaming={chat.streaming} />
+        <InputBar onSend={handleSend} onStop={handleStop} streaming={streaming} />
 
         <Dialog visible={dialog === 'project'} title="项目" options={projects} selectedId={selectedProject.id} onSelect={handleProjectDialogSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
 
         <Sidebar
-          visible={conversation.sidebarVisible}
-          currentId={conversation.conversationId}
-          onClose={conversation.closeSidebar}
+          visible={sidebarVisible}
+          currentId={conversationId}
+          onClose={closeSidebar}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
         />
 
         <BatchDeleteConfirm
-          visible={!!chat.pendingToolCall && chat.pendingToolCall.toolCalls.some(tc => tc.name === 'file_delete')}
-          toolCalls={chat.pendingToolCall?.toolCalls.filter(tc => tc.name === 'file_delete') || []}
-          homePath={chat.homePath}
-          onConfirm={chat.handleToolConfirm}
+          visible={!!pendingToolCall && pendingToolCall.type !== 'shell' && pendingToolCall.toolCalls.some(tc => tc.name === 'file_delete')}
+          toolCalls={pendingToolCall?.toolCalls.filter(tc => tc.name === 'file_delete') || []}
+          homePath={homePath}
+          onConfirm={handleToolConfirm}
         />
       </View>
     </>
@@ -158,7 +236,7 @@ export default function ChatScreen({ onGoSettings }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1 },
   list: { flex: 1 },
   listContent: { paddingVertical: spacing.sm },
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Pressable, PanResponder, Animated as RNAnimated } from 'react-native';
+import { useTheme } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function BottomSheet({ visible, onClose, children }: Props) {
+  const { colors } = useTheme();
   const translateY = useRef(new RNAnimated.Value(600)).current;
   const [mounted, setMounted] = useState(false);
 
@@ -66,15 +68,15 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
 
   return (
     <>
-      <RNAnimated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+      <RNAnimated.View style={[styles.backdrop, { opacity: backdropOpacity, backgroundColor: '#000' }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </RNAnimated.View>
       <RNAnimated.View
-        style={[styles.sheet, { transform: [{ translateY }] }]}
+        style={[styles.sheet, { backgroundColor: colors.surfaceElevated }, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
         <Pressable style={styles.handleContainer}>
-          <Pressable style={styles.handle} />
+          <Pressable style={[styles.handle, { backgroundColor: colors.textTertiary }]} />
         </Pressable>
         {children}
       </RNAnimated.View>
@@ -85,14 +87,12 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#000',
   },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#141414',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingBottom: 34,
@@ -105,6 +105,5 @@ const styles = StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#636366',
   },
 });

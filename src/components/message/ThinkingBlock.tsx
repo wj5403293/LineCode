@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { ChevronRight, ChevronDown } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../../constants/theme';
-import { thinkingMdStyle } from './markdownStyles';
+import { spacing, fontSizes } from '../../constants/theme';
+import { useTheme } from '../../theme';
+import { createThinkingMdStyle } from './markdownStyles';
 
 interface Props {
   content: string;
@@ -13,6 +14,8 @@ interface Props {
 }
 
 export default React.memo(function ThinkingBlock({ content, streaming, autoExpand, scrollable }: Props) {
+  const { colors } = useTheme();
+  const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
   const [expanded, setExpanded] = useState(autoExpand || false);
 
   useEffect(() => {
@@ -27,8 +30,8 @@ export default React.memo(function ThinkingBlock({ content, streaming, autoExpan
         activeOpacity={0.7}
       >
         <View style={styles.row}>
-          <Text style={styles.icon}>✦</Text>
-          <Text style={styles.label} numberOfLines={1}>
+          <Text style={[styles.icon, { color: colors.textTertiary }]}>✦</Text>
+          <Text style={[styles.label, { color: colors.textTertiary }]} numberOfLines={1}>
             {streaming ? '思考中...' : '思考完毕'}
           </Text>
           {expanded
@@ -38,12 +41,12 @@ export default React.memo(function ThinkingBlock({ content, streaming, autoExpan
       </TouchableOpacity>
       {expanded && (
         scrollable ? (
-          <ScrollView style={styles.scroll} nestedScrollEnabled>
-            <Markdown style={thinkingMdStyle}>{content}</Markdown>
+          <ScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
+            <Markdown style={mdStyle}>{content}</Markdown>
           </ScrollView>
         ) : (
-          <View style={styles.content}>
-            <Markdown style={thinkingMdStyle}>{content}</Markdown>
+          <View style={[styles.content, { borderTopColor: colors.borderLight }]}>
+            <Markdown style={mdStyle}>{content}</Markdown>
           </View>
         )
       )}
@@ -65,22 +68,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   icon: {
-    color: colors.textTertiary,
     fontSize: 10,
   },
   label: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
   },
   scroll: {
     maxHeight: 180,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
   },
   content: {
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
   },
 });

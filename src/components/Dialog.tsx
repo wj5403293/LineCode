@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Option {
   id: string;
@@ -26,12 +27,13 @@ interface ItemProps {
 }
 
 const DialogItem = React.memo(function DialogItem({ item, isSelected, onSelect }: ItemProps) {
-  const style = useMemo(() => [styles.item, isSelected && styles.itemActive], [isSelected]);
+  const { colors } = useTheme();
+  const style = useMemo(() => [styles.item, isSelected && { backgroundColor: colors.accentMuted }], [isSelected, colors.accentMuted]);
   return (
     <TouchableOpacity style={style} onPress={() => onSelect(item.id)} activeOpacity={0.6}>
       <View style={styles.itemContent}>
-        <Text style={styles.label}>{item.label}</Text>
-        {item.desc && <Text style={styles.desc}>{item.desc}</Text>}
+        <Text style={[styles.label, { color: colors.text }]}>{item.label}</Text>
+        {item.desc && <Text style={[styles.desc, { color: colors.textTertiary }]}>{item.desc}</Text>}
       </View>
       {isSelected && <Check size={18} color={colors.accent} />}
     </TouchableOpacity>
@@ -39,17 +41,18 @@ const DialogItem = React.memo(function DialogItem({ item, isSelected, onSelect }
 });
 
 function Dialog({ visible, title, options, selectedId, onSelect, onClose, icon }: Props) {
+  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <TouchableOpacity style={[styles.backdrop, { backgroundColor: colors.overlay }]} activeOpacity={1} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}>
+          <View style={[styles.handle, { backgroundColor: colors.textTertiary }]} />
           <View style={styles.header}>
             {icon}
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
           </View>
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
           {options.map(opt => (
             <DialogItem
               key={opt.id}
@@ -73,19 +76,16 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.textTertiary,
     alignSelf: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
   },
   sheet: {
-    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingBottom: 34,
@@ -98,13 +98,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   title: {
-    color: colors.text,
     fontSize: fontSizes.lg,
     fontWeight: '700',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderLight,
   },
   item: {
     flexDirection: 'row',
@@ -112,18 +110,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md + 2,
   },
-  itemActive: {
-    backgroundColor: 'rgba(48, 209, 88, 0.08)',
-  },
+  itemActive: {},
   itemContent: {
     flex: 1,
   },
   label: {
-    color: colors.text,
     fontSize: fontSizes.md,
   },
   desc: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     marginTop: 2,
   },

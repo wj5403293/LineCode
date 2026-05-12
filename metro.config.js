@@ -9,8 +9,6 @@ const config = {
       'node:path': require.resolve('./polyfills/empty.js'),
       os: require.resolve('./polyfills/empty.js'),
       'node:os': require.resolve('./polyfills/empty.js'),
-      http: require.resolve('./polyfills/empty.js'),
-      'node:http': require.resolve('./polyfills/empty.js'),
       https: require.resolve('./polyfills/empty.js'),
       'node:https': require.resolve('./polyfills/empty.js'),
       stream: require.resolve('./polyfills/empty.js'),

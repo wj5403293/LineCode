@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronDown, Plus, Shield, MoreVertical, Menu } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   projectLabel: string;
@@ -15,15 +16,16 @@ interface Props {
 export default React.memo(function Header({
   projectLabel, onPressMenu, onPressProject, onPressPermission, onPressAdd, onPressMore,
 }: Props) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { backgroundColor: colors.bg, borderBottomColor: colors.border }]}>
       <TouchableOpacity style={styles.iconBtn} onPress={onPressMenu} activeOpacity={0.6}>
         <Menu size={20} color={colors.text} />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.projectBtn} onPress={onPressProject} activeOpacity={0.6}>
-        <View style={styles.statusDot} />
-        <Text style={styles.projectName}>{projectLabel}</Text>
+        <View style={[styles.statusDot, { backgroundColor: colors.accent }]} />
+        <Text style={[styles.projectName, { color: colors.text }]}>{projectLabel}</Text>
         <ChevronDown size={14} color={colors.textSecondary} />
       </TouchableOpacity>
 
@@ -48,9 +50,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    backgroundColor: colors.bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
     gap: spacing.xs,
   },
   projectBtn: {
@@ -63,10 +63,8 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: colors.accent,
   },
   projectName: {
-    color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '600',
   },

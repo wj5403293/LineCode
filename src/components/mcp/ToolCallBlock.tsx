@@ -4,8 +4,9 @@ import ToolCallRead from './ToolCallRead';
 import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
+import ToolCallShell from './ToolCallShell';
 import AgentBlock from './AgentBlock';
-import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, parseToolInput } from '../../mcp/toolUtils';
+import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool, parseToolInput } from '../../mcp/toolUtils';
 import { agentToolManager } from '../../mcp/AgentToolManager';
 
 interface Props {
@@ -14,9 +15,25 @@ interface Props {
   isError?: boolean;
   homePath?: string;
   block?: ContentBlock;
+  pending?: boolean;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
-export default React.memo(function ToolCallBlock({ toolCall, result, isError, homePath, block }: Props) {
+export default React.memo(function ToolCallBlock({
+  toolCall,
+  result,
+  isError,
+  homePath,
+  block,
+  pending,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
+}: Props) {
   const input = parseToolInput(toolCall);
 
   if (isAgentTool(toolCall.name)) {
@@ -26,6 +43,7 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
     const agentThinking = block?.agentThinking;
     const agentToolCalls = block?.agentToolCalls;
     const waitingForUnlock = block?.waitingForUnlock;
+    const agentStreaming = !result && !block?.agentOutput && (agentStatus === 'running' || agentStatus === 'waiting_unlock');
     
     return (
       <AgentBlock
@@ -35,7 +53,7 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
         output={agentOutput}
         thinking={agentThinking}
         toolCalls={agentToolCalls}
-        streaming={!result && !block?.agentOutput}
+        streaming={agentStreaming}
         homePath={homePath}
         waitingForUnlock={waitingForUnlock}
         onContinueAfterUnlock={() => agentToolManager.continueAfterUnlock()}
@@ -73,6 +91,21 @@ export default React.memo(function ToolCallBlock({ toolCall, result, isError, ho
 
   if (isHttpTool(toolCall.name)) {
     return <ToolCallHttpServer input={input} result={result} isError={isError} />;
+  }
+
+  if (isShellTool(toolCall.name)) {
+    return (
+      <ToolCallShell
+        input={input}
+        result={result}
+        isError={isError}
+        pending={pending}
+        onCancel={onShellCancel}
+        onConfirm={onShellConfirm}
+        onDefaultExecute={onShellDefaultExecute}
+        onViewCommand={onViewShellCommand}
+      />
+    );
   }
 
   return null;

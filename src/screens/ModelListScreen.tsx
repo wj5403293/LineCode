@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Plus, Trash2, X } from 'lucide-react-native';
 import { Model } from '../types';
 import { modelStorage } from '../services/storage';
 import ModelCard from '../components/ModelCard';
 import ScreenHeader from '../components/ScreenHeader';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   onBack: () => void;
@@ -18,27 +20,21 @@ interface Props {
 
 export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const [models, setModels] = useState<Model[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [multiSelect, setMultiSelect] = useState<string[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      const [m, sid] = await Promise.all([modelStorage.getModels(), modelStorage.getSelectedModelId()]);
-      setModels(m);
-      setSelectedId(sid);
-    };
-    load();
-  }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      const [m, sid] = await Promise.all([modelStorage.getModels(), modelStorage.getSelectedModelId()]);
-      setModels(m);
-      setSelectedId(sid);
-    };
-    load();
-  }, [onBack, onAdd, onSelect]);
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        const [m, sid] = await Promise.all([modelStorage.getModels(), modelStorage.getSelectedModelId()]);
+        setModels(m);
+        setSelectedId(sid);
+      };
+      load();
+    }, [])
+  );
 
   const handleSelect = useCallback(async (id: string) => {
     if (multiSelect.length > 0) {
@@ -101,7 +97,7 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
   ) : undefined;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
       <ScreenHeader
         title={multiSelect.length > 0 ? `已选 ${multiSelect.length} 项` : '模型'}
         onBack={multiSelect.length > 0 ? undefined : onBack}
@@ -110,8 +106,8 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
 
       {models.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>还没有添加模型</Text>
-          <Text style={styles.emptySubText}>点击右上角 + 添加</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>还没有添加模型</Text>
+          <Text style={[styles.emptySubText, { color: colors.textTertiary }]}>点击右上角 + 添加</Text>
         </View>
       ) : (
         <FlatList
@@ -126,10 +122,10 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1 },
   iconBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   list: { padding: spacing.lg },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: colors.textSecondary, fontSize: fontSizes.lg },
-  emptySubText: { color: colors.textTertiary, fontSize: fontSizes.sm, marginTop: spacing.xs },
+  emptyText: { fontSize: fontSizes.lg },
+  emptySubText: { fontSize: fontSizes.sm, marginTop: spacing.xs },
 });

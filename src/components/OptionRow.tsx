@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   icon: React.ReactNode;
@@ -11,9 +12,11 @@ interface Props {
 }
 
 export default React.memo(function OptionRow({ icon, label, desc, active, onPress }: Props) {
+  const { colors } = useTheme();
+
   const containerStyle = useMemo(
-    () => [styles.option, active && styles.optionActive],
-    [active],
+    () => [styles.option, { borderBottomColor: colors.borderLight }, active && { backgroundColor: colors.accentMuted }],
+    [active, colors.borderLight, colors.accentMuted],
   );
 
   return (
@@ -25,8 +28,10 @@ export default React.memo(function OptionRow({ icon, label, desc, active, onPres
     >
       {icon}
       <View style={styles.content}>
-        <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
-        {desc && <Text style={styles.desc}>{desc}</Text>}
+        <Text style={[styles.label, { color: active ? colors.accent : colors.text }, active && styles.labelActive]}>
+          {label}
+        </Text>
+        {desc && <Text style={[styles.desc, { color: colors.textTertiary }]}>{desc}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -39,25 +44,18 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  optionActive: {
-    backgroundColor: 'rgba(48,209,88,0.08)',
   },
   content: {
     flex: 1,
   },
   label: {
-    color: colors.text,
     fontSize: fontSizes.md,
     fontWeight: '500',
   },
   labelActive: {
-    color: colors.accent,
     fontWeight: '600',
   },
   desc: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     marginTop: 2,
   },

@@ -1,18 +1,22 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
-import { colors, spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes } from '../constants/theme';
+import { useTheme } from '../theme';
 
 interface Props {
   title: string;
 }
 
 export default React.memo(function SectionHeader({ title }: Props) {
-  return <Text style={styles.title}>{title}</Text>;
+  const { colors } = useTheme();
+
+  return (
+    <Text style={[styles.title, { color: colors.textTertiary }]}>{title}</Text>
+  );
 });
 
 const styles = StyleSheet.create({
   title: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     fontWeight: '600',
     textTransform: 'uppercase',

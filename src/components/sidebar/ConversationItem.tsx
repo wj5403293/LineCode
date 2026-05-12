@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MessageSquare, Trash2 } from 'lucide-react-native';
 import { Conversation } from '../../services/conversation';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface ConversationItemProps {
   item: Conversation;
@@ -12,23 +13,24 @@ interface ConversationItemProps {
 }
 
 export function ConversationItem({ item, isActive, onSelect, onDelete }: ConversationItemProps) {
+  const { colors } = useTheme();
   const date = new Date(item.updatedAt);
   const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
 
   return (
     <TouchableOpacity
-      style={[styles.item, isActive && styles.itemActive]}
+      style={[styles.item, isActive && { backgroundColor: colors.accentMuted }]}
       onPress={onSelect}
       activeOpacity={0.7}
     >
-      <View style={styles.itemIcon}>
+      <View style={[styles.itemIcon, { backgroundColor: colors.surfaceLight }]}>
         <MessageSquare size={16} color={isActive ? colors.accent : colors.textTertiary} />
       </View>
       <View style={styles.itemContent}>
-        <Text style={[styles.itemTitle, isActive && styles.itemTitleActive]} numberOfLines={1}>
+        <Text style={[styles.itemTitle, { color: isActive ? colors.accent : colors.text }, isActive && styles.itemTitleActive]} numberOfLines={1}>
           {item.title}
         </Text>
-        <Text style={styles.itemTime}>{timeStr}</Text>
+        <Text style={[styles.itemTime, { color: colors.textTertiary }]}>{timeStr}</Text>
       </View>
       <TouchableOpacity onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
         <Trash2 size={14} color={colors.textTertiary} />
@@ -46,14 +48,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     gap: spacing.sm,
   },
-  itemActive: {
-    backgroundColor: 'rgba(48,209,88,0.08)',
-  },
   itemIcon: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -61,15 +59,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemTitle: {
-    color: colors.text,
     fontSize: fontSizes.sm,
   },
   itemTitleActive: {
-    color: colors.accent,
     fontWeight: '600',
   },
   itemTime: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     marginTop: 2,
   },

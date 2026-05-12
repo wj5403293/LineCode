@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { colors, spacing, fontSizes } from '../../constants/theme';
+import { spacing, fontSizes } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface DiffLine {
   type: 'add' | 'remove' | 'context';
@@ -20,7 +21,6 @@ function computeDiff(oldText: string, newText: string): DiffLine[] {
   const newLines = newText.split('\n');
   const result: DiffLine[] = [];
 
-  // Simple LCS-based diff
   const m = oldLines.length;
   const n = newLines.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
@@ -55,6 +55,7 @@ function computeDiff(oldText: string, newText: string): DiffLine[] {
 }
 
 export default React.memo(function DiffView({ oldContent, newContent, maxLines = 50 }: Props) {
+  const { colors } = useTheme();
   const lines = useMemo(() => computeDiff(oldContent, newContent), [oldContent, newContent]);
   const displayLines = lines.slice(0, maxLines);
   const truncated = lines.length > maxLines;
@@ -63,18 +64,32 @@ export default React.memo(function DiffView({ oldContent, newContent, maxLines =
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={styles.container}>
         {displayLines.map((line, idx) => (
-          <View key={idx} style={[styles.line, line.type === 'add' && styles.lineAdd, line.type === 'remove' && styles.lineRemove]}>
-            <Text style={styles.lineNum}>{line.oldLine ?? ''}</Text>
-            <Text style={styles.lineNum}>{line.newLine ?? ''}</Text>
-            <Text style={[styles.linePrefix, line.type === 'add' && styles.prefixAdd, line.type === 'remove' && styles.prefixRemove]}>
+          <View key={idx} style={[
+            styles.line,
+            line.type === 'add' && { backgroundColor: colors.diffAddBg },
+            line.type === 'remove' && { backgroundColor: colors.diffDelBg },
+          ]}>
+            <Text style={[styles.lineNum, { color: colors.textTertiary }]}>{line.oldLine ?? ''}</Text>
+            <Text style={[styles.lineNum, { color: colors.textTertiary }]}>{line.newLine ?? ''}</Text>
+            <Text style={[
+              styles.linePrefix,
+              { color: colors.textTertiary },
+              line.type === 'add' && { color: colors.diffAddText },
+              line.type === 'remove' && { color: colors.diffDelText },
+            ]}>
               {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
             </Text>
-            <Text style={[styles.lineText, line.type === 'add' && styles.textAdd, line.type === 'remove' && styles.textRemove]}>
+            <Text style={[
+              styles.lineText,
+              { color: colors.text },
+              line.type === 'add' && { color: colors.diffAddText },
+              line.type === 'remove' && { color: colors.diffDelText },
+            ]}>
               {line.content}
             </Text>
           </View>
         ))}
-        {truncated && <Text style={styles.truncated}>... (diff 已截断，共 {lines.length} 行)</Text>}
+        {truncated && <Text style={[styles.truncated, { color: colors.textTertiary }]}>... (diff 已截断，共 {lines.length} 行)</Text>}
       </View>
     </ScrollView>
   );
@@ -89,14 +104,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
   },
-  lineAdd: {
-    backgroundColor: 'rgba(46,160,67,0.12)',
-  },
-  lineRemove: {
-    backgroundColor: 'rgba(248,81,73,0.12)',
-  },
   lineNum: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
     width: 28,
@@ -105,31 +113,16 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   linePrefix: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
     width: 12,
   },
-  prefixAdd: {
-    color: '#3FB950',
-  },
-  prefixRemove: {
-    color: '#F85149',
-  },
   lineText: {
-    color: colors.text,
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
     flex: 1,
   },
-  textAdd: {
-    color: '#3FB950',
-  },
-  textRemove: {
-    color: '#F85149',
-  },
   truncated: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     padding: spacing.sm,
     fontStyle: 'italic',

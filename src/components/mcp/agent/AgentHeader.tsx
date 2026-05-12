@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Bot, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock } from 'lucide-react-native';
-import { colors, spacing, fontSizes } from '../../../constants/theme';
+import { spacing, fontSizes } from '../../../constants/theme';
+import { useTheme } from '../../../theme';
 
 interface AgentHeaderProps {
   name: string;
@@ -12,8 +13,9 @@ interface AgentHeaderProps {
 }
 
 export function AgentHeader({ name, agentType, status, expanded, onToggle }: AgentHeaderProps) {
+  const { colors } = useTheme();
   const typeLabel = agentType === 'explore' ? '探索' : '编程';
-  const typeColor = agentType === 'explore' ? colors.accent : '#F85149';
+  const typeColor = agentType === 'explore' ? colors.accent : colors.danger;
 
   return (
     <TouchableOpacity style={styles.header} onPress={onToggle} activeOpacity={0.7}>
@@ -22,19 +24,19 @@ export function AgentHeader({ name, agentType, status, expanded, onToggle }: Age
           <Bot size={14} color={typeColor} />
         </View>
         <View style={styles.titleSection}>
-          <Text style={styles.title} numberOfLines={1}>{name}</Text>
-          <Text style={styles.subtitle}>{typeLabel} Agent</Text>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{typeLabel} Agent</Text>
         </View>
       </View>
       <View style={styles.right}>
         {status === 'running' ? (
           <ActivityIndicator size="small" color={colors.accent} />
         ) : status === 'done' ? (
-          <CheckCircle size={14} color="#3FB950" />
+          <CheckCircle size={14} color={colors.success} />
         ) : status === 'waiting_unlock' ? (
-          <Clock size={14} color="#FF9800" />
+          <Clock size={14} color={colors.processing} />
         ) : (
-          <XCircle size={14} color="#F85149" />
+          <XCircle size={14} color={colors.danger} />
         )}
         {expanded
           ? <ChevronDown size={16} color={colors.textTertiary} />
@@ -70,12 +72,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: colors.text,
     fontSize: fontSizes.sm,
     fontWeight: '600',
   },
   subtitle: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     marginTop: 1,
   },

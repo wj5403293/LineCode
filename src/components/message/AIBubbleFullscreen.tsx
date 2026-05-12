@@ -15,10 +15,28 @@ interface Props {
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
 export default React.memo(function AIBubbleFullscreen({
-  content, blocks, toolCalls, toolResults, streaming, codeWrap, thinkingAutoExpand, thinkingScrollable, homePath,
+  content,
+  blocks,
+  toolCalls,
+  toolResults,
+  streaming,
+  codeWrap,
+  thinkingAutoExpand,
+  thinkingScrollable,
+  homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
 }: Props) {
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
@@ -40,6 +58,11 @@ export default React.memo(function AIBubbleFullscreen({
           thinkingAutoExpand={thinkingAutoExpand}
           thinkingScrollable={thinkingScrollable}
           homePath={homePath}
+          shellConfirmToolCallId={shellConfirmToolCallId}
+          onShellCancel={onShellCancel}
+          onShellConfirm={onShellConfirm}
+          onShellDefaultExecute={onShellDefaultExecute}
+          onViewShellCommand={onViewShellCommand}
         />
       )}
     </View>

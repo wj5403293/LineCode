@@ -1,4 +1,4 @@
-import { Model, ContentBlock, ToolCall } from '../../../types';
+import { Model, ContentBlock, ToolCall, ReasoningDetail } from '../../../types';
 import { ReasoningEffort } from '../../settings';
 
 export interface StreamCallbacks {
@@ -9,6 +9,7 @@ export interface StreamCallbacks {
 
 export interface StreamOptions {
   reasoningEffort?: ReasoningEffort;
+  preserveReasoning?: boolean;
   abortSignal?: AbortSignal;
 }
 
@@ -17,6 +18,7 @@ export interface StreamResult {
   blocks: ContentBlock[];
   toolCalls?: ToolCall[];
   reasoningContent?: string;
+  reasoningDetails?: ReasoningDetail[];
 }
 
 export interface ChatMessage {
@@ -26,6 +28,7 @@ export interface ChatMessage {
   toolName?: string;
   toolCalls?: ToolCall[];
   reasoningContent?: string;
+  reasoningDetails?: ReasoningDetail[];
 }
 
 export abstract class StreamProcessor {

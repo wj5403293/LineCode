@@ -13,6 +13,7 @@ const READONLY_TOOLS = new Set([
 
 const DANGEROUS_TOOLS = new Set([
   'file_delete',
+  'shell_execute',
 ]);
 
 export class PermissionService {

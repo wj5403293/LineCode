@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { ChevronRight, ChevronDown } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
-import { colors, spacing, fontSizes } from '../../../constants/theme';
-import { thinkingMdStyle } from '../../message/markdownStyles';
+import { spacing, fontSizes } from '../../../constants/theme';
+import { useTheme } from '../../../theme';
+import { createThinkingMdStyle } from '../../message/markdownStyles';
 
 interface AgentThinkingProps {
   thinking?: string;
@@ -13,6 +14,9 @@ interface AgentThinkingProps {
 }
 
 export function AgentThinking({ thinking, streaming, expanded, onToggle }: AgentThinkingProps) {
+  const { colors } = useTheme();
+  const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
+
   if (!thinking) return null;
 
   return (
@@ -22,8 +26,8 @@ export function AgentThinking({ thinking, streaming, expanded, onToggle }: Agent
         onPress={onToggle}
         activeOpacity={0.7}
       >
-        <Text style={styles.thinkingIcon}>✦</Text>
-        <Text style={styles.thinkingLabel}>
+        <Text style={[styles.thinkingIcon, { color: colors.textTertiary }]}>✦</Text>
+        <Text style={[styles.thinkingLabel, { color: colors.textTertiary }]}>
           {streaming ? '思考中...' : '思考完毕'}
         </Text>
         {expanded
@@ -33,8 +37,8 @@ export function AgentThinking({ thinking, streaming, expanded, onToggle }: Agent
       </TouchableOpacity>
 
       {expanded && (
-        <ScrollView style={styles.thinkingContent} nestedScrollEnabled>
-          <Markdown style={thinkingMdStyle}>{thinking}</Markdown>
+        <ScrollView style={[styles.thinkingContent, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
+          <Markdown style={mdStyle}>{thinking}</Markdown>
         </ScrollView>
       )}
     </>
@@ -49,11 +53,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   thinkingIcon: {
-    color: colors.textTertiary,
     fontSize: 10,
   },
   thinkingLabel: {
-    color: colors.textTertiary,
     fontSize: fontSizes.xs,
     flex: 1,
   },
@@ -62,6 +64,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingTop: spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderLight,
   },
 });

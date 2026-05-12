@@ -4,6 +4,9 @@ export type DisplayMode = 'bubble' | 'fullscreen';
 export type ToneMode = 'chat' | 'coding';
 export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 export type PermissionMode = 'readonly' | 'auto' | 'confirm';
+export type ThemeMode = 'system' | 'light' | 'dark';
+export type BrowserMode = 'builtin' | 'external';
+export type MCPExecutionMode = 'local' | 'ssh';
 
 export const REASONING_EFFORT_DESC: Record<ReasoningEffort, { label: string; desc: string }> = {
   off: { label: '关闭', desc: '不启用思考模式，响应更快' },
@@ -26,7 +29,13 @@ const KEYS = {
   THINKING_SCROLL: '@lineai_thinking_scroll',
   THINKING_AUTO_EXPAND: '@lineai_thinking_auto_expand',
   REASONING_EFFORT: '@lineai_reasoning_effort',
+  PRESERVE_REASONING: '@lineai_preserve_reasoning',
   PERMISSION_MODE: '@lineai_permission_mode',
+  THEME_MODE: '@lineai_theme_mode',
+  BROWSER_MODE: '@lineai_browser_mode',
+  GPT55_PROMO_SEEN: '@lineai_gpt55_promo_seen',
+  FIRST_LAUNCH_GUIDE_SEEN: '@lineai_first_launch_guide_seen',
+  MCP_EXECUTION_MODE: '@lineai_mcp_execution_mode',
 } as const;
 
 class SettingsService {
@@ -89,12 +98,63 @@ class SettingsService {
     await this.set(KEYS.REASONING_EFFORT, effort);
   }
 
+  async getPreserveReasoning(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.PRESERVE_REASONING);
+    return value === 'true';
+  }
+
+  async setPreserveReasoning(enabled: boolean): Promise<void> {
+    await this.set(KEYS.PRESERVE_REASONING, enabled);
+  }
+
   async getPermissionMode(): Promise<PermissionMode> {
     return this.get(KEYS.PERMISSION_MODE, 'auto' as PermissionMode);
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     await this.set(KEYS.PERMISSION_MODE, mode);
+  }
+
+  async getThemeMode(): Promise<ThemeMode> {
+    return this.get(KEYS.THEME_MODE, 'system' as ThemeMode);
+  }
+
+  async setThemeMode(mode: ThemeMode): Promise<void> {
+    await this.set(KEYS.THEME_MODE, mode);
+  }
+
+  async getBrowserMode(): Promise<BrowserMode> {
+    return this.get(KEYS.BROWSER_MODE, 'builtin' as BrowserMode);
+  }
+
+  async setBrowserMode(mode: BrowserMode): Promise<void> {
+    await this.set(KEYS.BROWSER_MODE, mode);
+  }
+
+  async getMCPExecutionMode(): Promise<MCPExecutionMode> {
+    return this.get(KEYS.MCP_EXECUTION_MODE, 'local' as MCPExecutionMode);
+  }
+
+  async setMCPExecutionMode(mode: MCPExecutionMode): Promise<void> {
+    await this.set(KEYS.MCP_EXECUTION_MODE, mode);
+  }
+
+  async getGpt55PromoSeen(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.GPT55_PROMO_SEEN);
+    return value === 'true';
+  }
+
+  async setGpt55PromoSeen(seen: boolean): Promise<void> {
+    await this.set(KEYS.GPT55_PROMO_SEEN, seen);
+  }
+
+  async getFirstLaunchGuideSeen(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.FIRST_LAUNCH_GUIDE_SEEN);
+    return value === 'true';
+  }
+
+  async setFirstLaunchGuideSeen(seen: boolean): Promise<void> {
+    await this.set(KEYS.FIRST_LAUNCH_GUIDE_SEEN, seen);
   }
 }
 

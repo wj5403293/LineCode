@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Trash2, AlertTriangle, Check } from 'lucide-react-native';
-import { colors, spacing, fontSizes, radius } from '../../constants/theme';
+import { spacing, fontSizes, radius } from '../../constants/theme';
+import { useTheme } from '../../theme';
 
 interface Props {
   input: Record<string, unknown>;
@@ -10,33 +11,34 @@ interface Props {
 }
 
 export default React.memo(function ToolCallDelete({ input, result, isError }: Props) {
+  const { colors } = useTheme();
   const paths: string[] = Array.isArray(input.paths) ? input.paths : [];
 
   const isComplete = !!result;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.dangerMuted, borderColor: colors.dangerMuted2 }]}>
       <View style={styles.header}>
-        <View style={styles.deleteBadge}>
-          <Trash2 size={12} color="#F85149" />
-          <Text style={styles.deleteText}>DELETE</Text>
+        <View style={[styles.deleteBadge, { backgroundColor: colors.dangerMuted2 }]}>
+          <Trash2 size={12} color={colors.danger} />
+          <Text style={[styles.deleteText, { color: colors.danger }]}>DELETE</Text>
         </View>
-        <Text style={styles.countText}>
+        <Text style={[styles.countText, { color: colors.textSecondary }]}>
           {paths.length} 个项目
         </Text>
       </View>
 
       {isError && result && (
-        <View style={styles.errorSection}>
-          <AlertTriangle size={14} color="#F85149" />
-          <Text style={styles.errorText}>{result}</Text>
+        <View style={[styles.errorSection, { borderTopColor: colors.dangerMuted2 }]}>
+          <AlertTriangle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{result}</Text>
         </View>
       )}
 
       {isComplete && !isError && result && (
-        <View style={styles.resultSection}>
-          <Check size={14} color="#3FB950" />
-          <Text style={styles.resultText}>{result}</Text>
+        <View style={[styles.resultSection, { borderTopColor: colors.dangerMuted2 }]}>
+          <Check size={14} color={colors.success} />
+          <Text style={[styles.resultText, { color: colors.textSecondary }]}>{result}</Text>
         </View>
       )}
     </View>
@@ -45,12 +47,10 @@ export default React.memo(function ToolCallDelete({ input, result, isError }: Pr
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(248,81,73,0.08)',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(248,81,73,0.2)',
   },
   header: {
     flexDirection: 'row',
@@ -63,18 +63,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(248,81,73,0.2)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   deleteText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     fontWeight: '700',
   },
   countText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.sm,
   },
   errorSection: {
@@ -84,10 +81,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(248,81,73,0.2)',
   },
   errorText: {
-    color: '#F85149',
     fontSize: fontSizes.xs,
     flex: 1,
   },
@@ -98,10 +93,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(248,81,73,0.2)',
   },
   resultText: {
-    color: colors.textSecondary,
     fontSize: fontSizes.xs,
     flex: 1,
   },

@@ -12,13 +12,30 @@ interface Props {
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
 }
 
 const MemoizedUserBubble = React.memo(UserBubble);
 const MemoizedAIBubbleFullscreen = React.memo(AIBubbleFullscreen);
 const MemoizedAIBubbleCompact = React.memo(AIBubbleCompact);
 
-function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinkingAutoExpand, thinkingScrollable, homePath }: Props) {
+function MessageBubble({
+  message,
+  codeWrap,
+  displayMode = 'fullscreen',
+  thinkingAutoExpand,
+  thinkingScrollable,
+  homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
+}: Props) {
   if (message.role === 'user') {
     return <MemoizedUserBubble content={message.content} />;
   }
@@ -38,6 +55,11 @@ function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinking
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}
+        shellConfirmToolCallId={shellConfirmToolCallId}
+        onShellCancel={onShellCancel}
+        onShellConfirm={onShellConfirm}
+        onShellDefaultExecute={onShellDefaultExecute}
+        onViewShellCommand={onViewShellCommand}
       />
     : <MemoizedAIBubbleCompact
         content={message.content}
@@ -49,6 +71,11 @@ function MessageBubble({ message, codeWrap, displayMode = 'fullscreen', thinking
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}
+        shellConfirmToolCallId={shellConfirmToolCallId}
+        onShellCancel={onShellCancel}
+        onShellConfirm={onShellConfirm}
+        onShellDefaultExecute={onShellDefaultExecute}
+        onViewShellCommand={onViewShellCommand}
       />;
 }
 
