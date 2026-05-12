@@ -39,9 +39,7 @@ class ErrorReporter {
     this.originalGlobalHandler = errorUtils?.getGlobalHandler?.();
     errorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
       this.report(error, 'global', { fatal: isFatal });
-      if (__DEV__) {
-        this.originalGlobalHandler?.(error, isFatal);
-      }
+      this.originalGlobalHandler?.(error, isFatal);
     });
 
     const globalAny = globalThis as any;
