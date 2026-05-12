@@ -7,20 +7,21 @@ import { highlight } from './highlighter';
 interface Props {
   code: string;
   language?: string;
+  wordWrap?: boolean;
 }
 
-export default React.memo(function HighlightedCode({ code, language }: Props) {
+export default React.memo(function HighlightedCode({ code, language, wordWrap = false }: Props) {
   const { colors, syntax } = useTheme();
   const lines = useMemo(() => highlight(code, syntax as unknown as Record<string, string>, language), [code, language, syntax]);
 
   return (
     <>
       {lines.map((lineTokens, lineIdx) => (
-        <View key={lineIdx} style={styles.line}>
+        <View key={lineIdx} style={[styles.line, !wordWrap && styles.nowrapLine]}>
           <Text style={[styles.lineNumber, { color: colors.textTertiary }]}>{lineIdx + 1}</Text>
-          <Text style={[styles.codeText, { color: colors.text }]}>
+          <Text selectable style={[styles.codeText, !wordWrap && styles.nowrapCodeText, { color: colors.text }]}>
             {lineTokens.map((token, tokenIdx) => (
-              <Text key={tokenIdx} style={{ color: token.color }}>
+              <Text key={tokenIdx} selectable style={{ color: token.color }}>
                 {token.text}
               </Text>
             ))}
@@ -36,6 +37,9 @@ const styles = StyleSheet.create({
   line: {
     flexDirection: 'row',
   },
+  nowrapLine: {
+    alignSelf: 'flex-start',
+  },
   lineNumber: {
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
@@ -47,5 +51,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     lineHeight: 20,
     flex: 1,
+  },
+  nowrapCodeText: {
+    flex: 0,
+    flexShrink: 0,
   },
 });

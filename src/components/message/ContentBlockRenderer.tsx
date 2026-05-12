@@ -3,6 +3,7 @@ import { ContentBlock, ToolCall, ToolResult } from '../../types';
 import ThinkingBlock from './ThinkingBlock';
 import TextBlock from './TextBlock';
 import ToolCallBlock from '../mcp/ToolCallBlock';
+import ContextCompactBlock from '../mcp/ContextCompactBlock';
 
 interface ContentBlockRendererProps {
   blocks?: ContentBlock[];
@@ -75,6 +76,14 @@ export function ContentBlockRenderer({
           }
           if (block.type === 'tool_result') {
             return null;
+          }
+          if (block.type === 'compact') {
+            return (
+              <ContextCompactBlock
+                key={i}
+                status={block.compactStatus}
+              />
+            );
           }
           return (
             <TextBlock

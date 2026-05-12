@@ -43,7 +43,8 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
     }
     setSelectedId(id);
     await modelStorage.setSelectedModelId(id);
-  }, [multiSelect]);
+    onSelect();
+  }, [multiSelect, onSelect]);
 
   const handleLongPress = useCallback((id: string) => {
     setMultiSelect([id]);
@@ -101,6 +102,7 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
       <ScreenHeader
         title={multiSelect.length > 0 ? `已选 ${multiSelect.length} 项` : '模型'}
         onBack={multiSelect.length > 0 ? undefined : onBack}
+        leftAction={headerLeft}
         rightAction={headerRight}
       />
 

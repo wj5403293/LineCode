@@ -9,7 +9,7 @@ export interface AgentToolCall {
 }
 
 export interface ContentBlock {
-  type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'agent';
+  type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'agent' | 'compact';
   content: string;
   id?: string;
   name?: string;
@@ -25,6 +25,7 @@ export interface ContentBlock {
     filePath: string;
     lockedBy: string;
   };
+  compactStatus?: 'running' | 'done' | 'error';
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -69,6 +70,14 @@ export interface Message {
   reasoningContent?: string;
   reasoningDetails?: ReasoningDetail[];
   isError?: boolean;
+  hidden?: boolean;
+  excludeFromContext?: boolean;
+}
+
+export interface InputAttachment {
+  name: string;
+  path: string;
+  source: 'local' | 'ssh';
 }
 
 export interface Model {

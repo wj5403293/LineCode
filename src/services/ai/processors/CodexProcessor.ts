@@ -1,4 +1,5 @@
 import { Model, ContentBlock, ToolCall, ReasoningDetail } from '../../../types';
+import { getApiModelId } from '../../../utils/modelContext';
 import { StreamProcessor, StreamCallbacks, StreamOptions, StreamResult, ChatMessage } from './StreamProcessor';
 
 type CodexResponseItem = Record<string, any>;
@@ -27,10 +28,11 @@ export class CodexStreamProcessor extends StreamProcessor {
     const requestUrl = this.responsesUrl(baseUrl);
     const reasoningEffort = options?.reasoningEffort || 'medium';
     const abortSignal = options?.abortSignal;
+    const apiModelId = getApiModelId(model.modelId);
     const formatted = this.formatMessages(messages);
     const formattedTools = this.formatTools(tools);
     const body: Record<string, any> = {
-      model: model.modelId,
+      model: apiModelId,
       input: formatted.input,
       tools: formattedTools,
       parallel_tool_calls: true,

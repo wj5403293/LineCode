@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
-import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult } from '../types';
+import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage } from '../services/ai';
 import { ToneMode, ReasoningEffort } from '../services/settings';
@@ -8,6 +8,14 @@ import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor
 import { agentToolManager } from '../mcp/AgentToolManager';
 import { conversationStore } from '../services/conversation';
 import { isDangerousShellCommand } from '../utils/shellSafety';
+import { parseModelContext, formatContextSize } from '../utils/modelContext';
+import {
+  COMPACT_PROMPT,
+  createCompactSummaryContent,
+  estimateMessageTokens,
+  shouldCompactContext,
+  toCompactTranscript,
+} from '../services/contextCompaction';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -56,6 +64,14 @@ function markBlocksTerminated(blocks?: ContentBlock[]): {
   let changed = false;
 
   const nextBlocks = blocks.map(block => {
+    if (block.type === 'compact' && block.compactStatus === 'running') {
+      changed = true;
+      return {
+        ...block,
+        compactStatus: 'error' as const,
+      };
+    }
+
     if (block.type !== 'tool_use') return block;
 
     if (block.agentStatus === 'running' || block.agentStatus === 'waiting_unlock') {
@@ -148,6 +164,18 @@ function isDangerousShellToolCall(tc: ToolCall): boolean {
   return tc.name === 'shell_execute' && isDangerousShellCommand(getShellCommandFromToolCall(tc));
 }
 
+function composeUserContent(text: string, attachments: InputAttachment[]): string {
+  const trimmed = text.trim();
+  if (attachments.length === 0) return trimmed;
+
+  const attachmentText = attachments
+    .map(item => `- ${item.name}: ${item.path}`)
+    .join('\n');
+  const pathBlock = `附加文件位置:\n${attachmentText}`;
+
+  return trimmed ? `${trimmed}\n\n${pathBlock}` : pathBlock;
+}
+
 export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffort, preserveReasoning: boolean) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [model, setModel] = useState<Model | null>(null);
@@ -156,6 +184,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const [pendingToolCall, setPendingToolCall] = useState<PendingToolCall | null>(null);
   const [homePath, setHomePath] = useState<string>('');
   const [streaming, setStreaming] = useState(false);
+  const [compacting, setCompacting] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const streamingRef = useRef(false);
   const atBottomRef = useRef(true);
@@ -163,6 +192,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const localMessagesRef = useRef<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
   const shellAutoApproveRef = useRef(false);
+  const compactingRef = useRef(false);
 
   useEffect(() => {
     getHomePath().then(setHomePath);
@@ -175,11 +205,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       conversationStore.getCurrentConversationId(),
     ]);
 
-    if (selectedId) {
-      setModel(models.find(m => m.id === selectedId) || null);
-    } else if (models.length > 0) {
-      setModel(models[0]);
-    }
+    const selectedModel = selectedId ? models.find(m => m.id === selectedId) : null;
+    setModel(selectedModel || models[0] || null);
 
     if (convId) {
       const conv = await conversationStore.getConversation(convId);
@@ -201,13 +228,15 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       modelStorage.getModels(),
       modelStorage.getSelectedModelId(),
     ]);
-    if (selectedId) {
-      const found = models.find(m => m.id === selectedId);
-      if (found) setModel(found);
-    } else if (models.length > 0 && !model) {
-      setModel(models[0]);
-    }
-  }, [model]);
+    const selectedModel = selectedId ? models.find(m => m.id === selectedId) : null;
+    setModel(selectedModel || models[0] || null);
+  }, []);
+
+  useEffect(() => {
+    return modelStorage.subscribeSelectedModel(() => {
+      reloadModel();
+    });
+  }, [reloadModel]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -246,7 +275,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [conversationId]);
 
   const toChatMessages = useCallback((msgs: Message[]): ChatMessage[] => {
-    return msgs.map(m => ({
+    return msgs.filter(m => !m.excludeFromContext).map(m => ({
       role: m.role,
       content: m.content,
       toolCalls: m.toolCalls,
@@ -401,13 +430,100 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     }
   }, [conversationId]);
 
+  const runContextCompaction = useCallback(async (baseMessages: Message[], preservedTail: Message[] = []): Promise<Message[]> => {
+    if (!model) return baseMessages;
+
+    const contextMessages = baseMessages.filter(m => !m.excludeFromContext);
+    const summarizableMessages = contextMessages.filter(m => m.content.trim() || m.toolCalls?.length || m.toolResults?.length);
+    if (summarizableMessages.length < 4) {
+      throw new Error('当前上下文不足，无需压缩');
+    }
+
+    const progressId = `compact_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const progressMsg: Message = {
+      id: progressId,
+      role: 'assistant',
+      content: '',
+      blocks: [{ type: 'compact', content: '压缩', compactStatus: 'running' }],
+      timestamp: Date.now(),
+      streaming: true,
+      excludeFromContext: true,
+    };
+
+    const withProgress = [...baseMessages, ...preservedTail, progressMsg];
+    messagesRef.current = withProgress;
+    setMessages(withProgress);
+    scrollToBottom(false);
+
+    const compactController = new AbortController();
+    abortControllerRef.current = compactController;
+
+    try {
+      const transcript = toCompactTranscript(toChatMessages(contextMessages));
+      const result = await aiService.sendMessage(model, [
+        {
+          role: 'user',
+          content: `${COMPACT_PROMPT}\n\nConversation transcript:\n${transcript}`,
+        },
+      ], undefined, 'off', [], compactController.signal, false);
+
+      const summaryMsg: Message = {
+        id: `compact_summary_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        role: 'user',
+        content: createCompactSummaryContent(result.text),
+        timestamp: Date.now(),
+        hidden: true,
+      };
+
+      const doneProgressMsg: Message = {
+        ...progressMsg,
+        streaming: false,
+        blocks: [{ type: 'compact', content: '压缩', compactStatus: 'done' }],
+      };
+
+      const compacted = [
+        ...baseMessages.map(m => ({ ...m, excludeFromContext: true })),
+        summaryMsg,
+        ...preservedTail,
+        doneProgressMsg,
+      ];
+      messagesRef.current = compacted;
+      setMessages(compacted);
+      scrollToBottom(false);
+      return compacted;
+    } catch (err) {
+      setMessages(prev => prev.map(m => m.id === progressId
+        ? {
+            ...m,
+            streaming: false,
+            blocks: [{ type: 'compact', content: '压缩', compactStatus: 'error' }],
+          }
+        : m
+      ));
+      messagesRef.current = messagesRef.current.map(m => m.id === progressId
+        ? {
+            ...m,
+            streaming: false,
+            blocks: [{ type: 'compact', content: '压缩', compactStatus: 'error' }],
+          }
+        : m
+      );
+      throw err;
+    } finally {
+      if (abortControllerRef.current === compactController) {
+        abortControllerRef.current = null;
+      }
+    }
+  }, [model, scrollToBottom, toChatMessages]);
+
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     agentToolManager.abort();
-    shellAutoApproveRef.current = false;
+    compactingRef.current = false;
     streamingRef.current = false;
+    setCompacting(false);
     setStreaming(false);
     setPendingToolCall(prev => {
       if (prev?.confirmResolve) {
@@ -418,9 +534,10 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     persistTerminatedMessages();
   }, [persistTerminatedMessages]);
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!model || streamingRef.current) return;
-    shellAutoApproveRef.current = false;
+  const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
+    if (!model || streamingRef.current || compactingRef.current) return;
+    const sentContent = composeUserContent(text, attachments);
+    if (!sentContent.trim()) return;
 
     let convId = conversationId;
     if (!convId) {
@@ -430,7 +547,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     }
 
     const now = Date.now();
-    const userMsg: Message = { id: String(now), role: 'user', content: text, timestamp: now };
+    const userMsg: Message = { id: String(now), role: 'user', content: sentContent, timestamp: now };
 
     atBottomRef.current = true;
 
@@ -438,15 +555,29 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     streamingRef.current = true;
     setStreaming(true);
 
-    abortControllerRef.current = new AbortController();
-    const abortSignal = abortControllerRef.current.signal;
-
     const localMessages: Message[] = [...messages, userMsg];
     localMessagesRef.current = localMessages;
+    let abortSignal: AbortSignal | null = null;
 
     try {
+      const contextInfo = parseModelContext(model.modelId);
+      const canCompactExistingContext = messages.filter(m => !m.excludeFromContext).length >= 4;
+      if (canCompactExistingContext && shouldCompactContext(localMessages, contextInfo.contextTokens)) {
+        compactingRef.current = true;
+        setCompacting(true);
+        const compactedMessages = await runContextCompaction(messages, [userMsg]);
+        localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
+        localMessagesRef.current = localMessages;
+        compactingRef.current = false;
+        setCompacting(false);
+      }
+
+      abortControllerRef.current = new AbortController();
+      const activeAbortSignal = abortControllerRef.current.signal;
+      abortSignal = activeAbortSignal;
+
       while (true) {
-        if (abortSignal.aborted) {
+        if (activeAbortSignal.aborted) {
           console.log('[LineCode] Aborted by user');
           break;
         }
@@ -462,14 +593,14 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
         const result = await aiService.sendMessage(model, chatMessages, {
           onBlocks: (blocks) => {
-            if (abortSignal.aborted) return;
+            if (activeAbortSignal.aborted) return;
             setMessages(prev => prev.map(m =>
               m.id === aiId ? { ...m, blocks, content: blocks.filter(b => b.type === 'text').map(b => b.content).join('') } : m,
             ));
             scrollToBottom(false);
           },
           onToolCallDetected: (toolCall) => {
-            if (abortSignal.aborted) return;
+            if (activeAbortSignal.aborted) return;
             setMessages(prev => prev.map(m => {
               if (m.id === aiId) {
                 const existingBlocks = m.blocks || [];
@@ -488,9 +619,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
             }));
             scrollToBottom(false);
           },
-        }, reasoningEffort, undefined, abortSignal, preserveReasoning);
+        }, reasoningEffort, undefined, activeAbortSignal, preserveReasoning);
 
-        if (abortSignal.aborted) {
+        if (activeAbortSignal.aborted) {
           persistTerminatedMessages();
           break;
         }
@@ -511,11 +642,11 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
         localMessages.push(assistantMsg);
         localMessagesRef.current = localMessages;
 
-        if (abortSignal.aborted) break;
+        if (activeAbortSignal.aborted) break;
 
         if (!result.toolCalls || result.toolCalls.length === 0) {
           if (messages.length === 0) {
-            summarizeTitle(model, text, result.text);
+            summarizeTitle(model, sentContent, result.text);
           }
           break;
         }
@@ -531,8 +662,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           }
         }
 
-        const continued = await executeToolCalls(normalToolCalls, localMessages, abortSignal);
-        if (!continued || abortSignal.aborted) break;
+        const continued = await executeToolCalls(normalToolCalls, localMessages, activeAbortSignal);
+        if (!continued || activeAbortSignal.aborted) break;
 
         if (confirmToolCalls.length > 0) {
           const cancelToolCall = (tc: ToolCall) => {
@@ -557,11 +688,11 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           };
 
           for (const tc of confirmToolCalls) {
-            if (abortSignal.aborted) break;
+            if (activeAbortSignal.aborted) break;
 
             if (!shouldConfirmToolCall(tc)) {
-              const autoContinued = await executeToolCalls([tc], localMessages, abortSignal);
-              if (!autoContinued || abortSignal.aborted) break;
+              const autoContinued = await executeToolCalls([tc], localMessages, activeAbortSignal);
+              if (!autoContinued || activeAbortSignal.aborted) break;
               continue;
             }
 
@@ -569,7 +700,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
               setPendingToolCall({
                 toolCalls: [tc],
                 localMessages: [...localMessages],
-                text,
+                text: sentContent,
                 type: tc.name === 'shell_execute' ? 'shell' : 'delete',
                 confirmResolve: (c: boolean) => {
                   setPendingToolCall(null);
@@ -578,16 +709,16 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
               });
             });
 
-            if (!confirmed || abortSignal.aborted) {
+            if (!confirmed || activeAbortSignal.aborted) {
               cancelToolCall(tc);
-              if (abortSignal.aborted) break;
+              if (activeAbortSignal.aborted) break;
               continue;
             }
 
-            const confirmedContinued = await executeToolCalls([tc], localMessages, abortSignal);
-            if (!confirmedContinued || abortSignal.aborted) break;
+            const confirmedContinued = await executeToolCalls([tc], localMessages, activeAbortSignal);
+            if (!confirmedContinued || activeAbortSignal.aborted) break;
           }
-          if (abortSignal.aborted) break;
+          if (activeAbortSignal.aborted) break;
         }
       }
     } catch (err: any) {
@@ -613,17 +744,48 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
         });
       }
     } finally {
-      if (abortSignal.aborted) {
+      if (abortSignal?.aborted) {
         persistTerminatedMessages();
       }
-      shellAutoApproveRef.current = false;
+      compactingRef.current = false;
+      setCompacting(false);
       streamingRef.current = false;
       setStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [model, messages, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall]);
+  }, [model, messages, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction]);
 
-  const clearMessages = useCallback(() => setMessages([]), []);
+  const resetShellAutoApprove = useCallback(() => {
+    shellAutoApproveRef.current = false;
+  }, []);
+
+  const clearMessages = useCallback(() => {
+    shellAutoApproveRef.current = false;
+    setMessages([]);
+  }, []);
+
+  const handleCompactContext = useCallback(async () => {
+    if (streamingRef.current || compactingRef.current) return;
+    const currentMessages = messagesRef.current;
+    if (currentMessages.filter(m => !m.excludeFromContext).length < 4) return;
+
+    compactingRef.current = true;
+    setCompacting(true);
+    try {
+      await runContextCompaction(currentMessages);
+    } catch (err) {
+      console.error('[LineCode] compact context error:', err);
+    } finally {
+      compactingRef.current = false;
+      setCompacting(false);
+    }
+  }, [runContextCompaction]);
+
+  const contextInfo = model ? parseModelContext(model.modelId) : null;
+  const contextTokens = contextInfo?.contextTokens || 250_000;
+  const contextUsedTokens = estimateMessageTokens(messages.filter(m => !m.excludeFromContext));
+  const contextPercent = Math.min(100, Math.round((contextUsedTokens / contextTokens) * 100));
+  const contextSizeLabel = formatContextSize(contextTokens);
 
   const handleToolConfirm = useCallback((confirmed: boolean, defaultExecute = false) => {
     if (!pendingToolCall) return;
@@ -645,6 +807,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     setMessages,
     model,
     loading,
+    compacting,
+    contextSizeLabel,
+    contextPercent,
     conversationId,
     setConversationId,
     flatListRef,
@@ -658,6 +823,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     pendingToolCall,
     homePath,
     handleToolConfirm,
+    resetShellAutoApprove,
+    handleCompactContext,
     reloadModel,
   };
 }

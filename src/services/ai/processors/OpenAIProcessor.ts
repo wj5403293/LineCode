@@ -1,4 +1,5 @@
 import { Model, ContentBlock } from '../../../types';
+import { getApiModelId } from '../../../utils/modelContext';
 import { StreamProcessor, StreamCallbacks, StreamOptions, StreamResult, ChatMessage } from './StreamProcessor';
 
 type OpenAICompatibleThinkingProvider = 'deepseek' | 'kimi' | 'qwen' | 'glm' | 'minimax' | 'mimo' | 'unknown';
@@ -21,9 +22,10 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     const reasoningEffort = options?.reasoningEffort || 'medium';
     const preserveReasoning = options?.preserveReasoning || false;
     const abortSignal = options?.abortSignal;
+    const apiModelId = getApiModelId(model.modelId);
 
     const baseUrlLower = baseUrl.toLowerCase();
-    const modelIdLower = model.modelId.toLowerCase();
+    const modelIdLower = apiModelId.toLowerCase();
     const capabilities = this.detectCapabilities(baseUrlLower, modelIdLower);
     const hasToolExchange = messages.some(m =>
       m.role === 'tool' || (m.role === 'assistant' && !!m.toolCalls?.length)
@@ -36,7 +38,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
         capabilities.provider === 'deepseek'
       );
     const body: any = {
-      model: model.modelId,
+      model: apiModelId,
       messages: this.formatMessages(messages, shouldPreserveReasoning),
       stream: true,
     };

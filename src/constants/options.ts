@@ -8,5 +8,6 @@ export const PERMISSIONS: OptionItem[] = [
 
 export const MORE_OPTIONS: OptionItem[] = [
   { id: 'settings', label: '设置' },
+  { id: 'compact', label: '压缩上下文' },
   { id: 'clear', label: '清空对话' },
 ];

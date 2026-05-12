@@ -2,6 +2,7 @@ import { NativeModules } from 'react-native';
 import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { resolvePathWithinRoot } from '../../../utils/pathSafety';
 
 const Server = NativeModules.SimpleHttpServer;
 
@@ -38,13 +39,19 @@ export class HttpServerTool extends BaseTool {
         return { content: `服务器已在运行: http://localhost:${activePort}`, toolCallId: '' };
       }
 
-      const rootPath = root
-        ? (root.startsWith('/') ? root : `${homePath}/${root}`)
-        : homePath;
+      const rootPath = resolvePathWithinRoot(root, homePath);
+      if (!rootPath) {
+        return { content: `HTTP 服务器根目录越界: ${root || ''}`, toolCallId: '', isError: true };
+      }
 
       const dirExists = await RNFS.exists(rootPath);
       if (!dirExists) {
         return { content: `目录不存在: ${rootPath}`, toolCallId: '', isError: true };
+      }
+
+      const stat = await RNFS.stat(rootPath);
+      if (!stat.isDirectory()) {
+        return { content: `HTTP 服务器根目录不是目录: ${rootPath}`, toolCallId: '', isError: true };
       }
 
       const actualPort: number = await Server.start(port, rootPath);

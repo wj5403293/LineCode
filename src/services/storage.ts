@@ -7,6 +7,8 @@ const KEYS = {
 } as const;
 
 class ModelStorage {
+  private selectedModelListeners = new Set<(id: string) => void>();
+
   async getModels(): Promise<Model[]> {
     const json = await AsyncStorage.getItem(KEYS.MODELS);
     return json ? JSON.parse(json) : [];
@@ -22,6 +24,14 @@ class ModelStorage {
 
   async setSelectedModelId(id: string): Promise<void> {
     await AsyncStorage.setItem(KEYS.SELECTED_MODEL, id);
+    this.selectedModelListeners.forEach(listener => listener(id));
+  }
+
+  subscribeSelectedModel(listener: (id: string) => void): () => void {
+    this.selectedModelListeners.add(listener);
+    return () => {
+      this.selectedModelListeners.delete(listener);
+    };
   }
 }
 

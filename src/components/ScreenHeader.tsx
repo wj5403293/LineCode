@@ -7,15 +7,18 @@ import { useTheme } from '../theme';
 interface Props {
   title: string;
   onBack?: () => void;
+  leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
 }
 
-export default React.memo(function ScreenHeader({ title, onBack, rightAction }: Props) {
+export default React.memo(function ScreenHeader({ title, onBack, leftAction, rightAction }: Props) {
   const { colors } = useTheme();
 
   return (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
-      {onBack ? (
+      {leftAction ? (
+        leftAction
+      ) : onBack ? (
         <TouchableOpacity onPress={onBack} style={styles.iconBtn}>
           <ChevronLeft size={22} color={colors.text} />
         </TouchableOpacity>

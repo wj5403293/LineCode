@@ -30,7 +30,18 @@ interface Props {
 export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { codeWrap, displayMode, toneMode, thinkingScrollable, thinkingAutoExpand, reasoningEffort, preserveReasoning, permissionMode, updatePermissionMode } = useSettings();
+  const {
+    codeWrap,
+    displayMode,
+    toneMode,
+    thinkingScrollable,
+    thinkingAutoExpand,
+    reasoningEffort,
+    preserveReasoning,
+    permissionMode,
+    mcpExecutionMode,
+    updatePermissionMode,
+  } = useSettings();
   const chat = useChatState(toneMode, reasoningEffort, preserveReasoning);
   const {
     reloadModel,
@@ -50,6 +61,11 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     scrollToBottom,
     handleScrollBeginDrag,
     handleScroll,
+    resetShellAutoApprove,
+    handleCompactContext,
+    contextSizeLabel,
+    contextPercent,
+    compacting,
   } = chat;
   const { dialog, openDialog, closeDialog } = useDialog();
   const conversation = useConversationManager();
@@ -76,9 +92,9 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   }, [permissionMode]);
 
   useEffect(() => {
-    setKeepAwake(streaming);
+    setKeepAwake(streaming || compacting);
     return () => setKeepAwake(false);
-  }, [streaming]);
+  }, [streaming, compacting]);
 
   const handlePermissionSelect = useCallback(async (id: string) => {
     const mode = id as PermissionMode;
@@ -134,7 +150,17 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     closeDialog();
     if (id === 'settings') onGoSettings();
     if (id === 'clear') clearMessages();
-  }, [onGoSettings, closeDialog, clearMessages]);
+    if (id === 'compact') {
+      Alert.alert(
+        '压缩上下文',
+        '压缩会把当前对话的早期上下文总结成一条隐藏摘要，旧消息仍保留在历史中，但后续请求会使用压缩后的上下文继续。是否继续？',
+        [
+          { text: '取消', style: 'cancel' },
+          { text: '确认压缩', onPress: handleCompactContext },
+        ],
+      );
+    }
+  }, [onGoSettings, closeDialog, clearMessages, handleCompactContext]);
 
   const handleProjectDialogSelect = useCallback((id: string) => {
     handleProjectSelect(id);
@@ -142,17 +168,19 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   }, [handleProjectSelect, closeDialog]);
 
   const handleNewConversation = useCallback(async () => {
+    resetShellAutoApprove();
     await createConversation();
     setMessages([]);
-  }, [createConversation, setMessages]);
+  }, [createConversation, resetShellAutoApprove, setMessages]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
+    resetShellAutoApprove();
     const conv = await selectConversation(id);
     if (conv) {
       setConversationId(conv.id);
       setMessages(conv.messages);
     }
-  }, [selectConversation, setConversationId, setMessages]);
+  }, [resetShellAutoApprove, selectConversation, setConversationId, setMessages]);
 
   if (!model && !loading) {
     return (
@@ -194,7 +222,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
 
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={messages.filter(message => !message.hidden)}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           style={styles.list}
@@ -210,7 +238,16 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           windowSize={10}
         />
 
-        <InputBar onSend={handleSend} onStop={handleStop} streaming={streaming} />
+        <InputBar
+          onSend={handleSend}
+          onStop={handleStop}
+          streaming={streaming || compacting}
+          mode={mcpExecutionMode}
+          homePath={homePath}
+          modelId={model?.modelId || ''}
+          contextSizeLabel={contextSizeLabel}
+          contextPercent={contextPercent}
+        />
 
         <Dialog visible={dialog === 'project'} title="项目" options={projects} selectedId={selectedProject.id} onSelect={handleProjectDialogSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />

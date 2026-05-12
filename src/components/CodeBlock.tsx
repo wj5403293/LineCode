@@ -25,9 +25,13 @@ export default React.memo(function CodeBlock({ language, code, wordWrap = false 
       <ScrollView
         horizontal={!wordWrap}
         showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={!wordWrap && styles.scrollContent}
       >
         <View style={styles.codeContent}>
-          <HighlightedCode code={code} language={cleanLang || undefined} />
+          <HighlightedCode code={code} language={cleanLang || undefined} wordWrap={wordWrap} />
         </View>
       </ScrollView>
     </View>
@@ -56,5 +60,8 @@ const styles = StyleSheet.create({
   },
   codeContent: {
     padding: spacing.md,
+  },
+  scrollContent: {
+    minWidth: '100%',
   },
 });

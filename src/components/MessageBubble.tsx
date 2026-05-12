@@ -36,6 +36,10 @@ function MessageBubble({
   onShellDefaultExecute,
   onViewShellCommand,
 }: Props) {
+  if (message.hidden) {
+    return null;
+  }
+
   if (message.role === 'user') {
     return <MemoizedUserBubble content={message.content} />;
   }

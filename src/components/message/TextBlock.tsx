@@ -1,6 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import Clipboard from '@react-native-clipboard/clipboard';
+import React, { useMemo } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { spacing } from '../../constants/theme';
 import { useTheme } from '../../theme';
@@ -13,18 +12,33 @@ interface Props {
   codeWrap?: boolean;
 }
 
-export default React.memo(function TextBlock({ content, streaming, codeWrap }: Props) {
-  const { colors } = useTheme();
-  const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
-
-  if (!content && !streaming) return null;
-
-  const handleLongPress = useCallback(() => {
-    Clipboard.setString(content);
-    Alert.alert('已复制', '文本已复制到剪贴板');
-  }, [content]);
-
-  const customRules = {
+function createSelectableRules(codeWrap?: boolean) {
+  return {
+    text: (node: any, _children: any, _parent: any, styles: any, inheritedStyles = {}) => (
+      <Text key={node.key} selectable style={[inheritedStyles, styles.text]}>
+        {node.content}
+      </Text>
+    ),
+    textgroup: (node: any, children: React.ReactNode, _parent: any, styles: any) => (
+      <Text key={node.key} selectable style={styles.textgroup}>
+        {children}
+      </Text>
+    ),
+    strong: (node: any, children: React.ReactNode, _parent: any, styles: any) => (
+      <Text key={node.key} selectable style={styles.strong}>
+        {children}
+      </Text>
+    ),
+    em: (node: any, children: React.ReactNode, _parent: any, styles: any) => (
+      <Text key={node.key} selectable style={styles.em}>
+        {children}
+      </Text>
+    ),
+    code_inline: (node: any, _children: any, _parent: any, styles: any, inheritedStyles = {}) => (
+      <Text key={node.key} selectable style={[inheritedStyles, styles.code_inline]}>
+        {node.content}
+      </Text>
+    ),
     fence: (node: any) => {
       const language = node.attributes?.language || '';
       const code = node.content || '';
@@ -35,6 +49,14 @@ export default React.memo(function TextBlock({ content, streaming, codeWrap }: P
       return <CodeBlock key={node.key} code={code} wordWrap={codeWrap} />;
     },
   };
+}
+
+export default React.memo(function TextBlock({ content, streaming, codeWrap }: Props) {
+  const { colors } = useTheme();
+  const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
+  const customRules = useMemo(() => createSelectableRules(codeWrap), [codeWrap]);
+
+  if (!content && !streaming) return null;
 
   if (!content && streaming) {
     return (
@@ -44,11 +66,11 @@ export default React.memo(function TextBlock({ content, streaming, codeWrap }: P
     );
   }
 
-  return (
-    <TouchableOpacity activeOpacity={0.8} onLongPress={handleLongPress}>
-      <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
-    </TouchableOpacity>
+  const markdown = (
+    <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
   );
+
+  return markdown;
 });
 
 const styles = StyleSheet.create({

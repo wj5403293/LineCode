@@ -1,6 +1,7 @@
 import { Model, ContentBlock, ToolCall } from '../../../types';
 import { StreamProcessor, StreamCallbacks, StreamOptions, StreamResult, ChatMessage } from './StreamProcessor';
 import { ReasoningEffort } from '../../settings';
+import { getApiModelId } from '../../../utils/modelContext';
 
 export class AnthropicStreamProcessor extends StreamProcessor {
   async process(
@@ -11,6 +12,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     options?: StreamOptions,
   ): Promise<StreamResult> {
     const baseUrl = model.baseUrl || 'https://api.anthropic.com';
+    const apiModelId = getApiModelId(model.modelId);
     const reasoningEffort = options?.reasoningEffort || 'medium';
     const preserveReasoning = options?.preserveReasoning || false;
     const abortSignal = options?.abortSignal;
@@ -20,7 +22,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     const { system, messages: userMessages } = this.formatMessages(messages, preserveReasoning && !hasToolExchange);
 
     const body: any = {
-      model: model.modelId,
+      model: apiModelId,
       max_tokens: 4096,
       messages: userMessages,
       stream: true,

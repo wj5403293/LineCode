@@ -20,12 +20,12 @@ class SimpleHttpServerModule(reactContext: ReactApplicationContext) :
             return
         }
         try {
-            val dir = File(rootDir)
-            if (!dir.exists()) {
+            val dir = File(rootDir).canonicalFile
+            if (!dir.exists() || !dir.isDirectory) {
                 promise.reject("E_DIR", "Directory not found: $rootDir")
                 return
             }
-            val inst = ServerInstance(port, rootDir)
+            val inst = ServerInstance(port, dir.canonicalPath)
             inst.start()
             server = inst
             promise.resolve(inst.port)
@@ -53,7 +53,7 @@ class SimpleHttpServerModule(reactContext: ReactApplicationContext) :
             private set
         private var serverSocket: ServerSocket? = null
         private var running = false
-        private val root = File(rootDir).canonicalPath
+        private val root = File(rootDir).canonicalFile
 
         fun start() {
             serverSocket = ServerSocket(port, 10)
@@ -113,17 +113,22 @@ class SimpleHttpServerModule(reactContext: ReactApplicationContext) :
                         return
                     }
 
-                    val decoded = URLDecoder.decode(rawPath, "UTF-8")
-                    val safePath = decoded.replace("../", "").replace("..\\", "")
-                    val file = File(root, safePath)
+                    val decoded = URLDecoder.decode(rawPath, "UTF-8").replace('\\', '/')
+                    if (decoded.indexOf('\u0000') >= 0) {
+                        send(sock, 400, "Bad Request", null, null)
+                        return
+                    }
 
-                    if (!file.canonicalPath.startsWith(root)) {
+                    val relativePath = decoded.trimStart('/')
+                    val file = File(root, relativePath).canonicalFile
+
+                    if (!isInsideRoot(file)) {
                         send(sock, 403, "Forbidden", null, null)
                         return
                     }
 
                     if (file.isDirectory) {
-                        serveDir(sock, file, decoded)
+                        serveDir(sock, file, requestPathFor(file))
                     } else if (file.exists()) {
                         serveFile(sock, file)
                     } else {
@@ -131,6 +136,19 @@ class SimpleHttpServerModule(reactContext: ReactApplicationContext) :
                     }
                 }
             } catch (_: Exception) {}
+        }
+
+        private fun isInsideRoot(file: File): Boolean {
+            val targetPath = file.canonicalPath
+            val rootPath = root.canonicalPath
+            return targetPath == rootPath || targetPath.startsWith(rootPath + File.separator)
+        }
+
+        private fun requestPathFor(file: File): String {
+            val rootPath = root.canonicalPath
+            val targetPath = file.canonicalPath
+            if (targetPath == rootPath) return "/"
+            return "/" + targetPath.removePrefix(rootPath).trimStart(File.separatorChar).replace(File.separatorChar, '/')
         }
 
         private fun serveFile(sock: Socket, file: File) {
@@ -142,20 +160,34 @@ class SimpleHttpServerModule(reactContext: ReactApplicationContext) :
         private fun serveDir(sock: Socket, dir: File, path: String) {
             val items = dir.listFiles()?.sortedBy { it.name } ?: emptyList()
             val html = buildString {
-                append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>$path</title>")
+                val safeTitle = escapeHtml(path)
+                append("<!DOCTYPE html><html><head><meta charset='utf-8'><title>$safeTitle</title>")
                 append("<style>body{font-family:monospace;background:#000;color:#fff;padding:20px}")
                 append("a{color:#30D158;text-decoration:none;display:block;padding:4px 0}")
                 append("a:hover{text-decoration:underline}</style></head><body>")
-                append("<h2>Index of $path</h2>")
+                append("<h2>Index of $safeTitle</h2>")
                 if (path != "/") append("<a href='..'>../</a>")
                 for (f in items) {
                     val name = if (f.isDirectory) "${f.name}/" else f.name
                     val href = if (path.endsWith("/")) "$path$name" else "$path/$name"
-                    append("<a href='${href.replace("&", "%26")}'>$name</a>")
+                    append("<a href='${escapeAttribute(href)}'>${escapeHtml(name)}</a>")
                 }
                 append("</body></html>")
             }
             send(sock, 200, "OK", "text/html; charset=utf-8", html.toByteArray(Charsets.UTF_8))
+        }
+
+        private fun escapeHtml(value: String): String {
+            return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;")
+        }
+
+        private fun escapeAttribute(value: String): String {
+            return escapeHtml(value.replace("&", "%26"))
         }
 
         private fun send(sock: Socket, code: Int, msg: String, mime: String?, body: ByteArray?) {
