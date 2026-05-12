@@ -4,7 +4,7 @@ export type DisplayMode = 'bubble' | 'fullscreen';
 export type ToneMode = 'chat' | 'coding';
 export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 export type PermissionMode = 'readonly' | 'auto' | 'confirm';
-export type ThemeMode = 'system' | 'light' | 'dark';
+export type ThemeMode = 'system' | 'light' | 'dark' | 'coffee' | 'custom';
 export type BrowserMode = 'builtin' | 'external';
 export type MCPExecutionMode = 'local' | 'ssh';
 
@@ -32,6 +32,7 @@ const KEYS = {
   PRESERVE_REASONING: '@lineai_preserve_reasoning',
   PERMISSION_MODE: '@lineai_permission_mode',
   THEME_MODE: '@lineai_theme_mode',
+  CUSTOM_THEME_COLORS: '@lineai_custom_theme_colors',
   BROWSER_MODE: '@lineai_browser_mode',
   GPT55_PROMO_SEEN: '@lineai_gpt55_promo_seen',
   FIRST_LAUNCH_GUIDE_SEEN: '@lineai_first_launch_guide_seen',
@@ -121,6 +122,21 @@ class SettingsService {
 
   async setThemeMode(mode: ThemeMode): Promise<void> {
     await this.set(KEYS.THEME_MODE, mode);
+  }
+
+  async getCustomThemeColors(): Promise<Record<string, string> | null> {
+    const json = await AsyncStorage.getItem(KEYS.CUSTOM_THEME_COLORS);
+    if (!json) return null;
+    try {
+      const parsed = JSON.parse(json);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setCustomThemeColors(colors: Record<string, string>): Promise<void> {
+    await AsyncStorage.setItem(KEYS.CUSTOM_THEME_COLORS, JSON.stringify(colors));
   }
 
   async getBrowserMode(): Promise<BrowserMode> {

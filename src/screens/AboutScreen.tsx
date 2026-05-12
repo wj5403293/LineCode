@@ -3,8 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Code2, User, MessageCircle, FileText, ChevronRight } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
-
-const VERSION = '1.0.0-beta.1';
+import { APP_VERSION } from '../constants/appInfo';
 
 interface AboutItemProps {
   icon: React.ReactNode;
@@ -47,7 +46,7 @@ export default function AboutScreen({ onOpenLicenses }: Props) {
           <Code2 size={48} color={colors.accent} />
         </View>
         <Text style={[styles.appName, { color: colors.text }]}>LineCode</Text>
-        <Text style={[styles.version, { color: colors.textSecondary }]}>v{VERSION}</Text>
+        <Text style={[styles.version, { color: colors.textSecondary }]}>v{APP_VERSION}</Text>
       </View>
 
       <View style={styles.section}>

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Check, ChevronDown, ChevronRight, File, Folder, Plus, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, fontSizes, radius } from '../constants/theme';
@@ -38,12 +38,14 @@ export default React.memo(function AttachmentPickerModal({
 }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const selectedSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
+  const sheetHeight = Math.round(height * 0.78);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated, height: sheetHeight, paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
           <View style={styles.header}>
             <View>
               <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
@@ -58,31 +60,33 @@ export default React.memo(function AttachmentPickerModal({
 
           <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />
 
-          {loading ? (
-            <View style={styles.status}>
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={[styles.statusText, { color: colors.textSecondary }]}>{message || '加载中...'}</Text>
-            </View>
-          ) : !tree ? (
-            <View style={styles.status}>
-              <Text style={[styles.statusText, { color: colors.textSecondary }]}>{message || '没有可选择的文件'}</Text>
-              {action && (
-                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={action.onPress} activeOpacity={0.75}>
-                  <Text style={[styles.primaryText, { color: colors.textOnColor }]}>{action.label}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            <ScrollView style={styles.tree} contentContainerStyle={styles.treeContent}>
-              <TreeNodeRow
-                node={tree}
-                depth={0}
-                selectedSet={selectedSet}
-                onExpand={onExpand}
-                onToggleFile={onToggleFile}
-              />
-            </ScrollView>
-          )}
+          <View style={styles.body}>
+            {loading ? (
+              <View style={styles.status}>
+                <ActivityIndicator size="small" color={colors.accent} />
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>{message || '加载中...'}</Text>
+              </View>
+            ) : !tree ? (
+              <View style={styles.status}>
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>{message || '没有可选择的文件'}</Text>
+                {action && (
+                  <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={action.onPress} activeOpacity={0.75}>
+                    <Text style={[styles.primaryText, { color: colors.textOnColor }]}>{action.label}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <ScrollView style={styles.tree} contentContainerStyle={styles.treeContent}>
+                <TreeNodeRow
+                  node={tree}
+                  depth={0}
+                  selectedSet={selectedSet}
+                  onExpand={onExpand}
+                  onToggleFile={onToggleFile}
+                />
+              </ScrollView>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -168,10 +172,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    maxHeight: '78%',
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingTop: spacing.md,
+    overflow: 'hidden',
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -199,11 +203,16 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
   },
+  body: {
+    flex: 1,
+    minHeight: 0,
+  },
   tree: {
     flex: 1,
   },
   treeContent: {
     paddingVertical: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   row: {
     minHeight: 44,
@@ -234,6 +243,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   status: {
+    flex: 1,
     minHeight: 220,
     padding: spacing.xl,
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import { Model, ContentBlock, ToolCall, MessageRole, ReasoningDetail } from '../../types';
+import { Model, ContentBlock, ToolCall, MessageRole, ReasoningDetail, InputAttachment } from '../../types';
 import { SYSTEM_PROMPT } from '../../constants/prompt';
 import { ToneMode, ReasoningEffort } from '../settings';
 import { mcpService } from '../MCPService';
@@ -33,6 +33,11 @@ class AIService {
     if (homePath && executionMode !== 'ssh') {
       fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${homePath}\n所有文件操作都相对于此目录进行。`;
     }
+
+    const attachmentPrompt = this.buildAttachmentPrompt(history);
+    if (attachmentPrompt) {
+      fullSystemPrompt += `\n\n${attachmentPrompt}`;
+    }
     
     if (toolPrompt) {
       fullSystemPrompt += `\n\n${toolPrompt}`;
@@ -43,9 +48,12 @@ class AIService {
     }
 
     for (const msg of history) {
+      const legacy = msg.role === 'user' ? this.splitLegacyAttachmentBlock(msg.content) : null;
+      const content = legacy?.content || (legacy?.attachmentsText ? '已附加文件' : msg.content);
       messages.push({
         role: msg.role,
-        content: msg.content,
+        content,
+        attachments: msg.attachments,
         toolCalls: msg.toolCalls,
         toolCallId: msg.toolCallId,
         reasoningContent: msg.reasoningContent,
@@ -54,6 +62,50 @@ class AIService {
     }
 
     return messages;
+  }
+
+  private buildAttachmentPrompt(history: ChatMessage[]): string {
+    const userAttachments = history
+      .filter(msg => msg.role === 'user' && msg.attachments?.length)
+      .map((msg, index) => {
+        const label = msg.content.trim() || `用户消息 ${index + 1}`;
+        const paths = msg.attachments!
+          .map(item => `- ${item.name} (${item.source}): ${item.path}`)
+          .join('\n');
+        return `### ${label}\n${paths}`;
+      });
+    const legacyAttachments = history
+      .filter(msg => msg.role === 'user')
+      .map(msg => {
+        const legacy = this.splitLegacyAttachmentBlock(msg.content);
+        if (!legacy.attachmentsText) return '';
+        const label = legacy.content.trim() || '用户消息';
+        return `### ${label}\n${legacy.attachmentsText}`;
+      })
+      .filter(Boolean);
+
+    const sections = [...userAttachments, ...legacyAttachments];
+    if (sections.length === 0) return '';
+    return `## 附加文件位置\n这些路径来自用户在输入框左侧选择的文件，不要在回复中原样复述，除非用户明确要求。\n${sections.join('\n\n')}`;
+  }
+
+  private splitLegacyAttachmentBlock(content: string): { content: string; attachmentsText: string } {
+    const marker = '\n\n附加文件位置:\n';
+    const markerIndex = content.indexOf(marker);
+    if (markerIndex === -1) {
+      const startMarker = '附加文件位置:\n';
+      if (content.startsWith(startMarker)) {
+        return {
+          content: '',
+          attachmentsText: content.slice(startMarker.length).trim(),
+        };
+      }
+      return { content, attachmentsText: '' };
+    }
+    return {
+      content: content.slice(0, markerIndex).trim(),
+      attachmentsText: content.slice(markerIndex + marker.length).trim(),
+    };
   }
 
   async sendMessage(
@@ -87,15 +139,19 @@ class AIService {
     }
   }
 
-  convertToChatMessages(messages: { role: MessageRole; content: string; toolCalls?: ToolCall[]; toolCallId?: string; reasoningContent?: string; reasoningDetails?: ReasoningDetail[] }[]): ChatMessage[] {
-    return messages.map(m => ({
-      role: m.role,
-      content: m.content,
-      toolCalls: m.toolCalls,
-      toolCallId: m.toolCallId,
-      reasoningContent: m.reasoningContent,
-      reasoningDetails: m.reasoningDetails,
-    }));
+  convertToChatMessages(messages: { role: MessageRole; content: string; attachments?: InputAttachment[]; toolCalls?: ToolCall[]; toolCallId?: string; reasoningContent?: string; reasoningDetails?: ReasoningDetail[] }[]): ChatMessage[] {
+    return messages.map(m => {
+      const legacy = m.role === 'user' ? this.splitLegacyAttachmentBlock(m.content) : null;
+      return {
+        role: m.role,
+        content: legacy?.content || (legacy?.attachmentsText ? '已附加文件' : m.content),
+        attachments: m.attachments,
+        toolCalls: m.toolCalls,
+        toolCallId: m.toolCallId,
+        reasoningContent: m.reasoningContent,
+        reasoningDetails: m.reasoningDetails,
+      };
+    });
   }
 }
 

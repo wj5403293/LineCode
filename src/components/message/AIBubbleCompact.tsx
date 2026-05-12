@@ -21,6 +21,7 @@ interface Props {
   onShellConfirm?: () => void;
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 export default React.memo(function AIBubbleCompact({
@@ -38,11 +39,13 @@ export default React.memo(function AIBubbleCompact({
   onShellConfirm,
   onShellDefaultExecute,
   onViewShellCommand,
+  onToolReview,
 }: Props) {
   const { colors } = useTheme();
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
   const hasContent = content && content.trim().length > 0;
+  const showStreamingPlaceholder = streaming && !hasContent && !hasBlocks && !hasToolCalls;
 
   return (
     <View style={styles.row}>
@@ -52,6 +55,9 @@ export default React.memo(function AIBubbleCompact({
       <View style={[styles.bubble, { backgroundColor: colors.aiBubble }]}>
         {hasContent && !hasBlocks && !hasToolCalls && (
           <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+        )}
+        {showStreamingPlaceholder && (
+          <TextBlock content="" streaming codeWrap={codeWrap} />
         )}
         {(hasBlocks || hasToolCalls) && (
           <ContentWithText
@@ -69,6 +75,7 @@ export default React.memo(function AIBubbleCompact({
             onShellConfirm={onShellConfirm}
             onShellDefaultExecute={onShellDefaultExecute}
             onViewShellCommand={onViewShellCommand}
+            onToolReview={onToolReview}
           />
         )}
       </View>

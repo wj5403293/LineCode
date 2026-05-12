@@ -56,6 +56,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleStop,
     pendingToolCall,
     handleToolConfirm,
+    handleToolReview,
     model,
     loading,
     scrollToBottom,
@@ -131,6 +132,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
       onShellConfirm={() => handleToolConfirm(true)}
       onShellDefaultExecute={handleShellAutoExecute}
       onViewShellCommand={onViewShellCommand}
+      onToolReview={handleToolReview}
     />
   ), [
     codeWrap,
@@ -142,6 +144,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleToolConfirm,
     handleShellAutoExecute,
     onViewShellCommand,
+    handleToolReview,
   ]);
 
   const keyExtractor = useCallback((item: Message) => item.id, []);

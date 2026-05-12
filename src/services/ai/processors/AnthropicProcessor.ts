@@ -1,4 +1,4 @@
-import { Model, ContentBlock, ToolCall } from '../../../types';
+import { Model, ContentBlock, ToolCall, ReasoningDetail } from '../../../types';
 import { StreamProcessor, StreamCallbacks, StreamOptions, StreamResult, ChatMessage } from './StreamProcessor';
 import { ReasoningEffort } from '../../settings';
 import { getApiModelId } from '../../../utils/modelContext';
@@ -16,30 +16,39 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     const reasoningEffort = options?.reasoningEffort || 'medium';
     const preserveReasoning = options?.preserveReasoning || false;
     const abortSignal = options?.abortSignal;
-    const hasToolExchange = messages.some(m =>
-      m.role === 'tool' || (m.role === 'assistant' && !!m.toolCalls?.length)
-    );
-    const { system, messages: userMessages } = this.formatMessages(messages, preserveReasoning && !hasToolExchange);
+    const requestedThinking = reasoningEffort !== 'off';
+    const canReplayToolThinking = !this.hasUnreplayableToolThinking(messages);
+    const enableThinking = requestedThinking && canReplayToolThinking;
+    if (requestedThinking && !canReplayToolThinking) {
+      console.warn('[LineCode] Anthropic thinking disabled for this request: missing signed thinking for a prior tool_use');
+    }
+    const budgetMap: Record<Exclude<ReasoningEffort, 'off'>, number> = {
+      low: 1024,
+      medium: 4096,
+      high: 8192,
+      max: 16000,
+    };
+    const thinkingBudget = enableThinking
+      ? budgetMap[reasoningEffort as Exclude<ReasoningEffort, 'off'>]
+      : 0;
+    const { system, messages: userMessages } = this.formatMessages(messages, {
+      includeThinking: enableThinking,
+      preserveReasoning,
+    });
 
     const body: any = {
       model: apiModelId,
-      max_tokens: 4096,
+      max_tokens: thinkingBudget > 0 ? Math.max(4096, thinkingBudget + 1024) : 4096,
       messages: userMessages,
       stream: true,
     };
 
     if (system) body.system = system;
 
-    if (reasoningEffort !== 'off') {
-      const budgetMap: Record<Exclude<ReasoningEffort, 'off'>, number> = {
-        low: 1024,
-        medium: 4096,
-        high: 8192,
-        max: 16000,
-      };
+    if (enableThinking) {
       body.thinking = {
         type: 'enabled',
-        budget_tokens: budgetMap[reasoningEffort as Exclude<ReasoningEffort, 'off'>],
+        budget_tokens: thinkingBudget,
       };
     }
 
@@ -52,16 +61,26 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     }
 
     const requestUrl = `${baseUrl}/v1/messages`;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': model.apiKey,
+      'anthropic-version': '2023-06-01',
+    };
+
+    if (
+      enableThinking &&
+      tools.length > 0 &&
+      baseUrl.toLowerCase().includes('anthropic.com') &&
+      /claude-(opus|sonnet)-4/i.test(apiModelId)
+    ) {
+      headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
+    }
 
     let res: Response;
     try {
       res = await fetch(requestUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': model.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
+        headers,
         body: JSON.stringify(body),
         signal: abortSignal,
       });
@@ -100,7 +119,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     return this.readStream(res, callbacks, abortSignal);
   }
 
-  private formatMessages(messages: ChatMessage[], preserveReasoning: boolean): {
+  private formatMessages(messages: ChatMessage[], options: { includeThinking: boolean; preserveReasoning: boolean }): {
     system?: string;
     messages: { role: 'user' | 'assistant'; content: any }[];
   } {
@@ -131,9 +150,8 @@ export class AnthropicStreamProcessor extends StreamProcessor {
         });
       } else if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
         const content: any[] = [];
-        if (preserveReasoning && msg.reasoningContent) {
-          console.log('[LineCode] Adding thinking block to Anthropic message:', msg.reasoningContent.substring(0, 50));
-          content.push({ type: 'thinking', thinking: msg.reasoningContent });
+        if (options.includeThinking) {
+          content.push(...this.getThinkingBlocksForReplay(msg, true));
         }
         if (msg.content) content.push({ type: 'text', text: msg.content });
         for (const tc of msg.toolCalls) {
@@ -141,18 +159,21 @@ export class AnthropicStreamProcessor extends StreamProcessor {
             type: 'tool_use',
             id: tc.id,
             name: tc.name,
-            input: JSON.parse(tc.arguments),
+            input: this.safeParseToolInput(tc.arguments),
           });
         }
         console.log('[LineCode] Anthropic assistant message content blocks:', content.length);
         formatted.push({ role: 'assistant', content });
-      } else if (msg.role === 'assistant' && preserveReasoning && msg.reasoningContent) {
+      } else if (msg.role === 'assistant' && options.includeThinking && options.preserveReasoning) {
+        const thinkingBlocks = this.getThinkingBlocksForReplay(msg, true);
         formatted.push({
           role: 'assistant',
-          content: [
-            { type: 'thinking', thinking: msg.reasoningContent },
-            ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
-          ],
+          content: thinkingBlocks.length > 0
+            ? [
+                ...thinkingBlocks,
+                ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
+              ]
+            : msg.content,
         });
       } else if (msg.role === 'user' || msg.role === 'assistant') {
         formatted.push({ role: msg.role as 'user' | 'assistant', content: msg.content });
@@ -160,6 +181,42 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     }
 
     return { system, messages: formatted };
+  }
+
+  private safeParseToolInput(raw: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(raw || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private hasUnreplayableToolThinking(messages: ChatMessage[]): boolean {
+    return messages.some(msg => {
+      if (msg.role !== 'assistant' || !msg.toolCalls?.length) return false;
+      if (!msg.reasoningContent && !msg.reasoningDetails?.length) return false;
+      return this.getThinkingBlocksForReplay(msg, true).length === 0;
+    });
+  }
+
+  private getThinkingBlocksForReplay(msg: ChatMessage, requireSignature: boolean): Record<string, unknown>[] {
+    if (msg.reasoningDetails?.length) {
+      return msg.reasoningDetails
+        .filter(detail => {
+          if (detail.type === 'redacted_thinking') return typeof detail.data === 'string';
+          if (detail.type !== 'thinking') return false;
+          if (typeof detail.thinking !== 'string') return false;
+          return !requireSignature || typeof detail.signature === 'string';
+        })
+        .map(detail => ({ ...detail }));
+    }
+
+    if (!requireSignature && msg.reasoningContent) {
+      return [{ type: 'thinking', thinking: msg.reasoningContent }];
+    }
+
+    return [];
   }
 
   private async readStream(
@@ -177,6 +234,8 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     let currentBlockIndex = -1;
     const toolCalls: ToolCall[] = [];
     let currentToolCall: { id: string; name: string; input: string } | null = null;
+    let currentThinkingDetail: ReasoningDetail | null = null;
+    const reasoningDetails: ReasoningDetail[] = [];
 
     const ensureBlock = (type: 'thinking' | 'text' | 'tool_use'): number => {
       if (currentBlockType !== type) {
@@ -218,6 +277,20 @@ export class AnthropicStreamProcessor extends StreamProcessor {
               const blockType = json.content_block?.type;
               if (blockType === 'thinking') {
                 ensureBlock('thinking');
+                currentThinkingDetail = {
+                  type: 'thinking',
+                  thinking: json.content_block.thinking || '',
+                };
+                if (json.content_block.signature) {
+                  currentThinkingDetail.signature = json.content_block.signature;
+                }
+              } else if (blockType === 'redacted_thinking') {
+                ensureBlock('thinking');
+                blocks[currentBlockIndex].content += '[redacted thinking]';
+                currentThinkingDetail = {
+                  type: 'redacted_thinking',
+                  data: json.content_block.data || '',
+                };
               } else if (blockType === 'text') {
                 ensureBlock('text');
               } else if (blockType === 'tool_use') {
@@ -234,8 +307,17 @@ export class AnthropicStreamProcessor extends StreamProcessor {
             } else if (json.type === 'content_block_delta') {
               if (json.delta?.type === 'thinking_delta') {
                 const idx = ensureBlock('thinking');
-                blocks[idx].content += json.delta.thinking || '';
+                const thinking = json.delta.thinking || '';
+                blocks[idx].content += thinking;
+                if (currentThinkingDetail?.type === 'thinking') {
+                  currentThinkingDetail.thinking = `${String(currentThinkingDetail.thinking || '')}${thinking}`;
+                }
                 callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+              } else if (json.delta?.type === 'signature_delta') {
+                if (currentThinkingDetail?.type === 'thinking') {
+                  const signature = json.delta.signature || '';
+                  currentThinkingDetail.signature = `${String(currentThinkingDetail.signature || '')}${signature}`;
+                }
               } else if (json.delta?.type === 'text_delta') {
                 const idx = ensureBlock('text');
                 blocks[idx].content += json.delta.text || '';
@@ -246,6 +328,10 @@ export class AnthropicStreamProcessor extends StreamProcessor {
                 }
               }
             } else if (json.type === 'content_block_stop') {
+              if (currentThinkingDetail) {
+                reasoningDetails.push({ ...currentThinkingDetail });
+                currentThinkingDetail = null;
+              }
               if (currentToolCall) {
                 toolCalls.push({
                   id: currentToolCall.id,
@@ -274,6 +360,12 @@ export class AnthropicStreamProcessor extends StreamProcessor {
 
     const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
     const reasoningContent = blocks.filter(b => b.type === 'thinking').map(b => b.content).join('');
-    return { text: fullText, blocks, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, reasoningContent: reasoningContent || undefined };
+    return {
+      text: fullText,
+      blocks,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      reasoningContent: reasoningContent || undefined,
+      reasoningDetails: reasoningDetails.length > 0 ? reasoningDetails : undefined,
+    };
   }
 }

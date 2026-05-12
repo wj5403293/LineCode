@@ -8,21 +8,34 @@ import { diffService } from '../../services/DiffService';
 import { DiffRecord } from '../../types';
 
 interface Props {
-  name: string;
   input: Record<string, unknown>;
   result?: string;
   isError?: boolean;
+  toolCallId: string;
+  diffId?: string;
+  reviewState?: 'accepted' | 'rejected';
   homePath: string;
   streaming?: boolean;
+  onReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
-export default React.memo(function ToolCallWrite({ name, input, result, isError, homePath, streaming }: Props) {
+export default React.memo(function ToolCallWrite({
+  input,
+  result,
+  isError,
+  toolCallId,
+  diffId,
+  reviewState,
+  homePath,
+  streaming,
+  onReview,
+}: Props) {
   const { colors } = useTheme();
   const filePath = String(input.file_path || '');
   const fileName = filePath.split('/').pop() || filePath;
-  const [confirmed, setConfirmed] = useState<boolean | null>(null);
   const [diffRecord, setDiffRecord] = useState<DiffRecord | null>(null);
   const [diffExpanded, setDiffExpanded] = useState(false);
+  const [rejectError, setRejectError] = useState('');
 
   const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
   const langLabel = ext ? ext.toUpperCase() : 'TXT';
@@ -32,23 +45,55 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
   useEffect(() => {
     if (isComplete && !isError && filePath) {
       const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
-      diffService.getDiffChain(fullPath).then(chain => {
-        const last = chain.filter(d => !d.reverted).pop();
-        if (last) {
-          setDiffRecord(last);
-        }
-      }).catch(() => {});
+      if (diffId) {
+        diffService.getDiff(diffId).then(record => {
+          if (record) setDiffRecord(record);
+        }).catch(() => {});
+      } else {
+        diffService.getDiffChain(fullPath).then(chain => {
+          const last = chain.filter(d => !d.reverted).pop();
+          if (last) setDiffRecord(last);
+        }).catch(() => {});
+      }
     }
-  }, [isComplete, isError, filePath, homePath]);
+  }, [isComplete, isError, filePath, homePath, diffId]);
+
+  useEffect(() => {
+    if (reviewState !== 'rejected' || !diffRecord || diffRecord.reverted) return;
+    diffService.getDiff(diffRecord.id).then(record => {
+      if (record?.reverted) setDiffRecord(record);
+    }).catch(() => {});
+  }, [reviewState, diffRecord]);
 
   const hasDiff = isComplete && !isError && diffRecord;
+  const confirmed = reviewState === 'accepted'
+    ? true
+    : reviewState === 'rejected' || diffRecord?.reverted
+      ? false
+      : null;
 
-  const handleConfirm = () => setConfirmed(true);
+  const handleConfirm = () => {
+    setRejectError('');
+    onReview?.(toolCallId, 'accepted', diffRecord?.id || diffId);
+  };
 
   const handleReject = async () => {
-    setConfirmed(false);
-    const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
-    await diffService.revertLast(fullPath);
+    setRejectError('');
+    const targetDiffId = diffRecord?.id || diffId;
+    if (!targetDiffId) {
+      onReview?.(toolCallId, 'rejected', targetDiffId);
+      return;
+    }
+
+    const revertResult = await diffService.revertDiff(targetDiffId);
+    if (!revertResult.success) {
+      setRejectError(revertResult.message);
+      return;
+    }
+
+    const updated = await diffService.getDiff(targetDiffId);
+    if (updated) setDiffRecord(updated);
+    onReview?.(toolCallId, 'rejected', targetDiffId);
   };
 
   return (
@@ -69,7 +114,7 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
           {!streaming && !isComplete && (
             <ActivityIndicator size="small" color={colors.textTertiary} />
           )}
-          {isComplete && confirmed === null && !isError && (
+          {isComplete && confirmed === null && !isError && hasDiff && (
             <>
               <TouchableOpacity style={[styles.rejectBtn, { backgroundColor: colors.dangerMuted }]} onPress={handleReject} activeOpacity={0.7}>
                 <X size={14} color={colors.danger} />
@@ -124,6 +169,13 @@ export default React.memo(function ToolCallWrite({ name, input, result, isError,
         <View style={[styles.errorSection, { borderTopColor: colors.codeBorder }]}>
           <AlertCircle size={14} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.danger }]}>{result}</Text>
+        </View>
+      )}
+
+      {!!rejectError && (
+        <View style={[styles.errorSection, { borderTopColor: colors.codeBorder }]}>
+          <AlertCircle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{rejectError}</Text>
         </View>
       )}
 

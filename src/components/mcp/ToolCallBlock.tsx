@@ -1,5 +1,5 @@
 import React from 'react';
-import { ToolCall, ContentBlock } from '../../types';
+import { ToolCall, ContentBlock, ToolResult } from '../../types';
 import ToolCallRead from './ToolCallRead';
 import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
@@ -13,6 +13,7 @@ interface Props {
   toolCall: ToolCall;
   result?: string;
   isError?: boolean;
+  toolResult?: ToolResult;
   homePath?: string;
   block?: ContentBlock;
   pending?: boolean;
@@ -20,12 +21,14 @@ interface Props {
   onShellConfirm?: () => void;
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 export default React.memo(function ToolCallBlock({
   toolCall,
   result,
   isError,
+  toolResult,
   homePath,
   block,
   pending,
@@ -33,6 +36,7 @@ export default React.memo(function ToolCallBlock({
   onShellConfirm,
   onShellDefaultExecute,
   onViewShellCommand,
+  onToolReview,
 }: Props) {
   const input = parseToolInput(toolCall);
 
@@ -69,12 +73,15 @@ export default React.memo(function ToolCallBlock({
   if (isWriteTool(toolCall.name)) {
     return (
       <ToolCallWrite
-        name={toolCall.name}
         input={input}
         result={result}
         isError={isError}
+        toolCallId={toolCall.id}
+        diffId={toolResult?.diffId}
+        reviewState={toolResult?.reviewState}
         homePath={homePath || ''}
         streaming={!result}
+        onReview={onToolReview}
       />
     );
   }

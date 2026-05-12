@@ -166,14 +166,8 @@ function isDangerousShellToolCall(tc: ToolCall): boolean {
 
 function composeUserContent(text: string, attachments: InputAttachment[]): string {
   const trimmed = text.trim();
-  if (attachments.length === 0) return trimmed;
-
-  const attachmentText = attachments
-    .map(item => `- ${item.name}: ${item.path}`)
-    .join('\n');
-  const pathBlock = `附加文件位置:\n${attachmentText}`;
-
-  return trimmed ? `${trimmed}\n\n${pathBlock}` : pathBlock;
+  if (trimmed) return trimmed;
+  return attachments.length > 0 ? '已附加文件' : '';
 }
 
 export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffort, preserveReasoning: boolean) {
@@ -278,6 +272,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     return msgs.filter(m => !m.excludeFromContext).map(m => ({
       role: m.role,
       content: m.content,
+      attachments: m.attachments,
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
       reasoningContent: m.reasoningContent,
@@ -287,7 +282,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
   const executeToolCall = useCallback(async (
     tc: ToolCall,
-  ): Promise<{ toolMsg: Message; toolResult: { content: string; isError?: boolean } }> => {
+  ): Promise<{ toolMsg: Message; toolResult: ToolResult }> => {
     const toolResult = await executeTool(tc, {
       onProgress: (update: Partial<ContentBlock>) => {
         if (tc.name === 'agent') {
@@ -385,6 +380,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
                   toolCallId: toolMsg.toolCallId!,
                   content: toolResult.content,
                   isError: toolResult.isError,
+                  diffId: toolResult.diffId,
                 }],
               };
             }
@@ -410,6 +406,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
                 toolCallId: tc.id,
                 content: toolResult.content,
                 isError: toolResult.isError,
+                diffId: toolResult.diffId,
               }],
             };
           }
@@ -547,7 +544,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     }
 
     const now = Date.now();
-    const userMsg: Message = { id: String(now), role: 'user', content: sentContent, timestamp: now };
+    const userMsg: Message = {
+      id: String(now),
+      role: 'user',
+      content: sentContent,
+      timestamp: now,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
 
     atBottomRef.current = true;
 
@@ -802,6 +805,25 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     }
   }, [pendingToolCall]);
 
+  const handleToolReview = useCallback((toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => {
+    setMessages(prev => {
+      const next = prev.map(m => {
+        if (m.role !== 'assistant' || !m.toolResults?.some(r => r.toolCallId === toolCallId)) {
+          return m;
+        }
+        return {
+          ...m,
+          toolResults: m.toolResults.map(r => r.toolCallId === toolCallId
+            ? { ...r, reviewState: state, diffId: diffId || r.diffId }
+            : r
+          ),
+        };
+      });
+      messagesRef.current = next;
+      return next;
+    });
+  }, []);
+
   return {
     messages,
     setMessages,
@@ -823,6 +845,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     pendingToolCall,
     homePath,
     handleToolConfirm,
+    handleToolReview,
     resetShellAutoApprove,
     handleCompactContext,
     reloadModel,

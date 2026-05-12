@@ -74,7 +74,7 @@ export async function executeTool(
       const exists = await RNFS.exists(fullPath);
       if (exists) {
         try {
-          const items = await RNFS.readDir(fullPath);
+          await RNFS.readDir(fullPath);
           return {
             toolCallId: toolCall.id,
             content: `路径是一个目录，无法写入文件: ${filePath}\n如需创建文件，请指定完整文件路径。`,
@@ -88,9 +88,15 @@ export async function executeTool(
       const result = await tool.execute(input, context);
 
       if (!result.isError) {
-        const newContent = String(input.content || '');
+        let newContent = '';
+        try {
+          newContent = await RNFS.readFile(fullPath, 'utf8');
+        } catch {
+          newContent = String(input.content || '');
+        }
         if (oldContent !== newContent) {
-          await diffService.recordDiff(fullPath, oldContent, newContent);
+          const diff = await diffService.recordDiff(fullPath, oldContent, newContent, exists);
+          result.diffId = diff.id;
         }
       }
 

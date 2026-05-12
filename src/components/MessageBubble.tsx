@@ -17,6 +17,7 @@ interface Props {
   onShellConfirm?: () => void;
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 const MemoizedUserBubble = React.memo(UserBubble);
@@ -35,13 +36,14 @@ function MessageBubble({
   onShellConfirm,
   onShellDefaultExecute,
   onViewShellCommand,
+  onToolReview,
 }: Props) {
   if (message.hidden) {
     return null;
   }
 
   if (message.role === 'user') {
-    return <MemoizedUserBubble content={message.content} />;
+    return <MemoizedUserBubble content={message.content} attachments={message.attachments} />;
   }
 
   if (message.role === 'tool') {
@@ -64,6 +66,7 @@ function MessageBubble({
         onShellConfirm={onShellConfirm}
         onShellDefaultExecute={onShellDefaultExecute}
         onViewShellCommand={onViewShellCommand}
+        onToolReview={onToolReview}
       />
     : <MemoizedAIBubbleCompact
         content={message.content}
@@ -80,6 +83,7 @@ function MessageBubble({
         onShellConfirm={onShellConfirm}
         onShellDefaultExecute={onShellDefaultExecute}
         onViewShellCommand={onViewShellCommand}
+        onToolReview={onToolReview}
       />;
 }
 

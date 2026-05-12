@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AgentToolCall } from '../../types';
 import { isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool } from '../../mcp/toolUtils';
 import { useTheme } from '../../theme';
 import ToolCallRead from './ToolCallRead';
@@ -42,10 +41,10 @@ export function ToolCallRenderer({
   if (isWriteTool(name)) {
     return (
       <ToolCallWrite
-        name={name}
         input={input}
         result={result}
         isError={isError}
+        toolCallId={name}
         homePath={homePath || ''}
         streaming={streaming || false}
       />

@@ -1,4 +1,4 @@
-import { Model, ContentBlock, ToolCall, ReasoningDetail } from '../../../types';
+import { Model, ContentBlock, ToolCall, ReasoningDetail, InputAttachment } from '../../../types';
 import { ReasoningEffort } from '../../settings';
 
 export interface StreamCallbacks {
@@ -24,6 +24,7 @@ export interface StreamResult {
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  attachments?: InputAttachment[];
   toolCallId?: string;
   toolName?: string;
   toolCalls?: ToolCall[];

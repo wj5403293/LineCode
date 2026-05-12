@@ -204,3 +204,84 @@ export const lightColors: ThemeColors = {
   diffAddText: '#28A745',
   diffDelText: '#FF3B30',
 };
+
+export const coffeeSyntax: SyntaxColors = {
+  keyword: '#9B5C33',
+  string: '#6F7D4D',
+  comment: '#A58C72',
+  number: '#B56B45',
+  function: '#775F9A',
+  title: '#775F9A',
+  params: '#3E3328',
+  built_in: '#7C6B43',
+  literal: '#B56B45',
+  type: '#8F6B2E',
+  class: '#8F6B2E',
+  attr: '#7A6848',
+  selector: '#687846',
+  tag: '#687846',
+  name: '#687846',
+  symbol: '#8F6B2E',
+  bullet: '#8F6B2E',
+  code: '#6C5642',
+  regexp: '#6F7D4D',
+  link: '#8D5C42',
+  meta: '#A58C72',
+  deletion: '#A0443E',
+  addition: '#5E7447',
+  default: '#3E3328',
+};
+
+export const coffeeColors: ThemeColors = {
+  bg: '#F4EFE6',
+  surface: '#EEE5D8',
+  surfaceElevated: '#FBF7EF',
+  surfaceLight: '#E7DCCA',
+
+  accent: '#D97757',
+  accentDim: '#F1D4C6',
+  accentMuted: 'rgba(217,119,87,0.12)',
+  accentMuted2: 'rgba(217,119,87,0.18)',
+
+  text: '#2B2118',
+  textSecondary: '#6C5A49',
+  textTertiary: '#9B8976',
+  textOnColor: '#FFFFFF',
+
+  border: '#DDD0BF',
+  borderLight: '#E8DDCF',
+  inputBg: '#FFFBF3',
+
+  userBubble: '#B86F50',
+  aiBubble: '#EFE4D4',
+
+  danger: '#B5473F',
+  warning: '#B7791F',
+  success: '#6A7F46',
+  processing: '#C27A31',
+
+  overlay: 'rgba(43,33,24,0.38)',
+  codeBg: 'rgba(91,65,40,0.07)',
+  codeBorder: 'rgba(91,65,40,0.14)',
+
+  dangerMuted: 'rgba(181,71,63,0.12)',
+  dangerMuted2: 'rgba(181,71,63,0.18)',
+  processingMuted: 'rgba(194,122,49,0.12)',
+
+  diffAddBg: 'rgba(106,127,70,0.14)',
+  diffDelBg: 'rgba(181,71,63,0.12)',
+  diffAddText: '#5E7447',
+  diffDelText: '#A0443E',
+};
+
+export const customDefaultColors: ThemeColors = {
+  ...lightColors,
+  surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  surfaceLight: '#ECECF1',
+  inputBg: '#FFFFFF',
+  userBubble: '#0A84FF',
+  aiBubble: '#F2F2F7',
+  codeBg: '#F2F2F7',
+  codeBorder: '#D9D9DE',
+};

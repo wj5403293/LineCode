@@ -34,9 +34,12 @@ Your summary must include:
 
 REMINDER: Do NOT call any tools. Respond with plain text only: an <analysis> block followed by a <summary> block.`;
 
-export function estimateMessageTokens(messages: Pick<Message, 'content' | 'reasoningContent' | 'toolCalls' | 'toolResults' | 'blocks'>[]): number {
+export function estimateMessageTokens(messages: Pick<Message, 'content' | 'attachments' | 'reasoningContent' | 'toolCalls' | 'toolResults' | 'blocks'>[]): number {
   const chars = messages.reduce((total, message) => {
     let next = total + (message.content?.length || 0) + (message.reasoningContent?.length || 0);
+    if (message.attachments) {
+      next += JSON.stringify(message.attachments).length;
+    }
     if (message.toolCalls) {
       next += JSON.stringify(message.toolCalls).length;
     }
@@ -79,6 +82,9 @@ export function toCompactTranscript(messages: ChatMessage[]): string {
     const parts = [`## ${index + 1}. ${message.role}`];
     if (message.content) {
       parts.push(message.content);
+    }
+    if (message.attachments?.length) {
+      parts.push(`Attachments:\n${message.attachments.map(item => `- ${item.name} (${item.source}): ${item.path}`).join('\n')}`);
     }
     if (message.toolCalls?.length) {
       parts.push(`Tool calls:\n${JSON.stringify(message.toolCalls, null, 2)}`);

@@ -42,6 +42,8 @@ export interface ToolResult {
   toolCallId: string;
   content: string;
   isError?: boolean;
+  diffId?: string;
+  reviewState?: 'accepted' | 'rejected';
 }
 
 export interface AgentInstance {
@@ -72,6 +74,7 @@ export interface Message {
   isError?: boolean;
   hidden?: boolean;
   excludeFromContext?: boolean;
+  attachments?: InputAttachment[];
 }
 
 export interface InputAttachment {
@@ -112,6 +115,7 @@ export interface DiffRecord {
   filePath: string;
   oldContent: string;
   newContent: string;
+  oldExists?: boolean;
   timestamp: number;
   reverted: boolean;
 }

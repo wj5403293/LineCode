@@ -1,7 +1,6 @@
 import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
-import { diffService } from '../../../services/DiffService';
 
 export class FileEditTool extends BaseTool {
   readonly name = 'file_edit';
@@ -27,7 +26,7 @@ export class FileEditTool extends BaseTool {
       }
 
       try {
-        const items = await RNFS.readDir(filePath);
+        await RNFS.readDir(filePath);
         return { 
           content: `路径是一个目录，无法编辑文件: ${input.file_path}\n如需编辑文件，请指定具体文件路径。`, 
           toolCallId: '', 
@@ -43,10 +42,6 @@ export class FileEditTool extends BaseTool {
       const count = content.split(input.old_string).length - 1;
       const newContent = content.replace(input.old_string, input.new_string);
       await RNFS.writeFile(filePath, newContent, 'utf8');
-
-      if (content !== newContent) {
-        await diffService.recordDiff(filePath, content, newContent);
-      }
 
       return {
         content: `成功编辑文件 ${input.file_path} (${count} 处匹配已替换)`,

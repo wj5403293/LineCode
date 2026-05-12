@@ -27,10 +27,22 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   anthropic: 'Anthropic',
 };
 
-const PROVIDER_PLACEHOLDERS: Record<ProviderId, string> = {
+const PROVIDER_DEFAULT_BASE_URLS: Record<ProviderId, string> = {
   openai: 'https://api.openai.com/v1',
   codex: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
+};
+
+const PROVIDER_PLACEHOLDERS: Record<ProviderId, string> = {
+  openai: 'https://api.example.com/v1',
+  codex: 'https://api.example.com/v1',
+  anthropic: 'https://api.example.com/anthropic',
+};
+
+const PROVIDER_BASE_URL_HINTS: Record<ProviderId, string> = {
+  openai: 'OpenAI 兼容协议必须填到 /v1 结尾，例如 https://api.example.com/v1；不要只填域名，也不要加 /chat/completions。',
+  codex: 'Codex 使用 Responses API，也必须填到 /v1 结尾，例如 https://api.example.com/v1；不要加 /responses。',
+  anthropic: 'Anthropic 协议必须填到 /anthropic 结尾，例如 https://api.example.com/anthropic；不要加 /v1/messages。',
 };
 
 export default function ModelAddScreen({ onBack }: Props) {
@@ -49,7 +61,7 @@ export default function ModelAddScreen({ onBack }: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
 
-  const effectiveBaseUrl = baseUrl.trim() || PROVIDER_PLACEHOLDERS[provider];
+  const effectiveBaseUrl = baseUrl.trim() || PROVIDER_DEFAULT_BASE_URLS[provider];
   const canQuery = !!(effectiveBaseUrl && apiKey.trim());
   const canSave = !!(name.trim() && modelId.trim() && apiKey.trim());
 
@@ -201,6 +213,9 @@ export default function ModelAddScreen({ onBack }: Props) {
           onChangeText={setBaseUrl}
           autoCapitalize="none"
         />
+        <Text style={[styles.hintText, { color: colors.textTertiary }]}>
+          {PROVIDER_BASE_URL_HINTS[provider]}
+        </Text>
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>API Key</Text>
         <TextInput
@@ -399,6 +414,11 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: fontSizes.xs,
+    marginTop: spacing.sm,
+  },
+  hintText: {
+    fontSize: fontSizes.xs,
+    lineHeight: 17,
     marginTop: spacing.sm,
   },
   promoCard: {

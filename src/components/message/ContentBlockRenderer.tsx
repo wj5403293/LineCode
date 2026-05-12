@@ -19,6 +19,7 @@ interface ContentBlockRendererProps {
   onShellConfirm?: () => void;
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 export function ContentBlockRenderer({
@@ -35,6 +36,7 @@ export function ContentBlockRenderer({
   onShellConfirm,
   onShellDefaultExecute,
   onViewShellCommand,
+  onToolReview,
 }: ContentBlockRendererProps) {
   if (blocks && blocks.length > 0) {
     return (
@@ -65,12 +67,14 @@ export function ContentBlockRenderer({
                 homePath={homePath}
                 result={tr?.content}
                 isError={tr?.isError}
+                toolResult={tr}
                 block={block}
                 pending={block.id === shellConfirmToolCallId && !tr}
                 onShellCancel={onShellCancel}
                 onShellConfirm={onShellConfirm}
                 onShellDefaultExecute={onShellDefaultExecute}
                 onViewShellCommand={onViewShellCommand}
+                onToolReview={onToolReview}
               />
             );
           }
@@ -110,11 +114,13 @@ export function ContentBlockRenderer({
               homePath={homePath}
               result={tr?.content}
               isError={tr?.isError}
+              toolResult={tr}
               pending={tc.id === shellConfirmToolCallId && !tr}
               onShellCancel={onShellCancel}
               onShellConfirm={onShellConfirm}
               onShellDefaultExecute={onShellDefaultExecute}
               onViewShellCommand={onViewShellCommand}
+              onToolReview={onToolReview}
             />
           );
         })}
@@ -140,6 +146,7 @@ interface ContentWithTextProps {
   onShellConfirm?: () => void;
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 export function ContentWithText({
@@ -157,6 +164,7 @@ export function ContentWithText({
   onShellConfirm,
   onShellDefaultExecute,
   onViewShellCommand,
+  onToolReview,
 }: ContentWithTextProps) {
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
@@ -181,6 +189,7 @@ export function ContentWithText({
         onShellConfirm={onShellConfirm}
         onShellDefaultExecute={onShellDefaultExecute}
         onViewShellCommand={onViewShellCommand}
+        onToolReview={onToolReview}
       />
     </>
   );

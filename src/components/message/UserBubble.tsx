@@ -5,9 +5,18 @@ import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createUserMdStyle } from './markdownStyles';
 import CodeBlock from '../CodeBlock';
+import { InputAttachment } from '../../types';
 
 interface Props {
   content: string;
+  attachments?: InputAttachment[];
+}
+
+function stripLegacyAttachmentBlock(content: string): string {
+  const marker = '\n\n附加文件位置:\n';
+  const markerIndex = content.indexOf(marker);
+  if (markerIndex !== -1) return content.slice(0, markerIndex).trim();
+  return content.startsWith('附加文件位置:\n') ? '' : content;
 }
 
 const selectableUserRules = {
@@ -47,14 +56,42 @@ const selectableUserRules = {
   },
 };
 
-export default React.memo(function UserBubble({ content }: Props) {
+export default React.memo(function UserBubble({ content, attachments }: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createUserMdStyle(colors), [colors]);
+  const sanitizedContent = stripLegacyAttachmentBlock(content);
+  const fallbackContent = content.startsWith('附加文件位置:\n') ? '已附加文件' : '';
+  const displayContent = sanitizedContent || fallbackContent;
+  const visibleContent = displayContent === '已附加文件' && attachments?.length ? '' : displayContent;
 
   return (
     <View style={styles.row}>
-      <View style={[styles.bubble, { backgroundColor: colors.userBubble }]}>
-        <Markdown style={mdStyle} rules={selectableUserRules}>{content}</Markdown>
+      <View style={styles.stack}>
+        {!!visibleContent && (
+          <View style={[styles.bubble, { backgroundColor: colors.userBubble }]}>
+            <Markdown style={mdStyle} rules={selectableUserRules}>{visibleContent}</Markdown>
+          </View>
+        )}
+        {!!attachments?.length && (
+          <View style={styles.attachmentList}>
+            {attachments.map(item => (
+              <View
+                key={`${item.source}:${item.path}`}
+                style={[
+                  styles.attachmentChip,
+                  {
+                    backgroundColor: colors.surfaceLight,
+                    borderColor: colors.borderLight,
+                  },
+                ]}
+              >
+                <Text style={[styles.attachmentName, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {item.name}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -67,11 +104,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: 6,
   },
-  bubble: {
+  stack: {
     maxWidth: '80%',
+    alignItems: 'flex-end',
+  },
+  bubble: {
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
     borderRadius: radius.lg,
     borderBottomRightRadius: 4,
+  },
+  attachmentList: {
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+    alignItems: 'flex-end',
+  },
+  attachmentChip: {
+    maxWidth: 220,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  attachmentName: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

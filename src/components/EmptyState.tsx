@@ -18,7 +18,7 @@ export default React.memo(function EmptyState({ onGoSettings }: Props) {
       <Text style={[styles.title, { color: colors.text }]}>未配置模型</Text>
       <Text style={[styles.desc, { color: colors.textSecondary }]}>请先添加 AI 模型才能开始对话</Text>
       <TouchableOpacity style={[styles.btn, { backgroundColor: colors.accent }]} onPress={onGoSettings} activeOpacity={0.7}>
-        <Text style={styles.btnText}>去配置</Text>
+        <Text style={[styles.btnText, { color: colors.textOnColor }]}>去配置</Text>
       </TouchableOpacity>
     </View>
   );
@@ -55,7 +55,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   btnText: {
-    color: '#000',
     fontSize: fontSizes.md,
     fontWeight: '700',
   },

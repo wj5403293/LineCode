@@ -11,6 +11,7 @@ export function useMessageManager() {
     return msgs.map(m => ({
       role: m.role,
       content: m.content,
+      attachments: m.attachments,
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
       reasoningContent: m.reasoningContent,

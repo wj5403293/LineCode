@@ -14,8 +14,6 @@ import css from 'highlight.js/lib/languages/css';
 import sql from 'highlight.js/lib/languages/sql';
 import yaml from 'highlight.js/lib/languages/yaml';
 import markdown from 'highlight.js/lib/languages/markdown';
-import type { SyntaxColors } from '../../theme';
-
 const LANGUAGES: [string, any][] = [
   ['javascript', javascript], ['js', javascript],
   ['typescript', typescript], ['ts', typescript],
@@ -38,6 +36,31 @@ for (const [name, lang] of LANGUAGES) {
   hljs.registerLanguage(name, lang);
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(?:lt|gt|amp|quot|apos|nbsp|#39|#x27|#x2f);/gi, entity => {
+    switch (entity.toLowerCase()) {
+      case '&lt;':
+        return '<';
+      case '&gt;':
+        return '>';
+      case '&amp;':
+        return '&';
+      case '&quot;':
+        return '"';
+      case '&apos;':
+      case '&#39;':
+      case '&#x27;':
+        return "'";
+      case '&nbsp;':
+        return ' ';
+      case '&#x2f;':
+        return '/';
+      default:
+        return entity;
+    }
+  });
+}
+
 export function parseHighlightedHTML(
   html: string,
   tokenColors: Record<string, string>,
@@ -49,12 +72,12 @@ export function parseHighlightedHTML(
   while ((match = regex.exec(html)) !== null) {
     if (match[1]) {
       tokens.push({
-        text: match[2].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
+        text: decodeHtmlEntities(match[2]),
         color: tokenColors[match[1]] || tokenColors.default,
       });
     } else if (match[3]) {
       tokens.push({
-        text: match[3].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'),
+        text: decodeHtmlEntities(match[3]),
         color: tokenColors.default,
       });
     }
