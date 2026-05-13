@@ -37,6 +37,7 @@ const KEYS = {
   GPT55_PROMO_SEEN: '@lineai_gpt55_promo_seen',
   FIRST_LAUNCH_GUIDE_SEEN: '@lineai_first_launch_guide_seen',
   MCP_EXECUTION_MODE: '@lineai_mcp_execution_mode',
+  AUTO_UPDATE_ENABLED: '@linecode_auto_update_enabled',
 } as const;
 
 class SettingsService {
@@ -171,6 +172,15 @@ class SettingsService {
 
   async setFirstLaunchGuideSeen(seen: boolean): Promise<void> {
     await this.set(KEYS.FIRST_LAUNCH_GUIDE_SEEN, seen);
+  }
+
+  async getAutoUpdateEnabled(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.AUTO_UPDATE_ENABLED);
+    return value === 'true';
+  }
+
+  async setAutoUpdateEnabled(enabled: boolean): Promise<void> {
+    await this.set(KEYS.AUTO_UPDATE_ENABLED, enabled);
   }
 }
 

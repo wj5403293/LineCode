@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench, Palette } from 'lucide-react-native';
+import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench, Palette, Archive } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -14,6 +14,7 @@ interface Props {
   onMCP: () => void;
   onAbout: () => void;
   onTheme: () => void;
+  onData: () => void;
 }
 
 const SETTINGS_ITEMS = [
@@ -22,10 +23,11 @@ const SETTINGS_ITEMS = [
   { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
   { id: 'theme', label: '主题设置', desc: '亮色/暗色/跟随系统', icon: Palette },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
+  { id: 'data', label: '数据与更新', desc: '热更新、导出和导入 .linecode', icon: Archive },
   { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },
 ];
 
-export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout, onTheme }: Props) {
+export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout, onTheme, onData }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -35,6 +37,7 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
     if (id === 'llm') onLLM();
     if (id === 'mcp') onMCP();
     if (id === 'theme') onTheme();
+    if (id === 'data') onData();
     if (id === 'about') onAbout();
   };
 

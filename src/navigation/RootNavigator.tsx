@@ -12,6 +12,7 @@ import LicensesScreen from '../screens/LicensesScreen';
 import ThemeSettingsScreen from '../screens/ThemeSettingsScreen';
 import InAppBrowserScreen from '../screens/InAppBrowserScreen';
 import ShellCommandScreen from '../screens/ShellCommandScreen';
+import DataSettingsScreen from '../screens/DataSettingsScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   About: undefined;
   Licenses: undefined;
   ThemeSettings: undefined;
+  DataSettings: undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
 };
@@ -56,7 +58,13 @@ export default function RootNavigator() {
             onMCP={() => navigation.navigate('MCPSettings')}
             onAbout={() => navigation.navigate('About')}
             onTheme={() => navigation.navigate('ThemeSettings')}
+            onData={() => navigation.navigate('DataSettings')}
           />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="DataSettings">
+        {({ navigation }) => (
+          <DataSettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="ThemeSettings">
@@ -99,7 +107,7 @@ export default function RootNavigator() {
         )}
       </Stack.Screen>
       <Stack.Screen name="Licenses">
-        {({ navigation }) => (
+        {() => (
           <LicensesScreen />
         )}
       </Stack.Screen>
