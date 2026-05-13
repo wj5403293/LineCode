@@ -33,7 +33,7 @@ export class FileReadTool extends BaseTool {
         const items = await workspaceFs.readDir(filePath);
         const list = await this.listDir(items, '');
         return {
-          content: `目录 ${filePath}:\n${list}\n\n如需读取文件，请指定具体文件路径。`,
+          content: `目录 ${workspaceFs.toDisplayPath(filePath)}:\n${list}\n\n如需读取文件，请指定具体文件路径。`,
           toolCallId: ''
         };
       } catch {

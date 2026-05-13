@@ -28,7 +28,7 @@ export interface DirectoryStats {
   directories: number;
 }
 
-function isSafPath(path: string): boolean {
+export function isSafPath(path: string): boolean {
   return path.startsWith('content://');
 }
 
@@ -46,6 +46,88 @@ function dirname(path: string): string {
   return index > 0 ? cleanPath.slice(0, index) : '';
 }
 
+function safeDecodeUriPart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    try {
+      return decodeURI(value);
+    } catch {
+      return value;
+    }
+  }
+}
+
+function stripUriSuffix(value: string): string {
+  return value.split(/[?#]/)[0];
+}
+
+function extractSafDocumentId(uri: string): string | null {
+  const cleanUri = stripUriSuffix(uri);
+  const documentMarker = '/document/';
+  const documentIndex = cleanUri.indexOf(documentMarker);
+  if (documentIndex >= 0) {
+    return cleanUri.slice(documentIndex + documentMarker.length);
+  }
+
+  const treeMarker = '/tree/';
+  const treeIndex = cleanUri.indexOf(treeMarker);
+  if (treeIndex >= 0) {
+    return cleanUri.slice(treeIndex + treeMarker.length);
+  }
+
+  return null;
+}
+
+function joinAbsolutePath(root: string, rest: string): string {
+  const cleanRest = rest.replace(/^\/+/, '');
+  return cleanRest ? `${root}/${cleanRest}` : root;
+}
+
+export function safUriToFileSystemPath(uri: string): string | null {
+  if (!isSafPath(uri)) return null;
+
+  const documentId = extractSafDocumentId(uri);
+  if (!documentId) return null;
+
+  const decodedDocumentId = safeDecodeUriPart(documentId).replace(/^\/+/, '');
+  if (decodedDocumentId.startsWith('raw:')) {
+    const rawPath = decodedDocumentId.slice('raw:'.length);
+    return rawPath.startsWith('/') ? rawPath : null;
+  }
+
+  const separatorIndex = decodedDocumentId.indexOf(':');
+  if (separatorIndex < 0) return null;
+
+  const volume = decodedDocumentId.slice(0, separatorIndex);
+  const rest = decodedDocumentId.slice(separatorIndex + 1);
+
+  if (volume === 'primary') {
+    return joinAbsolutePath('/storage/emulated/0', rest);
+  }
+
+  if (volume === 'home') {
+    return joinAbsolutePath('/storage/emulated/0/Documents', rest);
+  }
+
+  if (/^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$/.test(volume)) {
+    return joinAbsolutePath(`/storage/${volume}`, rest);
+  }
+
+  return null;
+}
+
+export function toDisplayPath(path: string): string {
+  return safUriToFileSystemPath(path) || path;
+}
+
+export function toShellPath(path: string): string | null {
+  if (isSafPath(path)) {
+    return safUriToFileSystemPath(path);
+  }
+  return path.startsWith('/') ? path : null;
+}
+
 export function joinWorkspacePath(rootPath: string, childPath: string): string {
   if (!childPath) return rootPath;
   if (childPath.startsWith('/') || isSafPath(childPath)) return childPath;
@@ -53,7 +135,7 @@ export function joinWorkspacePath(rootPath: string, childPath: string): string {
 }
 
 export function basename(path: string): string {
-  const cleanPath = trimTrailingSlash(path);
+  const cleanPath = trimTrailingSlash(toDisplayPath(path));
   return cleanPath.split('/').filter(Boolean).pop() || cleanPath;
 }
 
@@ -96,6 +178,9 @@ async function collectDirStats(path: string, depth: number, maxDepth: number): P
 
 export const workspaceFs = {
   isSafPath,
+  safUriToFileSystemPath,
+  toDisplayPath,
+  toShellPath,
 
   resolvePath(path: string, rootPath: string): string {
     return joinWorkspacePath(rootPath, path);

@@ -23,15 +23,16 @@ export class GlobTool extends BaseTool {
         : context.homePath;
 
       const results = await this.search(searchPath, input.pattern, searchPath);
+      const displaySearchPath = workspaceFs.toDisplayPath(searchPath);
       if (results.length === 0) {
         return {
-          content: `在 ${searchPath} 目录下未找到匹配 "${input.pattern}" 的文件。`,
+          content: `在 ${displaySearchPath} 目录下未找到匹配 "${input.pattern}" 的文件。`,
           toolCallId: '',
         };
       }
 
       return {
-        content: `在 ${searchPath} 目录下找到 ${results.length} 个匹配文件:\n${results.join('\n')}`,
+        content: `在 ${displaySearchPath} 目录下找到 ${results.length} 个匹配文件:\n${results.join('\n')}`,
         toolCallId: '',
       };
     } catch (err: any) {
@@ -44,7 +45,7 @@ export class GlobTool extends BaseTool {
     try {
       const items = await workspaceFs.readDir(dir);
       for (const item of items) {
-        const relativePath = item.path.replace(rootPath, '').replace(/^\//, '');
+        const relativePath = this.relativePath(item.path, rootPath);
         if (item.isDirectory()) {
           if (!item.name.startsWith('.') && !item.name.startsWith('node_modules')) {
             const subResults = await this.search(item.path, pattern, rootPath);
@@ -60,6 +61,21 @@ export class GlobTool extends BaseTool {
       // 忽略无权限的目录
     }
     return results;
+  }
+
+  private relativePath(path: string, rootPath: string): string {
+    const displayPath = workspaceFs.toDisplayPath(path);
+    const displayRoot = workspaceFs.toDisplayPath(rootPath);
+    const displayRelative = this.stripRoot(displayPath, displayRoot);
+    if (displayRelative !== null) return displayRelative;
+
+    return this.stripRoot(path, rootPath) || path;
+  }
+
+  private stripRoot(path: string, rootPath: string): string | null {
+    const root = rootPath.replace(/\/+$/, '');
+    if (path === root) return '';
+    return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : null;
   }
 
   private matchPath(relativePath: string, pattern: string): boolean {

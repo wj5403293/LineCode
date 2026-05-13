@@ -7,6 +7,8 @@ import { OpenAIStreamProcessor } from './processors/OpenAIProcessor';
 import { AnthropicStreamProcessor } from './processors/AnthropicProcessor';
 import { CodexStreamProcessor } from './processors/CodexProcessor';
 import { TONE_PROMPTS } from './constants/tonePrompts';
+import { projectService } from '../ProjectService';
+import { workspaceFs } from '../WorkspaceFileSystem';
 
 export { SYSTEM_PROMPT };
 export type { ChatMessage };
@@ -30,8 +32,18 @@ class AIService {
     
     let fullSystemPrompt = systemPrompt + (TONE_PROMPTS[toneMode] || '');
     
-    if (homePath && executionMode !== 'ssh') {
-      fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${homePath}\n所有文件操作都相对于此目录进行。`;
+    if (homePath) {
+      if (executionMode === 'ssh') {
+        const sshProjectPrompt = await this.buildSshProjectPrompt(homePath);
+        if (sshProjectPrompt) {
+          fullSystemPrompt += `\n\n${sshProjectPrompt}`;
+        }
+      } else {
+        const displayPath = workspaceFs.toDisplayPath(homePath);
+        const rawPathNote = displayPath !== homePath ? `\nSAF 原始 URI: ${homePath}` : '';
+        const safToolNote = displayPath !== homePath ? '\n调用本地文件工具时优先使用相对路径，不要把展示路径当作工具参数。' : '';
+        fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${displayPath}${rawPathNote}\n所有文件操作都相对于此目录进行。${safToolNote}`;
+      }
     }
 
     const attachmentPrompt = this.buildAttachmentPrompt(history);
@@ -64,6 +76,32 @@ class AIService {
     }
 
     return messages;
+  }
+
+  private async buildSshProjectPrompt(homePath: string): Promise<string> {
+    const project = await projectService.getSelectedProject();
+    if (project.path !== homePath) return '';
+
+    const shellPath = projectService.getProjectShellPath(project);
+    if (!shellPath) {
+      if (workspaceFs.isSafPath(homePath)) {
+        return [
+          '## SSH 项目目录',
+          `当前已打开外部项目: ${project.label}`,
+          `SAF URI: ${homePath}`,
+          '该 SAF URI 不能直接作为 SSH Shell 路径使用。执行文件查看、搜索或修改前，需要用户重新选择可转换为 /storage/... 的目录，或明确提供远端项目路径。',
+        ].join('\n');
+      }
+      return '';
+    }
+
+    return [
+      '## SSH 项目目录',
+      `当前已打开外部项目: ${project.label}`,
+      `项目目录: ${shellPath}`,
+      `执行读取、列目录、搜索或修改前，必须先在 SSH 环境中使用此目录，例如通过 shell_execute 的 cwd 参数设为 "${shellPath}"，或先执行 cd 后再操作。`,
+      '不要在 SSH 登录目录或其他目录中猜测项目文件位置。',
+    ].join('\n');
   }
 
   private buildAttachmentPrompt(history: ChatMessage[]): string {

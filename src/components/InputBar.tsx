@@ -19,6 +19,7 @@ import { FileTreeNode, useFileTree } from '../hooks/useFileTree';
 import { InputAttachment } from '../types';
 import AttachmentPickerModal from './AttachmentPickerModal';
 import { parseModelContext } from '../utils/modelContext';
+import { projectService } from '../services/ProjectService';
 
 interface Props {
   onSend: (text: string, attachments?: InputAttachment[]) => void;
@@ -67,16 +68,21 @@ def make_node(path, depth):
         node["children"] = children
     return node
 
-print(json.dumps(make_node(os.getcwd(), 0), ensure_ascii=False))
+project_root = os.environ.get("LINECODE_PROJECT_PATH")
+root = project_root or os.getcwd()
+if project_root and not os.path.isdir(root):
+    raise SystemExit("Project directory is not accessible: " + root)
+print(json.dumps(make_node(root, 0), ensure_ascii=False))
 `;
 
 function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function buildRemoteTreeCommand(pythonPath: string): string {
+function buildRemoteTreeCommand(pythonPath: string, projectPath: string | null): string {
   const pythonExpression = `exec(${JSON.stringify(REMOTE_TREE_SCRIPT)})`;
-  return `PY_BIN=${shellSingleQuote(pythonPath)}; "$PY_BIN" -c ${shellSingleQuote(pythonExpression)}`;
+  const projectEnv = projectPath ? `LINECODE_PROJECT_PATH=${shellSingleQuote(projectPath)} ` : '';
+  return `PY_BIN=${shellSingleQuote(pythonPath)}; ${projectEnv}"$PY_BIN" -c ${shellSingleQuote(pythonExpression)}`;
 }
 
 function normalizeRemoteNode(value: unknown, expanded = false): FileTreeNode | null {
@@ -188,8 +194,15 @@ export default React.memo(function InputBar({
       }
 
       setRemoteStatus('loading');
-      setRemoteMessage('正在读取远端目录结构...');
-      const output = await sshService.executeCommand(buildRemoteTreeCommand(pythonPath), 30000);
+      const project = await projectService.getSelectedProject();
+      const projectPath = projectService.getProjectShellPath(project);
+      if (project.source === 'saf' && !projectPath) {
+        setRemoteStatus('error');
+        setRemoteMessage('当前 SAF 项目路径无法转换为 SSH 可用路径。');
+        return;
+      }
+      setRemoteMessage(projectPath ? `正在读取远端项目目录: ${projectPath}` : '正在读取远端目录结构...');
+      const output = await sshService.executeCommand(buildRemoteTreeCommand(pythonPath, projectPath), 30000);
       setRemoteTree(parseRemoteTree(output));
       setRemoteStatus('ready');
       setRemoteMessage('');

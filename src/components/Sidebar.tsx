@@ -10,6 +10,7 @@ import FileTree from './FileTree';
 import { ConversationList } from './sidebar/ConversationList';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ExportModal } from './sidebar/ExportModal';
+import { workspaceFs } from '../services/WorkspaceFileSystem';
 
 const SIDEBAR_WIDTH = 300;
 
@@ -29,6 +30,7 @@ interface Props {
 
 function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, projectLabel, onOpenProject, onCreateProject }: Props) {
   const { colors } = useTheme();
+  const displayHomePath = workspaceFs.toDisplayPath(homePath);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const slideAnim = useRef(new RNAnimated.Value(-SIDEBAR_WIDTH)).current;
@@ -158,7 +160,7 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, 
               {projectLabel}
             </Text>
             <Text style={[styles.projectStripPath, { color: colors.textTertiary }]} numberOfLines={1} ellipsizeMode="middle">
-              {homePath}
+              {displayHomePath}
             </Text>
           </View>
         )}

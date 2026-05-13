@@ -42,7 +42,7 @@ export function useFileTree(rootPath: string) {
       if (!dirPath) setTree(node);
       return node;
     } catch {
-      const empty: FileTreeNode = { name: 'home', path, isDirectory: true, children: [], expanded: true };
+      const empty: FileTreeNode = { name: basename(path) || 'home', path, isDirectory: true, children: [], expanded: true };
       if (!dirPath) setTree(empty);
       return empty;
     }

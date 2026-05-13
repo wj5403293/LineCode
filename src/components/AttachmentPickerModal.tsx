@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { FileTreeNode } from '../hooks/useFileTree';
+import { workspaceFs } from '../services/WorkspaceFileSystem';
 
 interface PickerAction {
   label: string;
@@ -142,7 +143,7 @@ function TreeNodeRow({
           </Text>
           {isRoot && (
             <Text style={[styles.path, { color: colors.textTertiary }]} numberOfLines={1} ellipsizeMode="middle">
-              {node.path}
+              {workspaceFs.toDisplayPath(node.path)}
             </Text>
           )}
         </View>

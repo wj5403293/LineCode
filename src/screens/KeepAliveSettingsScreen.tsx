@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, PermissionsAndroid, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BatteryCharging, Bell, Music, Zap } from 'lucide-react-native';
 import ScreenHeader from '../components/ScreenHeader';
@@ -36,19 +36,32 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
     await settingsService.setKeepAliveSettings(next);
   }, [settings]);
 
+  const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android' || Platform.Version < 33) return true;
+    const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    return result === PermissionsAndroid.RESULTS.GRANTED;
+  }, []);
+
   const handleWakeLock = useCallback((enabled: boolean) => {
     update({ wakeLock: enabled }).catch(() => {});
     if (!enabled) setKeepAwake(false);
   }, [update]);
 
-  const handleForegroundService = useCallback((enabled: boolean) => {
-    update({ foregroundService: enabled }).catch(() => {});
-    if (!enabled) setForegroundCodingService(false);
-  }, [update]);
+  const handleForegroundService = useCallback(async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        Alert.alert('通知权限未开启', 'Android 13 及以上需要允许通知后才能显示“正在编码”。');
+        return;
+      }
+    }
+    await update({ foregroundService: enabled });
+    await setForegroundCodingService(enabled);
+  }, [requestNotificationPermission, update]);
 
-  const handleFakeMusic = useCallback((enabled: boolean) => {
-    update({ fakeMusic: enabled }).catch(() => {});
-    if (!enabled) setFakeMusicPlayback(false);
+  const handleFakeMusic = useCallback(async (enabled: boolean) => {
+    await update({ fakeMusic: enabled });
+    await setFakeMusicPlayback(enabled);
   }, [update]);
 
   const handleBattery = useCallback(async (enabled: boolean) => {
@@ -79,7 +92,7 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
             <SwitchRow
               icon={<Bell size={20} color={colors.textSecondary} />}
               label="前台服务通知"
-              desc="后台运行时挂通知，显示“正在编码”"
+              desc="开启后常驻显示“正在编码”通知"
               value={settings.foregroundService}
               onValueChange={handleForegroundService}
             />

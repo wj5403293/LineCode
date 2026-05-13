@@ -21,6 +21,7 @@ import { useProjectSelection } from '../hooks/useProjectSelection';
 import { PermissionMode } from '../services/settings';
 import { permissionService } from '../services/PermissionService';
 import { setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '../utils/keepAwake';
+import { projectService } from '../services/ProjectService';
 
 interface Props {
   onGoSettings: () => void;
@@ -80,6 +81,15 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleSelectConversation: selectConversation,
   } = conversation;
   const { projects, selectedProject, handleProjectSelect, handleOpenProject, handleCreateProject } = useProjectSelection();
+  const projectOptions = useMemo(
+    () => projects.map(project => ({
+      ...project,
+      desc: project.source === 'saf'
+        ? projectService.getProjectDisplayPath(project)
+        : project.desc,
+    })),
+    [projects],
+  );
   const [createProjectVisible, setCreateProjectVisible] = useState(false);
   const [projectName, setProjectName] = useState('');
 
@@ -98,12 +108,10 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   useEffect(() => {
     const active = streaming || compacting;
     setKeepAwake(keepAliveSettings.wakeLock && active);
-    setForegroundCodingService(keepAliveSettings.foregroundService && active);
-    setFakeMusicPlayback(keepAliveSettings.fakeMusic && active);
+    setForegroundCodingService(keepAliveSettings.foregroundService);
+    setFakeMusicPlayback(keepAliveSettings.fakeMusic);
     return () => {
       setKeepAwake(false);
-      setForegroundCodingService(false);
-      setFakeMusicPlayback(false);
     };
   }, [streaming, compacting, keepAliveSettings]);
 
@@ -245,7 +253,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
             visible={dialog === 'project'}
             title="项目"
             options={[
-              ...projects,
+              ...projectOptions,
               { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
               { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
             ]}
@@ -323,7 +331,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           visible={dialog === 'project'}
           title="项目"
           options={[
-            ...projects,
+            ...projectOptions,
             { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
             { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
           ]}

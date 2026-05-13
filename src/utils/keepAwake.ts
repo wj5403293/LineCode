@@ -15,16 +15,16 @@ export function setKeepAwake(enabled: boolean): void {
   });
 }
 
-export function setForegroundCodingService(enabled: boolean): void {
-  KeepAwake?.setForegroundServiceEnabled?.(enabled).catch((err: unknown) => {
+export function setForegroundCodingService(enabled: boolean): Promise<void> {
+  return KeepAwake?.setForegroundServiceEnabled?.(enabled).catch((err: unknown) => {
     console.warn('[LineCode] Foreground service failed:', err);
-  });
+  }) || Promise.resolve();
 }
 
-export function setFakeMusicPlayback(enabled: boolean): void {
-  KeepAwake?.setFakeMusicEnabled?.(enabled).catch((err: unknown) => {
+export function setFakeMusicPlayback(enabled: boolean): Promise<void> {
+  return KeepAwake?.setFakeMusicEnabled?.(enabled).catch((err: unknown) => {
     console.warn('[LineCode] Fake music failed:', err);
-  });
+  }) || Promise.resolve();
 }
 
 export function requestIgnoreBatteryOptimizations(): Promise<boolean> {

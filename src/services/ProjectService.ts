@@ -132,7 +132,7 @@ class ProjectService {
     const project: ProjectOption = {
       id: `saf:${doc.uri}`,
       label: doc.name || '外部项目',
-      desc: 'SAF 外部目录',
+      desc: workspaceFs.toDisplayPath(doc.uri),
       path: doc.uri,
       source: 'saf',
     };
@@ -165,6 +165,25 @@ class ProjectService {
 
   getDefaultHomePath(): string {
     return DEFAULT_HOME_PATH;
+  }
+
+  getProjectDisplayPath(project: ProjectOption): string {
+    return workspaceFs.toDisplayPath(project.path);
+  }
+
+  getProjectShellPath(project: ProjectOption): string | null {
+    if (project.source !== 'saf') return null;
+    return workspaceFs.toShellPath(project.path);
+  }
+
+  async getCurrentDisplayPath(): Promise<string> {
+    const project = await this.getSelectedProject();
+    return this.getProjectDisplayPath(project);
+  }
+
+  async getCurrentShellPath(): Promise<string | null> {
+    const project = await this.getSelectedProject();
+    return this.getProjectShellPath(project);
   }
 
   getLinecodeRoot(): string {
