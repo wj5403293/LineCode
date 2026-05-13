@@ -69,7 +69,7 @@ export default React.memo(function FileTree({ homePath, onFileSelect, onExport }
       } else if (modalType === 'create_folder') {
         if (modalValue) await createItem(modalParent, modalValue, true);
       }
-    } catch (err: any) {}
+    } catch {}
     setModalType(null);
     setModalValue('');
   }, [modalType, modalTarget, modalValue, modalParent, deleteItem, renameItem, createItem]);

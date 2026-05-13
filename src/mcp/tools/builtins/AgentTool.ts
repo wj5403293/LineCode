@@ -1,12 +1,12 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
-import { ToolResult, AgentInstance, Model, ToolCall, ContentBlock, AgentToolCall } from '../../../types';
+import { ToolResult, AgentInstance, ToolCall, ContentBlock, AgentToolCall } from '../../../types';
 import { aiService, ChatMessage } from '../../../services/ai';
 import { fileLock } from '../../../services/FileLock';
 import { modelStorage } from '../../../services/storage';
 import { settingsService } from '../../../services/settings';
 import { createDefaultRegistry, ToolRegistry } from '../index';
 import { agentToolManager } from '../../AgentToolManager';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 type AgentType = 'explore' | 'sub-coding';
 
@@ -102,24 +102,31 @@ export class AgentTool extends BaseTool {
     const fileWriteTool = this.currentAgentRegistry?.get('file_write');
     const fileEditTool = this.currentAgentRegistry?.get('file_edit');
 
-    const wrapWithLock = (origExecute: Function, toolName: string) => {
+    const wrapWithLock = (origExecute: Function) => {
       return async (input: Record<string, unknown>, ctx: ToolContext) => {
         const filePath = String(input.file_path || '');
-        const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
+        const fullPath = workspaceFs.resolvePath(filePath, homePath);
 
         let currentContent = '';
         try {
-          const exists = await RNFS.exists(fullPath);
+          const exists = await workspaceFs.exists(fullPath);
           if (exists) {
             try {
-              const items = await RNFS.readDir(fullPath);
+              const stat = await workspaceFs.stat(fullPath);
+              if (stat.isDirectory()) {
+                return {
+                  content: `路径是一个目录，无法写入文件: ${filePath}`,
+                  isError: true,
+                  toolCallId: '',
+                };
+              }
+              currentContent = await workspaceFs.readFile(fullPath);
+            } catch (err: any) {
               return {
-                content: `路径是一个目录，无法写入文件: ${filePath}`,
+                content: `读取文件失败: ${err?.message || String(err)}`,
                 isError: true,
                 toolCallId: '',
               };
-            } catch {
-              currentContent = await RNFS.readFile(fullPath, 'utf8');
             }
           }
         } catch {
@@ -164,17 +171,24 @@ export class AgentTool extends BaseTool {
 
         // 重新读取文件内容
         try {
-          const exists = await RNFS.exists(fullPath);
+          const exists = await workspaceFs.exists(fullPath);
           if (exists) {
             try {
-              const items = await RNFS.readDir(fullPath);
+              const stat = await workspaceFs.stat(fullPath);
+              if (stat.isDirectory()) {
+                return {
+                  content: `路径是一个目录，无法写入文件: ${filePath}`,
+                  isError: true,
+                  toolCallId: '',
+                };
+              }
+              currentContent = await workspaceFs.readFile(fullPath);
+            } catch (err: any) {
               return {
-                content: `路径是一个目录，无法写入文件: ${filePath}`,
+                content: `读取文件失败: ${err?.message || String(err)}`,
                 isError: true,
                 toolCallId: '',
               };
-            } catch {
-              currentContent = await RNFS.readFile(fullPath, 'utf8');
             }
           }
         } catch {
@@ -200,10 +214,10 @@ export class AgentTool extends BaseTool {
     };
 
     if (fileWriteTool) {
-      (fileWriteTool as any).execute = wrapWithLock((fileWriteTool as any).execute.bind(fileWriteTool), 'file_write');
+      (fileWriteTool as any).execute = wrapWithLock((fileWriteTool as any).execute.bind(fileWriteTool));
     }
     if (fileEditTool) {
-      (fileEditTool as any).execute = wrapWithLock((fileEditTool as any).execute.bind(fileEditTool), 'file_edit');
+      (fileEditTool as any).execute = wrapWithLock((fileEditTool as any).execute.bind(fileEditTool));
     }
   }
 

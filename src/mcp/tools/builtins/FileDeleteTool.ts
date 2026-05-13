@@ -1,6 +1,6 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 export class FileDeleteTool extends BaseTool {
   readonly name = 'file_delete';
@@ -25,15 +25,15 @@ export class FileDeleteTool extends BaseTool {
 
     for (const path of input.paths) {
       try {
-        const targetPath = this.resolvePath(path, context.homePath);
+        const targetPath = workspaceFs.resolvePath(path, context.homePath);
 
-        const exists = await RNFS.exists(targetPath);
+        const exists = await workspaceFs.exists(targetPath);
         if (!exists) {
           errors.push(`路径不存在: ${path}`);
           continue;
         }
 
-        await RNFS.unlink(targetPath);
+        await workspaceFs.unlink(targetPath);
         results.push(`已删除: ${path}`);
       } catch (err: any) {
         errors.push(`删除 ${path} 失败: ${err.message}`);
@@ -55,8 +55,4 @@ export class FileDeleteTool extends BaseTool {
     };
   }
 
-  private resolvePath(path: string, homePath: string): string {
-    if (path.startsWith('/')) return path;
-    return `${homePath}/${path}`;
-  }
 }

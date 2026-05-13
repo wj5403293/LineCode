@@ -358,7 +358,8 @@ export default function ModelAddScreen({ onBack, presetId }: Props) {
                         style={[
                           styles.pickerItemText,
                           { color: isCustom ? colors.accent : colors.text },
-                          isSelected && { fontWeight: '700', color: colors.accent },
+                          isSelected && styles.pickerItemSelected,
+                          isSelected && { color: colors.accent },
                         ]}
                       >
                         {isCustom ? '自定义 ID...' : item}
@@ -525,5 +526,8 @@ const styles = StyleSheet.create({
   pickerItemText: {
     fontSize: fontSizes.md,
     flex: 1,
+  },
+  pickerItemSelected: {
+    fontWeight: '700',
   },
 });

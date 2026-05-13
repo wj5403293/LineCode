@@ -3,8 +3,8 @@ import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzipWithPassword, zipWithPassword } from 'react-native-zip-archive';
 import { APP_NAME, APP_VERSION } from '../constants/appInfo';
+import { projectService } from './ProjectService';
 
-const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
 const ARCHIVE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/archive`;
 const BACKUP_HEADER = 'LINECODE-BACKUP-v1\n';
 const BACKUP_PASSWORD_SHA256 = '3b8c62235f137315bfc69ccd3080ce02ec14aba98b040be5716529f0e5357c83';
@@ -100,7 +100,11 @@ class DataArchiveService {
 
     try {
       await this.exportAsyncStorage(payloadDir);
-      await copyDir(HOME_DIR, `${payloadDir}/home`);
+      const homeDir = await projectService.getCurrentHomePath();
+      if (homeDir.startsWith('content://')) {
+        throw new Error('导出完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
+      }
+      await copyDir(homeDir, `${payloadDir}/home`);
 
       const files = await collectFiles(payloadDir);
       const manifest: ArchiveManifest = {
@@ -142,8 +146,12 @@ class DataArchiveService {
       await unzipWithPassword(zipPath, payloadDir, BACKUP_PASSWORD_SHA256);
       await this.verifyManifest(payloadDir);
       await this.restoreAsyncStorage(payloadDir);
-      await ensureCleanDir(HOME_DIR);
-      await copyDir(`${payloadDir}/home`, HOME_DIR);
+      const homeDir = await projectService.getCurrentHomePath();
+      if (homeDir.startsWith('content://')) {
+        throw new Error('导入完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
+      }
+      await ensureCleanDir(homeDir);
+      await copyDir(`${payloadDir}/home`, homeDir);
     } finally {
       if (await RNFS.exists(workDir)) {
         await RNFS.unlink(workDir);

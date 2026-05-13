@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated as RNAnimated, Platform } from 'react-native';
-import { X, Archive } from 'lucide-react-native';
+import { X, Archive, FolderOpen, FolderPlus } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
 import { createDocument, copyFile } from 'react-native-saf-x';
 import { Conversation, conversationStore } from '../services/conversation';
-import { spacing, fontSizes } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import FileTree from './FileTree';
 import { ConversationList } from './sidebar/ConversationList';
@@ -21,11 +21,13 @@ interface Props {
   onClose: () => void;
   onSelect: (id: string) => void;
   onNew: () => void;
+  homePath: string;
+  projectLabel: string;
+  onOpenProject: () => void;
+  onCreateProject: () => void;
 }
 
-const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
-
-function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
+function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, projectLabel, onOpenProject, onCreateProject }: Props) {
   const { colors } = useTheme();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
@@ -81,7 +83,12 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
     try {
       const zipPath = `${RNFS.DocumentDirectoryPath}/linecode_home_export.zip`;
       const { zip } = require('react-native-zip-archive');
-      await zip(HOME_DIR, zipPath);
+      if (homePath.startsWith('content://')) {
+        setExportError('SAF 外部目录暂不支持直接导出 ZIP。');
+        setExportResult(null);
+        return;
+      }
+      await zip(homePath, zipPath);
 
       if (Platform.OS === 'android') {
         const fileName = `linecode_home_export_${Date.now()}.zip`;
@@ -104,7 +111,7 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
       setExportError(err.message);
       setExportResult(null);
     }
-  }, []);
+  }, [homePath]);
 
   const closeExportModal = useCallback(() => {
     setExportResult(null);
@@ -125,9 +132,17 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
           </Text>
           <View style={styles.headerActions}>
             {activeTab === 'files' && (
-              <TouchableOpacity onPress={handleExportZip} style={styles.exportBtn}>
-                <Archive size={16} color={colors.accent} />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity onPress={onOpenProject} style={styles.exportBtn}>
+                  <FolderOpen size={16} color={colors.accent} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onCreateProject} style={styles.exportBtn}>
+                  <FolderPlus size={16} color={colors.accent} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleExportZip} style={styles.exportBtn}>
+                  <Archive size={16} color={colors.accent} />
+                </TouchableOpacity>
+              </>
             )}
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={colors.text} />
@@ -136,6 +151,17 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
         </View>
 
         <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
+        {activeTab === 'files' && (
+          <View style={[styles.projectStrip, { borderColor: colors.borderLight, backgroundColor: colors.surfaceLight }]}>
+            <Text style={[styles.projectStripLabel, { color: colors.text }]} numberOfLines={1}>
+              {projectLabel}
+            </Text>
+            <Text style={[styles.projectStripPath, { color: colors.textTertiary }]} numberOfLines={1} ellipsizeMode="middle">
+              {homePath}
+            </Text>
+          </View>
+        )}
 
         {activeTab === 'conversations' ? (
           <ConversationList
@@ -146,7 +172,7 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew }: Props) {
             onNew={onNew}
           />
         ) : (
-          <FileTree homePath={HOME_DIR} onExport={handleExportZip} />
+          <FileTree homePath={homePath} onExport={handleExportZip} />
         )}
       </RNAnimated.View>
 
@@ -213,5 +239,20 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  projectStrip: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  projectStripLabel: {
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+  },
+  projectStripPath: {
+    fontSize: fontSizes.xs,
+    marginTop: 2,
   },
 });

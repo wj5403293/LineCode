@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RNFS from 'react-native-fs';
 import { DiffRecord } from '../types';
+import { workspaceFs } from './WorkspaceFileSystem';
 
 const STORAGE_KEY = '@linecode_diffs';
 
@@ -139,21 +139,21 @@ class DiffService {
 
   private async restoreOldContent(record: DiffRecord): Promise<void> {
     if (record.oldExists === false) {
-      const exists = await RNFS.exists(record.filePath);
+      const exists = await workspaceFs.exists(record.filePath);
       if (exists) {
-        await RNFS.unlink(record.filePath);
+        await workspaceFs.unlink(record.filePath);
       }
       return;
     }
 
     const dir = record.filePath.substring(0, record.filePath.lastIndexOf('/'));
     if (dir) {
-      const dirExists = await RNFS.exists(dir);
+      const dirExists = await workspaceFs.exists(dir);
       if (!dirExists) {
-        await RNFS.mkdir(dir);
+        await workspaceFs.mkdir(dir);
       }
     }
-    await RNFS.writeFile(record.filePath, record.oldContent, 'utf8');
+    await workspaceFs.writeFile(record.filePath, record.oldContent);
   }
 }
 

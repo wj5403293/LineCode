@@ -1,6 +1,6 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { WorkspaceFileItem, workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 export class FileReadTool extends BaseTool {
   readonly name = 'file_read';
@@ -19,14 +19,18 @@ export class FileReadTool extends BaseTool {
 
   async execute(input: { file_path: string; offset?: number; limit?: number }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = this.resolvePath(input.file_path, context.homePath);
-      const exists = await RNFS.exists(filePath);
+      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
+      const exists = await workspaceFs.exists(filePath);
       if (!exists) {
         return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
       }
 
       try {
-        const items = await RNFS.readDir(filePath);
+        const stat = await workspaceFs.stat(filePath);
+        if (!stat.isDirectory()) {
+          throw new Error('not directory');
+        }
+        const items = await workspaceFs.readDir(filePath);
         const list = await this.listDir(items, '');
         return {
           content: `目录 ${filePath}:\n${list}\n\n如需读取文件，请指定具体文件路径。`,
@@ -36,7 +40,7 @@ export class FileReadTool extends BaseTool {
         // not a directory, continue to read as file
       }
 
-      const content = await RNFS.readFile(filePath, 'utf8');
+      const content = await workspaceFs.readFile(filePath);
       const lines = content.split('\n');
       const offset = input.offset || 0;
       const limit = input.limit || 2000;
@@ -54,19 +58,14 @@ export class FileReadTool extends BaseTool {
     }
   }
 
-  private resolvePath(path: string, homePath: string): string {
-    if (path.startsWith('/')) return path;
-    return `${homePath}/${path}`;
-  }
-
-  private async listDir(items: RNFS.ReadDirItem[], prefix: string): Promise<string> {
+  private async listDir(items: WorkspaceFileItem[], prefix: string): Promise<string> {
     let result = '';
     for (const item of items) {
       const indent = prefix ? '  ' + prefix : '';
       if (item.isDirectory()) {
         result += `${indent}[DIR]  ${item.name}/\n`;
         try {
-          const subItems = await RNFS.readDir(item.path);
+          const subItems = await workspaceFs.readDir(item.path);
           result += await this.listDir(subItems, prefix + '  ');
         } catch {}
       } else {

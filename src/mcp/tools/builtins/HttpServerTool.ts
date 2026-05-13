@@ -1,8 +1,8 @@
 import { NativeModules } from 'react-native';
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { resolvePathWithinRoot } from '../../../utils/pathSafety';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 const Server = NativeModules.SimpleHttpServer;
 
@@ -39,17 +39,22 @@ export class HttpServerTool extends BaseTool {
         return { content: `服务器已在运行: http://localhost:${activePort}`, toolCallId: '' };
       }
 
-      const rootPath = resolvePathWithinRoot(root, homePath);
+      const rootPath = workspaceFs.isSafPath(homePath)
+        ? (root ? workspaceFs.resolvePath(root, homePath) : homePath)
+        : resolvePathWithinRoot(root, homePath);
       if (!rootPath) {
         return { content: `HTTP 服务器根目录越界: ${root || ''}`, toolCallId: '', isError: true };
       }
+      if (workspaceFs.isSafPath(rootPath)) {
+        return { content: 'HTTP 服务器暂不支持 SAF 外部目录，请切换到 LineCode 内部项目。', toolCallId: '', isError: true };
+      }
 
-      const dirExists = await RNFS.exists(rootPath);
+      const dirExists = await workspaceFs.exists(rootPath);
       if (!dirExists) {
         return { content: `目录不存在: ${rootPath}`, toolCallId: '', isError: true };
       }
 
-      const stat = await RNFS.stat(rootPath);
+      const stat = await workspaceFs.stat(rootPath);
       if (!stat.isDirectory()) {
         return { content: `HTTP 服务器根目录不是目录: ${rootPath}`, toolCallId: '', isError: true };
       }

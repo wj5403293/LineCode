@@ -84,7 +84,11 @@ class ConversationStore {
   }
 
   async setCurrentConversationId(id: string): Promise<void> {
-    await AsyncStorage.setItem(KEYS.CURRENT, id);
+    if (id) {
+      await AsyncStorage.setItem(KEYS.CURRENT, id);
+    } else {
+      await AsyncStorage.removeItem(KEYS.CURRENT);
+    }
   }
 
   async createConversation(): Promise<Conversation> {

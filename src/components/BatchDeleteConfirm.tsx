@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Modal, ScrollView } from 'react-native';
-import { Trash2, AlertTriangle, Check, X } from 'lucide-react-native';
+import { Trash2, AlertTriangle, X } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
-import RNFS from 'react-native-fs';
 import { ToolCall } from '../types';
+import { workspaceFs } from '../services/WorkspaceFileSystem';
 
 interface Props {
   visible: boolean;
@@ -33,26 +33,31 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
       }
     } catch {}
   }
+  const pathsKey = allPaths.join('\n');
 
   useEffect(() => {
-    if (visible && homePath && allPaths.length > 0) {
+    const nextPaths = pathsKey ? pathsKey.split('\n') : [];
+    if (visible && homePath && nextPaths.length > 0) {
       setLoading(true);
       const checkPaths = async () => {
         const infos: PathInfo[] = [];
-        for (const path of allPaths) {
-          const fullPath = path.startsWith('/') ? path : `${homePath}/${path}`;
+        for (const path of nextPaths) {
+          const fullPath = workspaceFs.resolvePath(path, homePath);
           let isDirectory: boolean | null = null;
           let itemCount = 0;
 
           try {
-            const exists = await RNFS.exists(fullPath);
+            const exists = await workspaceFs.exists(fullPath);
             if (exists) {
               try {
-                const items = await RNFS.readDir(fullPath);
-                isDirectory = true;
-                itemCount = items.length;
+                const stat = await workspaceFs.stat(fullPath);
+                isDirectory = stat.isDirectory();
+                if (isDirectory) {
+                  const items = await workspaceFs.readDir(fullPath);
+                  itemCount = items.length;
+                }
               } catch {
-                isDirectory = false;
+                isDirectory = null;
               }
             }
           } catch {}
@@ -64,7 +69,7 @@ export default React.memo(function BatchDeleteConfirm({ visible, toolCalls, home
       };
       checkPaths();
     }
-  }, [visible, homePath]);
+  }, [visible, homePath, pathsKey]);
 
   const handleConfirm = useCallback(() => {
     onConfirm(true);

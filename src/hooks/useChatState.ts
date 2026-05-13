@@ -7,6 +7,7 @@ import { ToneMode, ReasoningEffort } from '../services/settings';
 import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor';
 import { agentToolManager } from '../mcp/AgentToolManager';
 import { conversationStore } from '../services/conversation';
+import { projectService } from '../services/ProjectService';
 import { isDangerousShellCommand } from '../utils/shellSafety';
 import { parseModelContext, formatContextSize } from '../utils/modelContext';
 import {
@@ -185,11 +186,25 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const abortControllerRef = useRef<AbortController | null>(null);
   const localMessagesRef = useRef<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
+  const conversationIdRef = useRef<string | null>(null);
+  const lastPersistedJsonRef = useRef('');
   const shellAutoApproveRef = useRef(false);
   const compactingRef = useRef(false);
 
   useEffect(() => {
     getHomePath().then(setHomePath);
+    return projectService.subscribe((project) => {
+      setHomePath(project.path);
+    });
+  }, []);
+
+  const updateConversationId = useCallback((id: string | null) => {
+    conversationIdRef.current = id;
+    lastPersistedJsonRef.current = '';
+    setConversationId(id);
+    if (id) {
+      conversationStore.setCurrentConversationId(id).catch(() => {});
+    }
   }, []);
 
   const loadInitialData = useCallback(async () => {
@@ -205,13 +220,15 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     if (convId) {
       const conv = await conversationStore.getConversation(convId);
       if (conv) {
-        setConversationId(conv.id);
+        updateConversationId(conv.id);
+        messagesRef.current = conv.messages;
+        lastPersistedJsonRef.current = JSON.stringify(conv.messages);
         setMessages(conv.messages);
       }
     }
 
     setLoading(false);
-  }, []);
+  }, [updateConversationId]);
 
   useEffect(() => {
     loadInitialData();
@@ -232,12 +249,35 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     });
   }, [reloadModel]);
 
+  const persistMessages = useCallback(async (
+    convId: string | null = conversationIdRef.current,
+    nextMessages: Message[] = messagesRef.current,
+  ) => {
+    if (!convId || nextMessages.length === 0) return;
+    const json = JSON.stringify(nextMessages);
+    if (lastPersistedJsonRef.current === json) return;
+    lastPersistedJsonRef.current = json;
+    await conversationStore.updateConversation(convId, { messages: nextMessages });
+  }, []);
+
+  const syncMessages = useCallback((
+    updater: Message[] | ((prev: Message[]) => Message[]),
+    convId: string | null = conversationIdRef.current,
+  ): Message[] => {
+    const prev = messagesRef.current;
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    messagesRef.current = next;
+    setMessages(next);
+    persistMessages(convId, next).catch(() => {});
+    return next;
+  }, [persistMessages]);
+
   useEffect(() => {
     messagesRef.current = messages;
     if (conversationId && messages.length > 0) {
-      conversationStore.updateConversation(conversationId, { messages });
+      persistMessages(conversationId, messages).catch(() => {});
     }
-  }, [conversationId, messages]);
+  }, [conversationId, messages, persistMessages]);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (atBottomRef.current) {
@@ -255,18 +295,18 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     atBottomRef.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   }, []);
 
-  const summarizeTitle = useCallback(async (titleModel: Model, firstUserMsg: string, firstAiMsg: string) => {
+  const summarizeTitle = useCallback(async (titleModel: Model, targetConversationId: string, firstUserMsg: string, firstAiMsg: string) => {
     try {
       const result = await aiService.sendMessage(titleModel, [
         { role: 'system', content: '用不超过10个字总结这段对话的主题，只输出标题，不要任何标点符号。' },
         { role: 'user', content: `用户: ${firstUserMsg}\n助手: ${firstAiMsg}` },
       ]);
       const title = result.text.trim().slice(0, 20);
-      if (title && conversationId) {
-        conversationStore.updateConversation(conversationId, { title });
+      if (title) {
+        conversationStore.updateConversation(targetConversationId, { title });
       }
     } catch {}
-  }, [conversationId]);
+  }, []);
 
   const toChatMessages = useCallback((msgs: Message[]): ChatMessage[] => {
     return msgs.filter(m => !m.excludeFromContext).map(m => ({
@@ -288,7 +328,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     const toolResult = await executeTool(tc, {
       onProgress: (update: Partial<ContentBlock>) => {
         if (tc.name === 'agent') {
-          setMessages(prev => prev.map(m => {
+          syncMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.blocks) {
               const updatedBlocks = m.blocks.map(b => {
                 if (b.type === 'tool_use' && b.id === tc.id) {
@@ -335,8 +375,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       isError: toolResult.isError,
     };
 
+    syncMessages([...messagesRef.current, toolMsg]);
     return { toolMsg, toolResult };
-  }, []);
+  }, [syncMessages]);
 
   const shouldConfirmToolCall = useCallback((tc: ToolCall): boolean => {
     if (
@@ -372,9 +413,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
       for (const { toolMsg, toolResult } of results) {
         localMessages.push(toolMsg);
-        setMessages(prev => {
-          const updated = [...prev, toolMsg];
-          return updated.map(m => {
+        syncMessages(prev => (
+          prev.map(m => {
             if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === toolMsg.toolCallId)) {
               const existingResults = m.toolResults || [];
               return {
@@ -388,8 +428,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
               };
             }
             return m;
-          });
-        });
+          })
+        ));
       }
     }
 
@@ -398,9 +438,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
       const { toolMsg, toolResult } = await executeToolCall(tc);
       localMessages.push(toolMsg);
-      setMessages(prev => {
-        const updated = [...prev, toolMsg];
-        return updated.map(m => {
+      syncMessages(prev => (
+        prev.map(m => {
           if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
             const existingResults = m.toolResults || [];
             return {
@@ -414,21 +453,20 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
             };
           }
           return m;
-        });
-      });
+        })
+      ));
     }
 
     return true;
-  }, [executeToolCall]);
+  }, [executeToolCall, syncMessages]);
 
   const persistTerminatedMessages = useCallback(() => {
     const terminated = markMessagesTerminated(messagesRef.current);
-    messagesRef.current = terminated;
-    setMessages(terminated);
-    if (conversationId && terminated.length > 0) {
-      conversationStore.updateConversation(conversationId, { messages: terminated });
+    syncMessages(terminated);
+    if (conversationIdRef.current && terminated.length > 0) {
+      persistMessages(conversationIdRef.current, terminated).catch(() => {});
     }
-  }, [conversationId]);
+  }, [persistMessages, syncMessages]);
 
   const runContextCompaction = useCallback(async (baseMessages: Message[], preservedTail: Message[] = []): Promise<Message[]> => {
     if (!model) return baseMessages;
@@ -451,8 +489,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     };
 
     const withProgress = [...baseMessages, ...preservedTail, progressMsg];
-    messagesRef.current = withProgress;
-    setMessages(withProgress);
+    syncMessages(withProgress);
     scrollToBottom(false);
 
     const compactController = new AbortController();
@@ -487,12 +524,11 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
         ...preservedTail,
         doneProgressMsg,
       ];
-      messagesRef.current = compacted;
-      setMessages(compacted);
+      syncMessages(compacted);
       scrollToBottom(false);
       return compacted;
     } catch (err) {
-      setMessages(prev => prev.map(m => m.id === progressId
+      syncMessages(prev => prev.map(m => m.id === progressId
         ? {
             ...m,
             streaming: false,
@@ -500,21 +536,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           }
         : m
       ));
-      messagesRef.current = messagesRef.current.map(m => m.id === progressId
-        ? {
-            ...m,
-            streaming: false,
-            blocks: [{ type: 'compact', content: '压缩', compactStatus: 'error' }],
-          }
-        : m
-      );
       throw err;
     } finally {
       if (abortControllerRef.current === compactController) {
         abortControllerRef.current = null;
       }
     }
-  }, [model, scrollToBottom, toChatMessages]);
+  }, [model, scrollToBottom, syncMessages, toChatMessages]);
 
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
@@ -538,12 +566,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     if (!model || streamingRef.current || compactingRef.current) return;
     const sentContent = composeUserContent(text, attachments);
     if (!sentContent.trim()) return;
+    const wasNewConversation = messagesRef.current.length === 0;
 
     let convId = conversationId;
     if (!convId) {
       const conv = await conversationStore.createConversation();
       convId = conv.id;
-      setConversationId(conv.id);
+      updateConversationId(conv.id);
     }
 
     const now = Date.now();
@@ -557,21 +586,26 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
     atBottomRef.current = true;
 
-    setMessages(prev => [...prev, userMsg]);
+    const initialMessages = [...messagesRef.current, userMsg];
+    syncMessages(initialMessages, convId);
+    if (wasNewConversation) {
+      const fallbackTitle = sentContent.trim().replace(/\s+/g, ' ').slice(0, 20) || '新对话';
+      conversationStore.updateConversation(convId, { title: fallbackTitle, messages: initialMessages }).catch(() => {});
+    }
     streamingRef.current = true;
     setStreaming(true);
 
-    const localMessages: Message[] = [...messages, userMsg];
+    const localMessages: Message[] = [...initialMessages];
     localMessagesRef.current = localMessages;
     let abortSignal: AbortSignal | null = null;
 
     try {
       const contextInfo = parseModelContext(model.modelId);
-      const canCompactExistingContext = messages.filter(m => !m.excludeFromContext).length >= 4;
+      const canCompactExistingContext = messagesRef.current.filter(m => !m.excludeFromContext).length >= 4;
       if (canCompactExistingContext && shouldCompactContext(localMessages, contextInfo.contextTokens)) {
         compactingRef.current = true;
         setCompacting(true);
-        const compactedMessages = await runContextCompaction(messages, [userMsg]);
+        const compactedMessages = await runContextCompaction(messagesRef.current.filter(m => m.id !== userMsg.id), [userMsg]);
         localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
         localMessagesRef.current = localMessages;
         compactingRef.current = false;
@@ -593,21 +627,21 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           id: aiId, role: 'assistant', content: '', blocks: [], timestamp: Date.now(), streaming: true,
         };
 
-        setMessages(prev => [...prev, aiPlaceholder]);
+        syncMessages(prev => [...prev, aiPlaceholder], convId);
 
         const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
 
         const result = await aiService.sendMessage(model, chatMessages, {
           onBlocks: (blocks) => {
             if (activeAbortSignal.aborted) return;
-            setMessages(prev => prev.map(m =>
+            syncMessages(prev => prev.map(m =>
               m.id === aiId ? { ...m, blocks, content: blocks.filter(b => b.type === 'text').map(b => b.content).join('') } : m,
-            ));
+            ), convId);
             scrollToBottom(false);
           },
           onToolCallDetected: (toolCall) => {
             if (activeAbortSignal.aborted) return;
-            setMessages(prev => prev.map(m => {
+            syncMessages(prev => prev.map(m => {
               if (m.id === aiId) {
                 const existingBlocks = m.blocks || [];
                 const hasToolBlock = existingBlocks.some(b => b.type === 'tool_use' && b.id === toolCall.id);
@@ -622,7 +656,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
                 }
               }
               return m;
-            }));
+            }), convId);
             scrollToBottom(false);
           },
         }, reasoningEffort, undefined, activeAbortSignal, preserveReasoning);
@@ -644,15 +678,15 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           reasoningDetails: result.reasoningDetails,
         };
 
-        setMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m));
+        syncMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m), convId);
         localMessages.push(assistantMsg);
         localMessagesRef.current = localMessages;
 
         if (activeAbortSignal.aborted) break;
 
         if (!result.toolCalls || result.toolCalls.length === 0) {
-          if (messages.length === 0) {
-            summarizeTitle(model, sentContent, result.text);
+          if (wasNewConversation) {
+            summarizeTitle(model, convId, sentContent, result.text);
           }
           break;
         }
@@ -675,8 +709,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           const cancelToolCall = (tc: ToolCall) => {
             const cancelMsg = createToolResultMessage(tc, '用户取消了此操作', true);
             localMessages.push(cancelMsg);
-            setMessages(prev => {
-              const updated = [...prev, cancelMsg];
+            syncMessages(prev => {
+              const updated = prev.some(m => m.id === cancelMsg.id) ? prev : [...prev, cancelMsg];
               return updated.map(m => {
                 if (m.role === 'assistant' && m.toolCalls?.some(t => t.id === tc.id)) {
                   return {
@@ -690,7 +724,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
                 }
                 return m;
               });
-            });
+            }, convId);
           };
 
           for (const tc of confirmToolCalls) {
@@ -733,7 +767,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       } else {
         console.error('[LineCode] sendMessage error:', err);
         const errMsg = err?.message || String(err) || '请求失败';
-        setMessages(prev => {
+        syncMessages(prev => {
           const last = prev[prev.length - 1];
           if (last?.streaming) {
             return prev.map(m => m.id === last.id
@@ -747,7 +781,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
             content: `请求失败: ${errMsg}`,
             timestamp: Date.now(),
           }];
-        });
+        }, convId);
       }
     } finally {
       if (abortSignal?.aborted) {
@@ -759,7 +793,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       setStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [model, messages, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction]);
+  }, [model, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, syncMessages, updateConversationId]);
 
   const resetShellAutoApprove = useCallback(() => {
     shellAutoApproveRef.current = false;
@@ -767,8 +801,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
   const clearMessages = useCallback(() => {
     shellAutoApproveRef.current = false;
-    setMessages([]);
-  }, []);
+    syncMessages([]);
+  }, [syncMessages]);
 
   const handleCompactContext = useCallback(async () => {
     if (streamingRef.current || compactingRef.current) return;
@@ -809,7 +843,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [pendingToolCall]);
 
   const handleToolReview = useCallback((toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => {
-    setMessages(prev => {
+    syncMessages(prev => {
       const next = prev.map(m => {
         if (m.role !== 'assistant' || !m.toolResults?.some(r => r.toolCallId === toolCallId)) {
           return m;
@@ -822,21 +856,20 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           ),
         };
       });
-      messagesRef.current = next;
       return next;
     });
-  }, []);
+  }, [syncMessages]);
 
   return {
     messages,
-    setMessages,
+    setMessages: syncMessages,
     model,
     loading,
     compacting,
     contextSizeLabel,
     contextPercent,
     conversationId,
-    setConversationId,
+    setConversationId: updateConversationId,
     flatListRef,
     streaming,
     handleSend,

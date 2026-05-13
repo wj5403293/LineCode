@@ -1,6 +1,6 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 export class FileWriteTool extends BaseTool {
   readonly name = 'file_write';
@@ -18,27 +18,29 @@ export class FileWriteTool extends BaseTool {
 
   async execute(input: { file_path: string; content: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = this.resolvePath(input.file_path, context.homePath);
+      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
       const dir = filePath.substring(0, filePath.lastIndexOf('/'));
 
-      const dirExists = await RNFS.exists(dir);
+      const dirExists = await workspaceFs.exists(dir);
       if (!dirExists) {
         await this.mkdirRecursive(dir);
       }
 
-      const fileExists = await RNFS.exists(filePath);
+      const fileExists = await workspaceFs.exists(filePath);
       if (fileExists) {
         try {
-          await RNFS.readDir(filePath);
-          return { 
-            content: `路径是一个目录，无法写入文件: ${input.file_path}\n如需创建文件，请指定完整文件路径。`, 
-            toolCallId: '', 
-            isError: true 
-          };
+          const stat = await workspaceFs.stat(filePath);
+          if (stat.isDirectory()) {
+            return {
+              content: `路径是一个目录，无法写入文件: ${input.file_path}\n如需创建文件，请指定完整文件路径。`,
+              toolCallId: '',
+              isError: true,
+            };
+          }
         } catch {}
       }
 
-      await RNFS.writeFile(filePath, input.content, 'utf8');
+      await workspaceFs.writeFile(filePath, input.content);
 
       const isNewFile = !fileExists;
       const lineCount = input.content.split('\n').length;
@@ -56,7 +58,7 @@ export class FileWriteTool extends BaseTool {
   }
 
   private async mkdirRecursive(dirPath: string): Promise<void> {
-    const exists = await RNFS.exists(dirPath);
+    const exists = await workspaceFs.exists(dirPath);
     if (exists) return;
 
     const parentDir = dirPath.substring(0, dirPath.lastIndexOf('/'));
@@ -64,11 +66,6 @@ export class FileWriteTool extends BaseTool {
       await this.mkdirRecursive(parentDir);
     }
 
-    await RNFS.mkdir(dirPath, { NSURLIsExcludedFromBackupKey: true });
-  }
-
-  private resolvePath(path: string, homePath: string): string {
-    if (path.startsWith('/')) return path;
-    return `${homePath}/${path}`;
+    await workspaceFs.mkdir(dirPath);
   }
 }

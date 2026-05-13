@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench, Palette, Archive } from 'lucide-react-native';
+import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench, Palette, Archive, Database, BatteryCharging } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -15,6 +15,8 @@ interface Props {
   onAbout: () => void;
   onTheme: () => void;
   onData: () => void;
+  onStorage: () => void;
+  onKeepAlive: () => void;
 }
 
 const SETTINGS_ITEMS = [
@@ -23,11 +25,13 @@ const SETTINGS_ITEMS = [
   { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
   { id: 'theme', label: '主题设置', desc: '亮色/暗色/跟随系统', icon: Palette },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
+  { id: 'storage', label: '存储管理', desc: '查看 diff、聊天、配置和 home 使用量', icon: Database },
+  { id: 'keepAlive', label: '保活设置', desc: '前台服务、静音播放和电池白名单', icon: BatteryCharging },
   { id: 'data', label: '数据与更新', desc: '热更新、导出和导入 .linecode', icon: Archive },
   { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },
 ];
 
-export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout, onTheme, onData }: Props) {
+export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout, onTheme, onData, onStorage, onKeepAlive }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -38,6 +42,8 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
     if (id === 'mcp') onMCP();
     if (id === 'theme') onTheme();
     if (id === 'data') onData();
+    if (id === 'storage') onStorage();
+    if (id === 'keepAlive') onKeepAlive();
     if (id === 'about') onAbout();
   };
 

@@ -1,6 +1,6 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 export class FileEditTool extends BaseTool {
   readonly name = 'file_edit';
@@ -19,29 +19,31 @@ export class FileEditTool extends BaseTool {
 
   async execute(input: { file_path: string; old_string: string; new_string: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = this.resolvePath(input.file_path, context.homePath);
-      const exists = await RNFS.exists(filePath);
+      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
+      const exists = await workspaceFs.exists(filePath);
       if (!exists) {
         return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
       }
 
       try {
-        await RNFS.readDir(filePath);
-        return { 
-          content: `路径是一个目录，无法编辑文件: ${input.file_path}\n如需编辑文件，请指定具体文件路径。`, 
-          toolCallId: '', 
-          isError: true 
-        };
+        const stat = await workspaceFs.stat(filePath);
+        if (stat.isDirectory()) {
+          return {
+            content: `路径是一个目录，无法编辑文件: ${input.file_path}\n如需编辑文件，请指定具体文件路径。`,
+            toolCallId: '',
+            isError: true,
+          };
+        }
       } catch {}
 
-      const content = await RNFS.readFile(filePath, 'utf8');
+      const content = await workspaceFs.readFile(filePath);
       if (!content.includes(input.old_string)) {
         return { content: `未找到匹配的文本`, toolCallId: '', isError: true };
       }
 
       const count = content.split(input.old_string).length - 1;
       const newContent = content.replace(input.old_string, input.new_string);
-      await RNFS.writeFile(filePath, newContent, 'utf8');
+      await workspaceFs.writeFile(filePath, newContent);
 
       return {
         content: `成功编辑文件 ${input.file_path} (${count} 处匹配已替换)`,
@@ -52,8 +54,4 @@ export class FileEditTool extends BaseTool {
     }
   }
 
-  private resolvePath(path: string, homePath: string): string {
-    if (path.startsWith('/')) return path;
-    return `${homePath}/${path}`;
-  }
 }

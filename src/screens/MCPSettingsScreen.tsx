@@ -93,10 +93,10 @@ export default function MCPSettingsScreen({ onBack }: Props) {
     });
   }, []);
 
-  const handleToggle = useCallback(async (id: string) => {
-    await mcpService.toggleMCP(id);
+  const handleToggle = useCallback(async (id: string, enabled: boolean) => {
+    await mcpService.setMCPEnabled(id, enabled);
     const updated = await mcpService.getConfigs();
-    setConfigs(updated);
+    setConfigs(updated.map(config => ({ ...config, tools: [...config.tools] })));
   }, []);
 
   const handleModeChange = useCallback(async (mode: MCPExecutionMode) => {
@@ -465,7 +465,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
                 </View>
                 <Switch
                   value={config.enabled}
-                  onValueChange={() => handleToggle(config.id)}
+                  onValueChange={(enabled) => handleToggle(config.id, enabled)}
                   trackColor={{ false: colors.surfaceLight, true: colors.accentDim }}
                   thumbColor={config.enabled ? colors.accent : colors.textTertiary}
                 />

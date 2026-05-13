@@ -8,6 +8,13 @@ export type ThemeMode = 'system' | 'light' | 'dark' | 'coffee' | 'vscode' | 'git
 export type BrowserMode = 'builtin' | 'external';
 export type MCPExecutionMode = 'local' | 'ssh';
 
+export interface KeepAliveSettings {
+  wakeLock: boolean;
+  foregroundService: boolean;
+  fakeMusic: boolean;
+  ignoreBatteryOptimizations: boolean;
+}
+
 const THEME_MODES: readonly ThemeMode[] = [
   'system',
   'light',
@@ -50,6 +57,7 @@ const KEYS = {
   FIRST_LAUNCH_GUIDE_SEEN: '@lineai_first_launch_guide_seen',
   MCP_EXECUTION_MODE: '@lineai_mcp_execution_mode',
   AUTO_UPDATE_ENABLED: '@linecode_auto_update_enabled',
+  KEEP_ALIVE: '@linecode_keep_alive_settings',
 } as const;
 
 class SettingsService {
@@ -194,6 +202,38 @@ class SettingsService {
 
   async setAutoUpdateEnabled(enabled: boolean): Promise<void> {
     await this.set(KEYS.AUTO_UPDATE_ENABLED, enabled);
+  }
+
+  async getKeepAliveSettings(): Promise<KeepAliveSettings> {
+    const json = await AsyncStorage.getItem(KEYS.KEEP_ALIVE);
+    if (!json) {
+      return {
+        wakeLock: true,
+        foregroundService: false,
+        fakeMusic: false,
+        ignoreBatteryOptimizations: false,
+      };
+    }
+    try {
+      const parsed = JSON.parse(json) as Partial<KeepAliveSettings>;
+      return {
+        wakeLock: parsed.wakeLock !== false,
+        foregroundService: parsed.foregroundService === true,
+        fakeMusic: parsed.fakeMusic === true,
+        ignoreBatteryOptimizations: parsed.ignoreBatteryOptimizations === true,
+      };
+    } catch {
+      return {
+        wakeLock: true,
+        foregroundService: false,
+        fakeMusic: false,
+        ignoreBatteryOptimizations: false,
+      };
+    }
+  }
+
+  async setKeepAliveSettings(settings: KeepAliveSettings): Promise<void> {
+    await AsyncStorage.setItem(KEYS.KEEP_ALIVE, JSON.stringify(settings));
   }
 }
 

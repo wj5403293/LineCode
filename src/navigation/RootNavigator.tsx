@@ -14,6 +14,8 @@ import ThemeSettingsScreen from '../screens/ThemeSettingsScreen';
 import InAppBrowserScreen from '../screens/InAppBrowserScreen';
 import ShellCommandScreen from '../screens/ShellCommandScreen';
 import DataSettingsScreen from '../screens/DataSettingsScreen';
+import StorageManagementScreen from '../screens/StorageManagementScreen';
+import KeepAliveSettingsScreen from '../screens/KeepAliveSettingsScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -28,6 +30,8 @@ export type RootStackParamList = {
   Licenses: undefined;
   ThemeSettings: undefined;
   DataSettings: undefined;
+  StorageManagement: undefined;
+  KeepAliveSettings: undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
 };
@@ -61,7 +65,19 @@ export default function RootNavigator() {
             onAbout={() => navigation.navigate('About')}
             onTheme={() => navigation.navigate('ThemeSettings')}
             onData={() => navigation.navigate('DataSettings')}
+            onStorage={() => navigation.navigate('StorageManagement')}
+            onKeepAlive={() => navigation.navigate('KeepAliveSettings')}
           />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="KeepAliveSettings">
+        {({ navigation }) => (
+          <KeepAliveSettingsScreen onBack={() => navigation.goBack()} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="StorageManagement">
+        {({ navigation }) => (
+          <StorageManagementScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="DataSettings">

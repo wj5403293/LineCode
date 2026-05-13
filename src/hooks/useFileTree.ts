@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import RNFS from 'react-native-fs';
+import { basename, workspaceFs } from '../services/WorkspaceFileSystem';
 
 export interface FileTreeNode {
   name: string;
@@ -11,12 +11,12 @@ export interface FileTreeNode {
 
 export function useFileTree(rootPath: string) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   const loadTree = useCallback(async (dirPath?: string): Promise<FileTreeNode> => {
     const path = dirPath || rootPath;
     try {
-      const items = await RNFS.readDir(path);
+      const items = await workspaceFs.readDir(path);
       const children: FileTreeNode[] = [];
 
       for (const item of items.sort((a, b) => {
@@ -32,7 +32,7 @@ export function useFileTree(rootPath: string) {
       }
 
       const node: FileTreeNode = {
-        name: path.split('/').pop() || 'home',
+        name: basename(path) || 'home',
         path,
         isDirectory: true,
         children,
@@ -71,22 +71,20 @@ export function useFileTree(rootPath: string) {
   const createItem = useCallback(async (parentPath: string, name: string, isDirectory: boolean) => {
     const fullPath = `${parentPath}/${name}`;
     if (isDirectory) {
-      await RNFS.mkdir(fullPath);
+      await workspaceFs.mkdir(fullPath);
     } else {
-      await RNFS.writeFile(fullPath, '', 'utf8');
+      await workspaceFs.writeFile(fullPath, '');
     }
     await loadTree();
   }, [loadTree]);
 
   const deleteItem = useCallback(async (path: string) => {
-    await RNFS.unlink(path);
+    await workspaceFs.unlink(path);
     await loadTree();
   }, [loadTree]);
 
   const renameItem = useCallback(async (oldPath: string, newName: string) => {
-    const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
-    const newPath = `${parentDir}/${newName}`;
-    await RNFS.moveFile(oldPath, newPath);
+    await workspaceFs.rename(oldPath, newName);
     await loadTree();
   }, [loadTree]);
 

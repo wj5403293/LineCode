@@ -7,10 +7,6 @@ export interface PermissionResult {
   reason?: string;
 }
 
-const READONLY_TOOLS = new Set([
-  'file_read', 'glob', 'web_search', 'web_fetch',
-]);
-
 const DANGEROUS_TOOLS = new Set([
   'file_delete',
   'shell_execute',

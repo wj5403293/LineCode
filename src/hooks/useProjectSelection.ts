@@ -1,23 +1,70 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { projectService, ProjectOption } from '../services/ProjectService';
 
-export interface ProjectOption {
-  id: string;
-  label: string;
-}
+export type { ProjectOption };
 
-const PROJECTS: ProjectOption[] = [
-  { id: '1', label: 'LineCode 主项目' },
-  { id: '2', label: '移动端 App' },
-  { id: '3', label: '后端服务' },
-  { id: '4', label: '组件库' },
-];
+const DEFAULT_PROJECT: ProjectOption = {
+  id: 'default',
+  label: 'LineCode',
+  desc: '默认 home 工作区',
+  path: '',
+  source: 'default',
+};
 
 export function useProjectSelection() {
-  const [selectedProject, setSelectedProject] = useState(PROJECTS[0]);
+  const [projects, setProjects] = useState<ProjectOption[]>([DEFAULT_PROJECT]);
+  const [selectedProject, setSelectedProject] = useState<ProjectOption>(DEFAULT_PROJECT);
 
-  const handleProjectSelect = useCallback((id: string) => {
-    setSelectedProject(PROJECTS.find(p => p.id === id) || PROJECTS[0]);
+  const refreshProjects = useCallback(async () => {
+    const [nextProjects, selected] = await Promise.all([
+      projectService.getProjects(),
+      projectService.getSelectedProject(),
+    ]);
+    setProjects(nextProjects);
+    setSelectedProject(selected);
+    return { projects: nextProjects, selected };
   }, []);
 
-  return { projects: PROJECTS, selectedProject, handleProjectSelect };
+  useEffect(() => {
+    refreshProjects().catch(() => {});
+    return projectService.subscribe((selected, nextProjects) => {
+      setProjects(nextProjects);
+      setSelectedProject(selected);
+    });
+  }, [refreshProjects]);
+
+  const handleProjectSelect = useCallback(async (id: string) => {
+    const selected = await projectService.setSelectedProject(id);
+    const nextProjects = await projectService.getProjects();
+    setProjects(nextProjects);
+    setSelectedProject(selected);
+    return selected;
+  }, []);
+
+  const handleOpenProject = useCallback(async () => {
+    const selected = await projectService.openSafProject();
+    if (selected) {
+      const nextProjects = await projectService.getProjects();
+      setProjects(nextProjects);
+      setSelectedProject(selected);
+    }
+    return selected;
+  }, []);
+
+  const handleCreateProject = useCallback(async (name: string) => {
+    const selected = await projectService.createProject(name);
+    const nextProjects = await projectService.getProjects();
+    setProjects(nextProjects);
+    setSelectedProject(selected);
+    return selected;
+  }, []);
+
+  return {
+    projects,
+    selectedProject,
+    handleProjectSelect,
+    handleOpenProject,
+    handleCreateProject,
+    refreshProjects,
+  };
 }

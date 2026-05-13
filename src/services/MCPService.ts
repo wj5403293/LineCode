@@ -103,18 +103,26 @@ class MCPService {
       this.configs = normalized.configs;
       if (normalized.changed) await this.save();
     } else {
-      this.configs = DEFAULT_CONFIGS;
+      this.configs = DEFAULT_CONFIGS.map(config => ({ ...config, tools: [...config.tools] }));
       await this.save();
     }
     return this.configs!;
+  }
+
+  async setMCPEnabled(id: string, enabled: boolean): Promise<void> {
+    const configs = await this.getConfigs();
+    const config = configs.find(c => c.id === id);
+    if (config) {
+      config.enabled = enabled;
+      await this.save();
+    }
   }
 
   async toggleMCP(id: string): Promise<void> {
     const configs = await this.getConfigs();
     const config = configs.find(c => c.id === id);
     if (config) {
-      config.enabled = !config.enabled;
-      await this.save();
+      await this.setMCPEnabled(id, !config.enabled);
     }
   }
 

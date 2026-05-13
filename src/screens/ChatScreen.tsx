@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useEffect } from 'react';
-import { Alert, View, FlatList, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, useEffect, useState } from 'react';
+import { Alert, View, FlatList, StyleSheet, Modal, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState';
 import Sidebar from '../components/Sidebar';
 import BatchDeleteConfirm from '../components/BatchDeleteConfirm';
 import { Message } from '../types';
-import { spacing } from '../constants/theme';
+import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { PERMISSIONS, MORE_OPTIONS } from '../constants/options';
 import { useChatState } from '../hooks/useChatState';
@@ -20,7 +20,7 @@ import { useConversationManager } from '../hooks/useConversationManager';
 import { useProjectSelection } from '../hooks/useProjectSelection';
 import { PermissionMode } from '../services/settings';
 import { permissionService } from '../services/PermissionService';
-import { setKeepAwake } from '../utils/keepAwake';
+import { setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '../utils/keepAwake';
 
 interface Props {
   onGoSettings: () => void;
@@ -40,6 +40,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     preserveReasoning,
     permissionMode,
     mcpExecutionMode,
+    keepAliveSettings,
     updatePermissionMode,
   } = useSettings();
   const chat = useChatState(toneMode, reasoningEffort, preserveReasoning);
@@ -78,7 +79,9 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleNewConversation: createConversation,
     handleSelectConversation: selectConversation,
   } = conversation;
-  const { projects, selectedProject, handleProjectSelect } = useProjectSelection();
+  const { projects, selectedProject, handleProjectSelect, handleOpenProject, handleCreateProject } = useProjectSelection();
+  const [createProjectVisible, setCreateProjectVisible] = useState(false);
+  const [projectName, setProjectName] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -93,9 +96,16 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   }, [permissionMode]);
 
   useEffect(() => {
-    setKeepAwake(streaming || compacting);
-    return () => setKeepAwake(false);
-  }, [streaming, compacting]);
+    const active = streaming || compacting;
+    setKeepAwake(keepAliveSettings.wakeLock && active);
+    setForegroundCodingService(keepAliveSettings.foregroundService && active);
+    setFakeMusicPlayback(keepAliveSettings.fakeMusic && active);
+    return () => {
+      setKeepAwake(false);
+      setForegroundCodingService(false);
+      setFakeMusicPlayback(false);
+    };
+  }, [streaming, compacting, keepAliveSettings]);
 
   const handlePermissionSelect = useCallback(async (id: string) => {
     const mode = id as PermissionMode;
@@ -166,15 +176,48 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   }, [onGoSettings, closeDialog, clearMessages, handleCompactContext]);
 
   const handleProjectDialogSelect = useCallback((id: string) => {
-    handleProjectSelect(id);
+    if (id === '__open_project') {
+      closeDialog();
+      handleOpenProject().catch((err: any) => Alert.alert('打开项目失败', err?.message || String(err)));
+      return;
+    }
+    if (id === '__create_project') {
+      closeDialog();
+      setProjectName('');
+      setCreateProjectVisible(true);
+      return;
+    }
+    handleProjectSelect(id).catch((err: any) => Alert.alert('切换项目失败', err?.message || String(err)));
     closeDialog();
-  }, [handleProjectSelect, closeDialog]);
+  }, [handleProjectSelect, handleOpenProject, closeDialog]);
+
+  const handleOpenProjectAction = useCallback(() => {
+    handleOpenProject().catch((err: any) => Alert.alert('打开项目失败', err?.message || String(err)));
+  }, [handleOpenProject]);
+
+  const handleCreateProjectAction = useCallback(() => {
+    setProjectName('');
+    setCreateProjectVisible(true);
+  }, []);
+
+  const submitCreateProject = useCallback(async () => {
+    try {
+      const name = projectName.trim();
+      if (!name) return;
+      await handleCreateProject(name);
+      setCreateProjectVisible(false);
+      setProjectName('');
+    } catch (err: any) {
+      Alert.alert('创建项目失败', err?.message || String(err));
+    }
+  }, [handleCreateProject, projectName]);
 
   const handleNewConversation = useCallback(async () => {
     resetShellAutoApprove();
-    await createConversation();
+    const conv = await createConversation();
+    setConversationId(conv.id);
     setMessages([]);
-  }, [createConversation, resetShellAutoApprove, setMessages]);
+  }, [createConversation, resetShellAutoApprove, setConversationId, setMessages]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
     resetShellAutoApprove();
@@ -198,6 +241,19 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
             onPressMore={() => openDialog('more')}
           />
           <EmptyState onGoSettings={onGoSettings} />
+          <Dialog
+            visible={dialog === 'project'}
+            title="项目"
+            options={[
+              ...projects,
+              { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
+              { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
+            ]}
+            selectedId={selectedProject.id}
+            onSelect={handleProjectDialogSelect}
+            onClose={closeDialog}
+          />
+          <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
           <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
         </View>
         <Sidebar
@@ -206,6 +262,17 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           onClose={closeSidebar}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
+          homePath={homePath}
+          projectLabel={selectedProject.label}
+          onOpenProject={handleOpenProjectAction}
+          onCreateProject={handleCreateProjectAction}
+        />
+        <CreateProjectModal
+          visible={createProjectVisible}
+          value={projectName}
+          onChangeText={setProjectName}
+          onCancel={() => setCreateProjectVisible(false)}
+          onConfirm={submitCreateProject}
         />
       </>
     );
@@ -252,7 +319,18 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           contextPercent={contextPercent}
         />
 
-        <Dialog visible={dialog === 'project'} title="项目" options={projects} selectedId={selectedProject.id} onSelect={handleProjectDialogSelect} onClose={closeDialog} />
+        <Dialog
+          visible={dialog === 'project'}
+          title="项目"
+          options={[
+            ...projects,
+            { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
+            { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
+          ]}
+          selectedId={selectedProject.id}
+          onSelect={handleProjectDialogSelect}
+          onClose={closeDialog}
+        />
         <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
         <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
 
@@ -262,6 +340,10 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           onClose={closeSidebar}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
+          homePath={homePath}
+          projectLabel={selectedProject.label}
+          onOpenProject={handleOpenProjectAction}
+          onCreateProject={handleCreateProjectAction}
         />
 
         <BatchDeleteConfirm
@@ -271,7 +353,56 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           onConfirm={handleToolConfirm}
         />
       </View>
+      <CreateProjectModal
+        visible={createProjectVisible}
+        value={projectName}
+        onChangeText={setProjectName}
+        onCancel={() => setCreateProjectVisible(false)}
+        onConfirm={submitCreateProject}
+      />
     </>
+  );
+}
+
+function CreateProjectModal({
+  visible,
+  value,
+  onChangeText,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  value: string;
+  onChangeText: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated }]}>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>创建项目</Text>
+          <TextInput
+            style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderLight }]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder="项目名称"
+            placeholderTextColor={colors.textTertiary}
+            autoFocus
+            autoCapitalize="none"
+          />
+          <View style={styles.modalActions}>
+            <TouchableOpacity style={styles.modalBtn} onPress={onCancel}>
+              <Text style={[styles.modalBtnText, { color: colors.textSecondary }]}>取消</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.accent }]} onPress={onConfirm}>
+              <Text style={[styles.modalBtnText, { color: colors.textOnColor }]}>创建</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -279,4 +410,46 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { flex: 1 },
   listContent: { paddingVertical: spacing.sm },
+  modalOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+  },
+  modalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: '700',
+    marginBottom: spacing.md,
+  },
+  modalInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    minHeight: 42,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSizes.md,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  modalBtn: {
+    minHeight: 38,
+    minWidth: 72,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  modalBtnText: {
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+  },
 });

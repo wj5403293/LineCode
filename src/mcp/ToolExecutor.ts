@@ -1,21 +1,12 @@
-import RNFS from 'react-native-fs';
 import { ToolCall, ToolResult, ContentBlock } from '../types';
 import { createDefaultRegistry, ToolContext } from './tools';
 import { diffService } from '../services/DiffService';
 import { permissionService } from '../services/PermissionService';
-
-const HOME_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/home`;
-
-async function ensureHomeDir(): Promise<void> {
-  const exists = await RNFS.exists(HOME_DIR);
-  if (!exists) {
-    await RNFS.mkdir(HOME_DIR);
-  }
-}
+import { projectService } from '../services/ProjectService';
+import { workspaceFs } from '../services/WorkspaceFileSystem';
 
 export async function getHomePath(): Promise<string> {
-  await ensureHomeDir();
-  return HOME_DIR;
+  return projectService.getCurrentHomePath();
 }
 
 export interface ExecuteToolOptions {
@@ -67,21 +58,29 @@ export async function executeTool(
 
   if (tool.category === 'write' && tool.name !== 'file_delete') {
     const filePath = String(input.file_path || '');
-    const fullPath = filePath.startsWith('/') ? filePath : `${homePath}/${filePath}`;
+    const fullPath = workspaceFs.resolvePath(filePath, homePath);
 
     try {
       let oldContent = '';
-      const exists = await RNFS.exists(fullPath);
+      const exists = await workspaceFs.exists(fullPath);
       if (exists) {
         try {
-          await RNFS.readDir(fullPath);
+          const stat = await workspaceFs.stat(fullPath);
+          if (!stat.isDirectory()) {
+            oldContent = await workspaceFs.readFile(fullPath);
+          } else {
+            return {
+              toolCallId: toolCall.id,
+              content: `路径是一个目录，无法写入文件: ${filePath}\n如需创建文件，请指定完整文件路径。`,
+              isError: true,
+            };
+          }
+        } catch {
           return {
             toolCallId: toolCall.id,
-            content: `路径是一个目录，无法写入文件: ${filePath}\n如需创建文件，请指定完整文件路径。`,
+            content: `无法读取原文件: ${filePath}`,
             isError: true,
           };
-        } catch {
-          oldContent = await RNFS.readFile(fullPath, 'utf8');
         }
       }
 
@@ -90,7 +89,7 @@ export async function executeTool(
       if (!result.isError) {
         let newContent = '';
         try {
-          newContent = await RNFS.readFile(fullPath, 'utf8');
+          newContent = await workspaceFs.readFile(fullPath);
         } catch {
           newContent = String(input.content || '');
         }

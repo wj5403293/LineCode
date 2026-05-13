@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { settingsService, DisplayMode, ToneMode, ReasoningEffort, PermissionMode, MCPExecutionMode } from '../services/settings';
+import { settingsService, DisplayMode, ToneMode, ReasoningEffort, PermissionMode, MCPExecutionMode, KeepAliveSettings } from '../services/settings';
 
 export function useSettings() {
   const [codeWrap, setCodeWrap] = useState(false);
@@ -11,6 +11,12 @@ export function useSettings() {
   const [preserveReasoning, setPreserveReasoning] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('auto');
   const [mcpExecutionMode, setMcpExecutionMode] = useState<MCPExecutionMode>('local');
+  const [keepAliveSettings, setKeepAliveSettings] = useState<KeepAliveSettings>({
+    wakeLock: true,
+    foregroundService: false,
+    fakeMusic: false,
+    ignoreBatteryOptimizations: false,
+  });
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -24,7 +30,8 @@ export function useSettings() {
       settingsService.getPreserveReasoning(),
       settingsService.getPermissionMode(),
       settingsService.getMCPExecutionMode(),
-    ]).then(([wrap, display, tone, scroll, autoExpand, effort, preserve, perm, executionMode]) => {
+      settingsService.getKeepAliveSettings(),
+    ]).then(([wrap, display, tone, scroll, autoExpand, effort, preserve, perm, executionMode, keepAlive]) => {
       setCodeWrap(wrap);
       setDisplayMode(display);
       setToneMode(tone);
@@ -34,6 +41,7 @@ export function useSettings() {
       setPreserveReasoning(preserve);
       setPermissionMode(perm);
       setMcpExecutionMode(executionMode);
+      setKeepAliveSettings(keepAlive);
       setLoaded(true);
     });
   }, []);
@@ -48,6 +56,11 @@ export function useSettings() {
     setMcpExecutionMode(mode);
   }, []);
 
+  const updateKeepAliveSettings = useCallback(async (settings: KeepAliveSettings) => {
+    await settingsService.setKeepAliveSettings(settings);
+    setKeepAliveSettings(settings);
+  }, []);
+
   return {
     codeWrap,
     displayMode,
@@ -58,8 +71,10 @@ export function useSettings() {
     preserveReasoning,
     permissionMode,
     mcpExecutionMode,
+    keepAliveSettings,
     updatePermissionMode,
     updateMCPExecutionMode,
+    updateKeepAliveSettings,
     loaded,
   };
 }

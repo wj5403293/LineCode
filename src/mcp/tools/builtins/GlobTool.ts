@@ -1,6 +1,6 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
+import { workspaceFs } from '../../../services/WorkspaceFileSystem';
 
 export class GlobTool extends BaseTool {
   readonly name = 'glob';
@@ -19,7 +19,7 @@ export class GlobTool extends BaseTool {
   async execute(input: { pattern: string; path?: string }, context: ToolContext): Promise<ToolResult> {
     try {
       const searchPath = input.path
-        ? (input.path.startsWith('/') ? input.path : `${context.homePath}/${input.path}`)
+        ? workspaceFs.resolvePath(input.path, context.homePath)
         : context.homePath;
 
       const results = await this.search(searchPath, input.pattern, searchPath);
@@ -42,7 +42,7 @@ export class GlobTool extends BaseTool {
   private async search(dir: string, pattern: string, rootPath: string): Promise<string[]> {
     const results: string[] = [];
     try {
-      const items = await RNFS.readDir(dir);
+      const items = await workspaceFs.readDir(dir);
       for (const item of items) {
         const relativePath = item.path.replace(rootPath, '').replace(/^\//, '');
         if (item.isDirectory()) {
