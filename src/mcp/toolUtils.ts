@@ -2,6 +2,7 @@ import { ToolCall, AgentToolCall, ToolCategory } from '../types';
 
 export const TOOL_CATEGORIES = {
   READ: new Set(['file_read', 'glob']),
+  WEB: new Set(['web_search', 'web_fetch']),
   WRITE: new Set(['file_write', 'file_edit']),
   DELETE: new Set(['file_delete']),
   HTTP: new Set(['http_server']),
@@ -11,6 +12,7 @@ export const TOOL_CATEGORIES = {
 
 export function getToolCategory(name: string): ToolCategory | null {
   if (TOOL_CATEGORIES.READ.has(name)) return 'read';
+  if (TOOL_CATEGORIES.WEB.has(name)) return 'read';
   if (TOOL_CATEGORIES.WRITE.has(name)) return 'write';
   if (TOOL_CATEGORIES.DELETE.has(name)) return 'write';
   if (TOOL_CATEGORIES.HTTP.has(name)) return 'system';
@@ -20,7 +22,7 @@ export function getToolCategory(name: string): ToolCategory | null {
 }
 
 export function isReadTool(name: string): boolean {
-  return TOOL_CATEGORIES.READ.has(name);
+  return TOOL_CATEGORIES.READ.has(name) || TOOL_CATEGORIES.WEB.has(name);
 }
 
 export function isWriteTool(name: string): boolean {

@@ -13,9 +13,11 @@ import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
 import { openURL } from '../utils/openURL';
 import { GPT55_PROMO_TITLE, GPT55_PROMO_URL } from '../constants/promo';
+import { getModelProviderPreset } from '../constants/modelProviders';
 
 interface Props {
   onBack: () => void;
+  presetId?: string;
 }
 
 const CUSTOM_ID = '__custom__';
@@ -45,14 +47,16 @@ const PROVIDER_BASE_URL_HINTS: Record<ProviderId, string> = {
   anthropic: 'Anthropic 协议必须填到 /anthropic 结尾，例如 https://api.example.com/anthropic；不要加 /v1/messages。',
 };
 
-export default function ModelAddScreen({ onBack }: Props) {
+export default function ModelAddScreen({ onBack, presetId }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const [provider, setProvider] = useState<ProviderId>('openai');
+  const preset = getModelProviderPreset(presetId);
+  const lockedPreset = !!preset;
+  const [provider, setProvider] = useState<ProviderId>(preset?.provider || 'openai');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
+  const [baseUrl, setBaseUrl] = useState(preset?.baseUrl || '');
 
   const [modelId, setModelId] = useState('');
   const [isCustomId, setIsCustomId] = useState(false);
@@ -61,9 +65,12 @@ export default function ModelAddScreen({ onBack }: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
 
-  const effectiveBaseUrl = baseUrl.trim() || PROVIDER_DEFAULT_BASE_URLS[provider];
+  const effectiveBaseUrl = preset
+    ? (baseUrl.trim() || preset.baseUrl)
+    : (baseUrl.trim() || PROVIDER_DEFAULT_BASE_URLS[provider]);
   const canQuery = !!(effectiveBaseUrl && apiKey.trim());
-  const canSave = !!(name.trim() && modelId.trim() && apiKey.trim());
+  const resolvedName = name.trim() || (preset ? modelId.trim() : '');
+  const canSave = !!(resolvedName && modelId.trim() && apiKey.trim());
 
   const handleFetchModels = useCallback(async () => {
     if (!canQuery) return;
@@ -128,9 +135,10 @@ export default function ModelAddScreen({ onBack }: Props) {
     } else {
       setIsCustomId(false);
       setModelId(id);
+      if (preset && !name.trim()) setName(id);
     }
     setShowModelPicker(false);
-  }, []);
+  }, [name, preset]);
 
   const handleSave = useCallback(async () => {
     if (!canSave) return;
@@ -138,8 +146,9 @@ export default function ModelAddScreen({ onBack }: Props) {
     const models = await modelStorage.getModels();
     const newModel: Model = {
       id: String(Date.now()),
-      name: name.trim(),
+      name: resolvedName,
       provider,
+      providerLabel: preset?.label,
       modelId: modelId.trim(),
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || undefined,
@@ -153,7 +162,7 @@ export default function ModelAddScreen({ onBack }: Props) {
     }
 
     onBack();
-  }, [name, modelId, apiKey, baseUrl, provider, canSave, onBack]);
+  }, [resolvedName, modelId, apiKey, baseUrl, provider, preset?.label, canSave, onBack]);
 
   const handleOpenPromo = useCallback(() => {
     openURL(GPT55_PROMO_URL, (url) => navigation.navigate('InAppBrowser', { url })).catch(() => {});
@@ -180,15 +189,29 @@ export default function ModelAddScreen({ onBack }: Props) {
       <ScreenHeader title="添加模型" onBack={onBack} rightAction={rightAction} />
 
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>提供商</Text>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          {preset ? `提供商：${preset.label}` : '提供商'}
+        </Text>
         <View style={styles.toggleRow}>
           {(['openai', 'codex', 'anthropic'] as const).map(p => (
             <TouchableOpacity
               key={p}
-              style={[styles.toggleBtn, { backgroundColor: provider === p ? colors.accent : colors.surfaceLight }]}
-              onPress={() => { setProvider(p); setFetchedModels([]); setModelId(''); setIsCustomId(false); }}
+              style={[
+                styles.toggleBtn,
+                { backgroundColor: provider === p ? colors.accent : colors.surfaceLight },
+                lockedPreset && p !== provider && styles.toggleBtnDisabled,
+              ]}
+              onPress={() => {
+                if (lockedPreset) return;
+                setProvider(p);
+                setBaseUrl(baseUrl);
+                setFetchedModels([]);
+                setModelId('');
+                setIsCustomId(false);
+              }}
+              disabled={lockedPreset}
             >
-              <Text style={[styles.toggleText, { color: provider === p ? '#000' : colors.textSecondary }]}>
+              <Text style={[styles.toggleText, { color: provider === p ? colors.textOnColor : colors.textSecondary }]}>
                 {PROVIDER_LABELS[p]}
               </Text>
             </TouchableOpacity>
@@ -198,7 +221,7 @@ export default function ModelAddScreen({ onBack }: Props) {
         <Text style={[styles.label, { color: colors.textSecondary }]}>名称</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-          placeholder="如 GPT-4o、Claude Sonnet"
+          placeholder={preset ? '可留空，默认使用模型 ID' : '如 GPT-4o、Claude Sonnet'}
           placeholderTextColor={colors.textTertiary}
           value={name}
           onChangeText={setName}
@@ -207,14 +230,14 @@ export default function ModelAddScreen({ onBack }: Props) {
         <Text style={[styles.label, { color: colors.textSecondary }]}>Base URL</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-          placeholder={PROVIDER_PLACEHOLDERS[provider]}
+          placeholder={preset?.placeholder || PROVIDER_PLACEHOLDERS[provider]}
           placeholderTextColor={colors.textTertiary}
           value={baseUrl}
           onChangeText={setBaseUrl}
           autoCapitalize="none"
         />
         <Text style={[styles.hintText, { color: colors.textTertiary }]}>
-          {PROVIDER_BASE_URL_HINTS[provider]}
+          {preset?.hint || PROVIDER_BASE_URL_HINTS[provider]}
         </Text>
 
         <Text style={[styles.label, { color: colors.textSecondary }]}>API Key</Text>
@@ -266,11 +289,11 @@ export default function ModelAddScreen({ onBack }: Props) {
               activeOpacity={0.7}
             >
               {fetchingModels ? (
-                <ActivityIndicator size="small" color={canQuery ? '#000' : colors.textTertiary} />
+                <ActivityIndicator size="small" color={canQuery ? colors.textOnColor : colors.textTertiary} />
               ) : (
                 <>
-                  <Search size={16} color={canQuery ? '#000' : colors.textTertiary} />
-                  <Text style={[styles.queryText, { color: canQuery ? '#000' : colors.textTertiary }]}>查询</Text>
+                  <Search size={16} color={canQuery ? colors.textOnColor : colors.textTertiary} />
+                  <Text style={[styles.queryText, { color: canQuery ? colors.textOnColor : colors.textTertiary }]}>查询</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -368,6 +391,9 @@ const styles = StyleSheet.create({
   toggleBtn: {
     flex: 1, paddingVertical: spacing.md, borderRadius: radius.md,
     alignItems: 'center',
+  },
+  toggleBtnDisabled: {
+    opacity: 0.45,
   },
   toggleText: { fontSize: fontSizes.md, fontWeight: '600' },
   input: {

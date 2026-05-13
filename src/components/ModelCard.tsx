@@ -36,7 +36,7 @@ export default React.memo(function ModelCard({ model, isSelected, isMultiSelect,
   return (
     <TouchableOpacity style={cardStyle} onPress={onPress} onLongPress={onLongPress} activeOpacity={0.7}>
       <View style={[styles.badge, { backgroundColor: PROVIDER_COLORS[model.provider] || colors.surfaceLight }]}>
-        <Text style={styles.badgeText}>{PROVIDER_LABELS[model.provider] || model.provider}</Text>
+        <Text style={styles.badgeText}>{model.providerLabel || PROVIDER_LABELS[model.provider] || model.provider}</Text>
       </View>
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{model.name}</Text>

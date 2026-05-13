@@ -14,10 +14,16 @@ import {
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Copy, Download, ExternalLink, ShieldCheck, Terminal, Wrench, Server } from 'lucide-react-native';
-import { MCPConfig } from '../types';
+import { Copy, Download, ExternalLink, Search, ShieldCheck, Terminal, Wrench, Server } from 'lucide-react-native';
+import { MCPConfig, WebSearchConfig, WebSearchProvider } from '../types';
 import { mcpService } from '../services/MCPService';
 import { MCPExecutionMode } from '../services/settings';
+import {
+  getDefaultWebSearchConfig,
+  getWebSearchProviderDefaults,
+  WEB_SEARCH_PROVIDER_LABELS,
+  webSearchService,
+} from '../services/WebSearchService';
 import {
   SSHConfig,
   TERMUX_ALLOW_EXTERNAL_APPS_COMMAND,
@@ -35,6 +41,7 @@ const MCP_ICONS: Record<string, typeof Wrench> = {
   file_ops: Wrench,
   http_server: Server,
   shell: Terminal,
+  web_search: Search,
 };
 
 const DEFAULT_SSH_CONFIG: SSHConfig = {
@@ -69,6 +76,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
   const [testingSsh, setTestingSsh] = useState(false);
   const [settingUpTermux, setSettingUpTermux] = useState(false);
   const [sshTestStatus, setSshTestStatus] = useState<SshTestStatus | null>(null);
+  const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig>(getDefaultWebSearchConfig());
   const { colors } = useTheme();
 
   useEffect(() => {
@@ -76,10 +84,12 @@ export default function MCPSettingsScreen({ onBack }: Props) {
       mcpService.getConfigs(),
       mcpService.getExecutionMode(),
       sshService.getConfig(),
-    ]).then(([nextConfigs, nextMode, nextSshConfig]) => {
+      webSearchService.getConfig(),
+    ]).then(([nextConfigs, nextMode, nextSshConfig, nextWebSearchConfig]) => {
       setConfigs(nextConfigs);
       setExecutionMode(nextMode);
       setSshConfig(nextSshConfig);
+      setWebSearchConfig(nextWebSearchConfig);
     });
   }, []);
 
@@ -101,6 +111,20 @@ export default function MCPSettingsScreen({ onBack }: Props) {
       return next;
     });
     setSshTestStatus(null);
+  }, []);
+
+  const updateWebSearchConfig = useCallback((patch: Partial<WebSearchConfig>) => {
+    setWebSearchConfig(prev => {
+      const next = { ...prev, ...patch };
+      webSearchService.saveConfig(next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const handleWebSearchProviderChange = useCallback((provider: WebSearchProvider) => {
+    const next = getWebSearchProviderDefaults(provider);
+    setWebSearchConfig(next);
+    webSearchService.saveConfig(next).catch(() => {});
   }, []);
 
   const handleTestSshConnection = useCallback(async () => {
@@ -137,11 +161,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
     });
   }, []);
 
-  const handleRequestTermuxPermission = useCallback(async () => {
-    if (Platform.OS !== 'android') {
-      Alert.alert('当前平台不支持', 'Termux 自动配置只支持 Android。');
-      return;
-    }
+  const requestTermuxRunCommandPermission = useCallback(async () => {
     try {
       const result = await PermissionsAndroid.request(TERMUX_RUN_COMMAND_PERMISSION as any);
       if (result === PermissionsAndroid.RESULTS.GRANTED) {
@@ -160,6 +180,38 @@ export default function MCPSettingsScreen({ onBack }: Props) {
       });
     }
   }, []);
+
+  const handleRequestTermuxPermission = useCallback(() => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('当前平台不支持', 'Termux 自动配置只支持 Android。');
+      return;
+    }
+
+    Alert.alert(
+      '先打开 Termux',
+      '请先打开 Termux，并执行“复制授权指令”里的命令，确认 allow-external-apps=true 已写入。完成后再回来继续授权 RUN_COMMAND。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '打开 Termux',
+          onPress: async () => {
+            try {
+              await sshService.openTermux();
+            } catch (err: any) {
+              setSshTestStatus({
+                type: 'error',
+                message: err?.message || String(err),
+              });
+            }
+          },
+        },
+        {
+          text: '继续授权',
+          onPress: requestTermuxRunCommandPermission,
+        },
+      ],
+    );
+  }, [requestTermuxRunCommandPermission]);
 
   const handleOpenTermux = useCallback(async () => {
     try {
@@ -219,7 +271,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
             />
           </View>
           <Text style={[styles.cardDesc, { color: colors.textTertiary }]}>
-            SSH Shell 模式会禁用本地读写、搜索、Agent 和 HTTP 服务器，只允许执行 SSH 命令。
+            SSH Shell 模式会禁用本地文件读写、文件搜索、Agent 和 HTTP 服务器；网页搜索仍由应用侧网络配置执行。
           </Text>
         </View>
 
@@ -339,9 +391,67 @@ export default function MCPSettingsScreen({ onBack }: Props) {
           </View>
         )}
 
+        <View style={[styles.card, { backgroundColor: colors.surfaceElevated }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>网页搜索配置</Text>
+          <Text style={[styles.cardDesc, { color: colors.textTertiary }]}>
+            需要先打开“网页搜索”工具，并填写你自己的搜索 API、模型/搜索源和密钥。本地与 SSH 模式共用这组配置。
+          </Text>
+          <View style={styles.providerGrid}>
+            {(Object.keys(WEB_SEARCH_PROVIDER_LABELS) as WebSearchProvider[]).map(provider => (
+              <ProviderButton
+                key={provider}
+                label={WEB_SEARCH_PROVIDER_LABELS[provider]}
+                active={webSearchConfig.provider === provider}
+                onPress={() => handleWebSearchProviderChange(provider)}
+              />
+            ))}
+          </View>
+          <LabeledInput
+            label="Search API URL"
+            value={webSearchConfig.baseUrl}
+            placeholder="https://api.example.com/search"
+            onChangeText={(baseUrl) => updateWebSearchConfig({ baseUrl })}
+          />
+          <LabeledInput
+            label="API Key"
+            value={webSearchConfig.apiKey}
+            placeholder="搜索服务密钥"
+            secureTextEntry
+            onChangeText={(apiKey) => updateWebSearchConfig({ apiKey })}
+          />
+          <LabeledInput
+            label="模型 / 搜索源"
+            value={webSearchConfig.model || ''}
+            placeholder="如 basic、advanced、google，可留空"
+            onChangeText={(model) => updateWebSearchConfig({ model })}
+          />
+          {webSearchConfig.provider === 'custom' && (
+            <>
+              <LabeledInput
+                label="查询参数名"
+                value={webSearchConfig.queryParam || 'q'}
+                placeholder="q"
+                onChangeText={(queryParam) => updateWebSearchConfig({ queryParam })}
+              />
+              <LabeledInput
+                label="密钥 Header"
+                value={webSearchConfig.apiKeyHeader || ''}
+                placeholder="Authorization，可留空"
+                onChangeText={(apiKeyHeader) => updateWebSearchConfig({ apiKeyHeader })}
+              />
+              <LabeledInput
+                label="密钥 Query 参数"
+                value={webSearchConfig.apiKeyParam || ''}
+                placeholder="api_key，可留空"
+                onChangeText={(apiKeyParam) => updateWebSearchConfig({ apiKeyParam })}
+              />
+            </>
+          )}
+        </View>
+
         {configs.map(config => {
           if (executionMode === 'local' && config.id === 'shell') return null;
-          if (executionMode === 'ssh' && config.id !== 'shell') return null;
+          if (executionMode === 'ssh' && config.id !== 'shell' && config.id !== 'web_search') return null;
           const Icon = MCP_ICONS[config.id] || Wrench;
           return (
             <View key={config.id} style={[styles.card, { backgroundColor: colors.surfaceElevated }]}>
@@ -384,6 +494,27 @@ function ModeButton({ label, active, onPress }: { label: string; active: boolean
       activeOpacity={0.75}
     >
       <Text style={[styles.modeText, { color: active ? colors.textOnColor : colors.textSecondary }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ProviderButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      style={[
+        styles.providerButton,
+        {
+          backgroundColor: active ? colors.accent : colors.surfaceLight,
+          borderColor: active ? colors.accent : colors.borderLight,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={[styles.providerButtonText, { color: active ? colors.textOnColor : colors.textSecondary }]}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -441,6 +572,7 @@ function LabeledInput({
   label,
   value,
   onChangeText,
+  placeholder,
   keyboardType,
   secureTextEntry,
   multiline,
@@ -448,6 +580,7 @@ function LabeledInput({
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  placeholder?: string;
   keyboardType?: 'default' | 'number-pad';
   secureTextEntry?: boolean;
   multiline?: boolean;
@@ -465,6 +598,7 @@ function LabeledInput({
         multiline={multiline}
         autoCapitalize="none"
         autoCorrect={false}
+        placeholder={placeholder}
         placeholderTextColor={colors.textTertiary}
       />
     </View>
@@ -500,6 +634,26 @@ const styles = StyleSheet.create({
   modeText: {
     fontSize: fontSizes.sm,
     fontWeight: '600',
+  },
+  providerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  providerButton: {
+    minHeight: 34,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    flexBasis: '30%',
+    flexGrow: 1,
+  },
+  providerButtonText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
   },
   cardHeader: {
     flexDirection: 'row',

@@ -71,3 +71,8 @@ jest.mock('react-native-webview', () => {
     WebView: (props) => React.createElement(View, props),
   };
 });
+
+jest.mock('react-native-zip-archive', () => ({
+  zipWithPassword: jest.fn(() => Promise.resolve()),
+  unzipWithPassword: jest.fn(() => Promise.resolve()),
+}));

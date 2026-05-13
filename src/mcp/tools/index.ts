@@ -8,6 +8,8 @@ import { HttpServerTool } from './builtins/HttpServerTool';
 import { AgentTool } from './builtins/AgentTool';
 import { AgentPipelineTool } from './builtins/AgentPipelineTool';
 import { ShellExecuteTool } from './builtins/ShellExecuteTool';
+import { WebSearchTool } from './builtins/WebSearchTool';
+import { WebFetchTool } from './builtins/WebFetchTool';
 
 export function createDefaultRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
@@ -20,6 +22,8 @@ export function createDefaultRegistry(): ToolRegistry {
   registry.register(new AgentTool());
   registry.register(new AgentPipelineTool());
   registry.register(new ShellExecuteTool());
+  registry.register(new WebSearchTool());
+  registry.register(new WebFetchTool());
   return registry;
 }
 

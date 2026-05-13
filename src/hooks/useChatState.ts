@@ -26,7 +26,7 @@ interface PendingToolCall {
 }
 
 function isConcurrencySafe(tc: ToolCall): boolean {
-  if (tc.name === 'file_read' || tc.name === 'glob') {
+  if (tc.name === 'file_read' || tc.name === 'glob' || tc.name === 'web_search' || tc.name === 'web_fetch') {
     return true;
   }
   if (tc.name === 'agent') {

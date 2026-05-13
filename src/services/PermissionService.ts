@@ -8,7 +8,7 @@ export interface PermissionResult {
 }
 
 const READONLY_TOOLS = new Set([
-  'file_read', 'glob',
+  'file_read', 'glob', 'web_search', 'web_fetch',
 ]);
 
 const DANGEROUS_TOOLS = new Set([

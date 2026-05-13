@@ -4,6 +4,7 @@ import ChatScreen from '../screens/ChatScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ModelListScreen from '../screens/ModelListScreen';
 import ModelAddScreen from '../screens/ModelAddScreen';
+import ModelAddOptionsScreen from '../screens/ModelAddOptionsScreen';
 import OutputSettingsScreen from '../screens/OutputSettingsScreen';
 import LLMSettingsScreen from '../screens/LLMSettingsScreen';
 import MCPSettingsScreen from '../screens/MCPSettingsScreen';
@@ -18,7 +19,8 @@ export type RootStackParamList = {
   Chat: undefined;
   Settings: undefined;
   ModelList: undefined;
-  ModelAdd: undefined;
+  ModelAddOptions: undefined;
+  ModelAdd: { presetId?: string } | undefined;
   OutputSettings: undefined;
   LLMSettings: undefined;
   MCPSettings: undefined;
@@ -76,14 +78,26 @@ export default function RootNavigator() {
         {({ navigation }) => (
           <ModelListScreen
             onBack={() => navigation.goBack()}
-            onAdd={() => navigation.navigate('ModelAdd')}
+            onAdd={() => navigation.navigate('ModelAddOptions')}
             onSelect={() => navigation.navigate('Chat')}
           />
         )}
       </Stack.Screen>
-      <Stack.Screen name="ModelAdd">
+      <Stack.Screen name="ModelAddOptions">
         {({ navigation }) => (
-          <ModelAddScreen onBack={() => navigation.goBack()} />
+          <ModelAddOptionsScreen
+            onBack={() => navigation.goBack()}
+            onCustom={() => navigation.navigate('ModelAdd')}
+            onProvider={(presetId) => navigation.navigate('ModelAdd', { presetId })}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="ModelAdd">
+        {({ navigation, route }) => (
+          <ModelAddScreen
+            presetId={route.params?.presetId}
+            onBack={() => navigation.goBack()}
+          />
         )}
       </Stack.Screen>
       <Stack.Screen name="OutputSettings">

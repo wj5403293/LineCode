@@ -90,6 +90,7 @@ export interface Model {
   modelId: string;
   apiKey: string;
   baseUrl?: string;
+  providerLabel?: string;
 }
 
 export interface SystemPrompt {
@@ -126,6 +127,18 @@ export interface MCPConfig {
   description: string;
   enabled: boolean;
   tools: string[];
+}
+
+export type WebSearchProvider = 'tavily' | 'brave' | 'serpapi' | 'bing' | 'custom';
+
+export interface WebSearchConfig {
+  provider: WebSearchProvider;
+  baseUrl: string;
+  apiKey: string;
+  model?: string;
+  queryParam?: string;
+  apiKeyHeader?: string;
+  apiKeyParam?: string;
 }
 
 export type ToolCategory = 'read' | 'write' | 'system';

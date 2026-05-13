@@ -9,6 +9,8 @@ const STORAGE_KEY = '@linecode_mcp_configs';
 const TOOL_CATEGORIES: Record<string, 'read' | 'write' | 'system'> = {
   file_read: 'read',
   glob: 'read',
+  web_search: 'read',
+  web_fetch: 'read',
   file_write: 'write',
   file_edit: 'write',
   file_delete: 'write',
@@ -52,7 +54,41 @@ const DEFAULT_CONFIGS: MCPConfig[] = [
     enabled: true,
     tools: ['shell_execute'],
   },
+  {
+    id: 'web_search',
+    name: '网页搜索',
+    description: '搜索互联网并查看网页内容',
+    enabled: false,
+    tools: ['web_search', 'web_fetch'],
+  },
 ];
+
+function normalizeConfigs(configs: MCPConfig[]): { configs: MCPConfig[]; changed: boolean } {
+  let changed = false;
+  const next = configs.map(config => ({ ...config, tools: [...config.tools] }));
+
+  const upsert = (config: MCPConfig) => {
+    const existing = next.find(item => item.id === config.id);
+    if (!existing) {
+      next.push(config);
+      changed = true;
+      return;
+    }
+    if (existing.name !== config.name || existing.description !== config.description) {
+      existing.name = config.name;
+      existing.description = config.description;
+      changed = true;
+    }
+    const missingTool = config.tools.some(tool => !existing.tools.includes(tool));
+    if (missingTool) {
+      existing.tools = config.tools;
+      changed = true;
+    }
+  };
+
+  DEFAULT_CONFIGS.forEach(upsert);
+  return { configs: next, changed };
+}
 
 class MCPService {
   private configs: MCPConfig[] | null = null;
@@ -63,39 +99,9 @@ class MCPService {
     const json = await AsyncStorage.getItem(STORAGE_KEY);
     if (json) {
       const parsed = JSON.parse(json);
-      this.configs = parsed;
-      const fileOps = (parsed as MCPConfig[]).find(c => c.id === 'file_ops');
-      if (fileOps && !fileOps.tools.includes('file_delete')) {
-        fileOps.tools = ['file_read', 'file_write', 'file_edit', 'file_delete', 'glob'];
-        await this.save();
-      }
-      const hasAgent = (parsed as MCPConfig[]).some(c => c.id === 'agent');
-      if (!hasAgent && this.configs) {
-        this.configs.push({
-          id: 'agent',
-          name: 'Agent',
-          description: '分派 Agent 处理任务',
-          enabled: true,
-          tools: ['agent', 'agent_pipeline'],
-        });
-        await this.save();
-      }
-      const agent = (parsed as MCPConfig[]).find(c => c.id === 'agent');
-      if (agent && !agent.tools.includes('agent_pipeline')) {
-        agent.tools = ['agent', 'agent_pipeline'];
-        await this.save();
-      }
-      const hasShell = (parsed as MCPConfig[]).some(c => c.id === 'shell');
-      if (!hasShell && this.configs) {
-        this.configs.push({
-          id: 'shell',
-          name: 'SSH Shell',
-          description: '通过 SSH 执行 shell 命令',
-          enabled: true,
-          tools: ['shell_execute'],
-        });
-        await this.save();
-      }
+      const normalized = normalizeConfigs(parsed as MCPConfig[]);
+      this.configs = normalized.configs;
+      if (normalized.changed) await this.save();
     } else {
       this.configs = DEFAULT_CONFIGS;
       await this.save();
@@ -115,12 +121,18 @@ class MCPService {
   async getEnabledTools(): Promise<string[]> {
     const configs = await this.getConfigs();
     const executionMode = await this.getExecutionMode();
+    const mode = permissionService.getMode();
+    const webSearchTools = configs.find(c => c.id === 'web_search')?.enabled
+      ? ['web_search', 'web_fetch'].filter(t => isToolAllowed(t, mode))
+      : [];
     if (executionMode === 'ssh') {
       const shell = configs.find(c => c.id === 'shell');
-      return shell?.enabled ? ['shell_execute'] : [];
+      return [
+        ...(shell?.enabled ? ['shell_execute'] : []),
+        ...webSearchTools,
+      ];
     }
 
-    const mode = permissionService.getMode();
     return configs
       .filter(c => c.enabled)
       .filter(c => c.id !== 'shell')
@@ -138,14 +150,32 @@ class MCPService {
     const executionMode = await this.getExecutionMode();
     if (executionMode === 'ssh') {
       const shell = configs.find(c => c.id === 'shell');
-      if (!shell?.enabled) return '';
+      const webSearch = configs.find(c => c.id === 'web_search');
+      if (!shell?.enabled && !webSearch?.enabled) return '';
+      const sections = [
+        shell?.enabled
+          ? [
+              '### SSH Shell',
+              '  - shell_execute',
+              'shell_execute 默认在 SSH 会话的登录目录执行，需要目录信息时先执行 pwd 或 cd。',
+            ].join('\n')
+          : '',
+        webSearch?.enabled
+          ? [
+              '### 网页搜索',
+              '  - web_search',
+              '  - web_fetch',
+              'web_search 和 web_fetch 由应用侧网络配置执行，不依赖 SSH 主机环境。需要最新或外部信息时先搜索，再打开关键结果核对。',
+            ].join('\n')
+          : '',
+      ].filter(Boolean).join('\n\n');
       return [
         '## 可用工具',
-        '当前执行目标是 SSH Shell。你只能使用 shell_execute 工具。',
-        '本地文件读写、搜索、Agent、Agent Pipeline 和 HTTP 服务器已禁用。',
-        '不要引用本地 home 工作目录；shell 命令默认在 SSH 会话的登录目录执行，需要目录信息时先执行 pwd 或 cd。',
+        '当前执行目标是 SSH Shell。本地文件读写、文件搜索、Agent、Agent Pipeline 和 HTTP 服务器已禁用。',
+        sections,
+        '不要引用本地 home 工作目录。',
         '如需读取、写入或搜索文件，请通过 shell 命令在 SSH 环境内完成。',
-        '每次 shell_execute 返回后必须继续分析输出；如果任务还没完成，继续调用 shell_execute 执行下一步。',
+        '每次工具返回后必须继续分析输出；如果任务还没完成，继续调用合适工具执行下一步。',
         '不要因为刚执行过一次或两次 shell 命令就结束；只有确认任务完成、受阻或需要用户决定时才回复用户。',
       ].join('\n');
     }
