@@ -11,6 +11,7 @@ class HttpServerPackage : ReactPackage {
             SimpleHttpServerModule(reactContext),
             KeepAwakeModule(reactContext),
             SshModule(reactContext),
+            DataArchiveModule(reactContext),
         )
     }
 

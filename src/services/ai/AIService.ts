@@ -56,6 +56,8 @@ class AIService {
         attachments: msg.attachments,
         toolCalls: msg.toolCalls,
         toolCallId: msg.toolCallId,
+        toolName: msg.toolName,
+        isError: msg.isError,
         reasoningContent: msg.reasoningContent,
         reasoningDetails: msg.reasoningDetails,
       });
@@ -139,7 +141,7 @@ class AIService {
     }
   }
 
-  convertToChatMessages(messages: { role: MessageRole; content: string; attachments?: InputAttachment[]; toolCalls?: ToolCall[]; toolCallId?: string; reasoningContent?: string; reasoningDetails?: ReasoningDetail[] }[]): ChatMessage[] {
+  convertToChatMessages(messages: { role: MessageRole; content: string; attachments?: InputAttachment[]; toolCalls?: ToolCall[]; toolCallId?: string; toolName?: string; isError?: boolean; reasoningContent?: string; reasoningDetails?: ReasoningDetail[] }[]): ChatMessage[] {
     return messages.map(m => {
       const legacy = m.role === 'user' ? this.splitLegacyAttachmentBlock(m.content) : null;
       return {
@@ -148,6 +150,8 @@ class AIService {
         attachments: m.attachments,
         toolCalls: m.toolCalls,
         toolCallId: m.toolCallId,
+        toolName: m.toolName,
+        isError: m.isError,
         reasoningContent: m.reasoningContent,
         reasoningDetails: m.reasoningDetails,
       };

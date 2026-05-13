@@ -4,9 +4,21 @@ export type DisplayMode = 'bubble' | 'fullscreen';
 export type ToneMode = 'chat' | 'coding';
 export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 export type PermissionMode = 'readonly' | 'auto' | 'confirm';
-export type ThemeMode = 'system' | 'light' | 'dark' | 'coffee' | 'custom';
+export type ThemeMode = 'system' | 'light' | 'dark' | 'coffee' | 'vscode' | 'githubDark' | 'gruvbox' | 'highContrast' | 'custom';
 export type BrowserMode = 'builtin' | 'external';
 export type MCPExecutionMode = 'local' | 'ssh';
+
+const THEME_MODES: readonly ThemeMode[] = [
+  'system',
+  'light',
+  'dark',
+  'coffee',
+  'vscode',
+  'githubDark',
+  'gruvbox',
+  'highContrast',
+  'custom',
+];
 
 export const REASONING_EFFORT_DESC: Record<ReasoningEffort, { label: string; desc: string }> = {
   off: { label: '关闭', desc: '不启用思考模式，响应更快' },
@@ -118,7 +130,8 @@ class SettingsService {
   }
 
   async getThemeMode(): Promise<ThemeMode> {
-    return this.get(KEYS.THEME_MODE, 'system' as ThemeMode);
+    const mode = await this.get(KEYS.THEME_MODE, 'system' as ThemeMode);
+    return THEME_MODES.includes(mode) ? mode : 'system';
   }
 
   async setThemeMode(mode: ThemeMode): Promise<void> {

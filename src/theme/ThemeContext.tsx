@@ -7,9 +7,17 @@ import {
   lightColors,
   coffeeColors,
   customDefaultColors,
+  gruvboxColors,
+  githubDarkColors,
+  highContrastColors,
+  vscodeColors,
   darkSyntax,
   lightSyntax,
   coffeeSyntax,
+  gruvboxSyntax,
+  githubDarkSyntax,
+  highContrastSyntax,
+  vscodeSyntax,
 } from './themes';
 import { settingsService, ThemeMode } from '../services/settings';
 
@@ -88,7 +96,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await settingsService.setCustomThemeColors(sanitized as Record<string, string>);
   }, []);
 
-  const resolvedTheme = useMemo<'dark' | 'light' | 'coffee' | 'custom'>(() => {
+  const resolvedTheme = useMemo<Exclude<ThemeMode, 'system'>>(() => {
     if (themeMode === 'system') {
       return systemColorScheme === 'light' ? 'light' : 'dark';
     }
@@ -98,6 +106,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const colors = useMemo<ThemeColors>(() => {
     if (resolvedTheme === 'dark') return darkColors;
     if (resolvedTheme === 'coffee') return coffeeColors;
+    if (resolvedTheme === 'vscode') return vscodeColors;
+    if (resolvedTheme === 'githubDark') return githubDarkColors;
+    if (resolvedTheme === 'gruvbox') return gruvboxColors;
+    if (resolvedTheme === 'highContrast') return highContrastColors;
     if (resolvedTheme === 'custom') return { ...customDefaultColors, ...sanitizeCustomColors(customColors) };
     return lightColors;
   }, [resolvedTheme, customColors]);
@@ -105,6 +117,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const syntax = useMemo<SyntaxColors>(() => {
     if (resolvedTheme === 'dark') return darkSyntax;
     if (resolvedTheme === 'coffee' || resolvedTheme === 'custom') return coffeeSyntax;
+    if (resolvedTheme === 'vscode') return vscodeSyntax;
+    if (resolvedTheme === 'githubDark') return githubDarkSyntax;
+    if (resolvedTheme === 'gruvbox') return gruvboxSyntax;
+    if (resolvedTheme === 'highContrast') return highContrastSyntax;
     return lightSyntax;
   }, [resolvedTheme]);
 
@@ -112,7 +128,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     colors,
     syntax,
     themeMode,
-    isDark: resolvedTheme === 'dark',
+    isDark: resolvedTheme !== 'light' && resolvedTheme !== 'coffee' && resolvedTheme !== 'custom',
     setThemeMode,
     setCustomThemeColors,
   }), [colors, syntax, resolvedTheme, themeMode, setThemeMode, setCustomThemeColors]);

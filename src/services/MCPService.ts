@@ -145,7 +145,8 @@ class MCPService {
         '本地文件读写、搜索、Agent、Agent Pipeline 和 HTTP 服务器已禁用。',
         '不要引用本地 home 工作目录；shell 命令默认在 SSH 会话的登录目录执行，需要目录信息时先执行 pwd 或 cd。',
         '如需读取、写入或搜索文件，请通过 shell 命令在 SSH 环境内完成。',
-        '工具返回后必须继续根据结果判断下一步，直到任务完成后再回复用户。',
+        '每次 shell_execute 返回后必须继续分析输出；如果任务还没完成，继续调用 shell_execute 执行下一步。',
+        '不要因为刚执行过一次或两次 shell 命令就结束；只有确认任务完成、受阻或需要用户决定时才回复用户。',
       ].join('\n');
     }
 
@@ -163,7 +164,7 @@ class MCPService {
 
     if (sections.length === 0) return '';
 
-    return `## 可用工具\n你可以使用以下工具：\n\n${sections.join('\n\n')}\n\n工具以 function calling 方式调用。工具返回后必须继续根据结果判断下一步，直到任务完成后再回复用户。`;
+    return `## 可用工具\n你可以使用以下工具：\n\n${sections.join('\n\n')}\n\n工具以 function calling 方式调用。每次工具返回后必须继续分析结果；如果任务还没完成，继续调用合适工具执行下一步。不要因为刚执行过一次或两次工具就结束；只有确认任务完成、受阻或需要用户决定时才回复用户。`;
   }
 
   private async save(): Promise<void> {

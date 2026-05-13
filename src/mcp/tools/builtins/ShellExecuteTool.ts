@@ -4,7 +4,7 @@ import { sshService } from '../../../services/SSHService';
 
 export class ShellExecuteTool extends BaseTool {
   readonly name = 'shell_execute';
-  readonly description = '通过 SSH 执行 shell 命令。用于 Termux 或远程主机，命令会在执行前请求用户确认。';
+  readonly description = '通过 SSH 执行 shell 命令。用于 Termux 或远程主机，命令会在执行前请求用户确认。工具返回后继续根据输出判断下一步，直到任务完成。';
   readonly category = 'system' as const;
   readonly requiresConfirmation = true;
   readonly parameters = {

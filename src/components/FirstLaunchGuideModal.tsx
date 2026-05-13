@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Server, Terminal, Wrench } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
+import { TERMUX_ALLOW_EXTERNAL_APPS_COMMAND } from '../services/SSHService';
 import { settingsService } from '../services/settings';
 import { useTheme } from '../theme';
 
@@ -53,12 +54,12 @@ export default function FirstLaunchGuideModal({ onDone }: Props) {
             />
             <GuideItem
               icon={<Server size={18} color={colors.accent} />}
-              title="Termux 安装 sshd"
-              text={'pkg update\npkg install openssh\npasswd\nsshd\nwhoami\nip addr\n\nssh-keygen -t ed25519 -f ~/.ssh/lineai_key -N ""\ncat ~/.ssh/lineai_key.pub >> ~/.ssh/authorized_keys\nchmod 700 ~/.ssh\nchmod 600 ~/.ssh/authorized_keys\ncat ~/.ssh/lineai_key'}
+              title="Termux intent 授权"
+              text={TERMUX_ALLOW_EXTERNAL_APPS_COMMAND}
               monospace
             />
             <Text style={[styles.note, { color: colors.textSecondary }]}>
-              Termux 默认连接 127.0.0.1:8022；密码登录先执行 passwd，无密码登录把 private key 粘贴到 SSH 设置。
+              先在 Termux 执行授权指令，再回设置页授权 RUN_COMMAND 并自动配置 OpenSSH。Termux 默认连接 127.0.0.1:8022；没有默认 SSH 密码。
             </Text>
           </ScrollView>
           <TouchableOpacity

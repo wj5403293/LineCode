@@ -178,7 +178,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
         return { role: 'system', content: m.content };
       }
       if (m.role === 'tool') {
-        return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+        return { role: 'tool', tool_call_id: m.toolCallId, content: this.formatToolResultContent(m) };
       }
       if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
         const validToolCalls = m.toolCalls.filter(tc => tc.id && tc.name);
@@ -364,6 +364,11 @@ export class OpenAIStreamProcessor extends StreamProcessor {
       reasoningContent: reasoningFull || undefined,
       reasoningDetails,
     };
+  }
+
+  private formatToolResultContent(message: ChatMessage): string {
+    if (!message.isError) return message.content;
+    return `Tool ${message.toolName || message.toolCallId || ''} failed:\n${message.content}`;
   }
 
   private extractReasoningDelta(delta: any): string {

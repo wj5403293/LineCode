@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  PermissionsAndroid,
+  Platform,
   View,
   Text,
   Switch,
@@ -9,12 +12,17 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Terminal, Wrench, Server } from 'lucide-react-native';
+import { Copy, Download, ExternalLink, ShieldCheck, Terminal, Wrench, Server } from 'lucide-react-native';
 import { MCPConfig } from '../types';
 import { mcpService } from '../services/MCPService';
 import { MCPExecutionMode } from '../services/settings';
-import { SSHConfig, sshService } from '../services/SSHService';
+import {
+  SSHConfig,
+  TERMUX_ALLOW_EXTERNAL_APPS_COMMAND,
+  sshService,
+} from '../services/SSHService';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -40,8 +48,18 @@ const DEFAULT_SSH_CONFIG: SSHConfig = {
 
 type SshTestStatus = {
   type: 'success' | 'error';
+  title?: string;
   message: string;
 };
+
+const TERMUX_RUN_COMMAND_PERMISSION = 'com.termux.permission.RUN_COMMAND';
+
+function redactTermuxPrivateKey(output: string): string {
+  return output.replace(
+    /LINEAI_PRIVATE_KEY_BEGIN[\s\S]*?LINEAI_PRIVATE_KEY_END/g,
+    'LINEAI_PRIVATE_KEY=[已保存到 SSH Private key]',
+  );
+}
 
 export default function MCPSettingsScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
@@ -49,6 +67,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
   const [executionMode, setExecutionMode] = useState<MCPExecutionMode>('local');
   const [sshConfig, setSshConfig] = useState<SSHConfig>(DEFAULT_SSH_CONFIG);
   const [testingSsh, setTestingSsh] = useState(false);
+  const [settingUpTermux, setSettingUpTermux] = useState(false);
   const [sshTestStatus, setSshTestStatus] = useState<SshTestStatus | null>(null);
   const { colors } = useTheme();
 
@@ -105,6 +124,81 @@ export default function MCPSettingsScreen({ onBack }: Props) {
     }
   }, [sshConfig, testingSsh]);
 
+  const handleCopyTermuxPermissionCommand = useCallback(() => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('当前平台不支持', 'Termux 配置指令只适用于 Android。');
+      return;
+    }
+    Clipboard.setString(TERMUX_ALLOW_EXTERNAL_APPS_COMMAND);
+    setSshTestStatus({
+      type: 'success',
+      title: '已复制',
+      message: 'Termux intent 执行授权指令已复制。打开 Termux 粘贴执行后，会写入 allow-external-apps=true 并尝试重新加载 Termux 设置。',
+    });
+  }, []);
+
+  const handleRequestTermuxPermission = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('当前平台不支持', 'Termux 自动配置只支持 Android。');
+      return;
+    }
+    try {
+      const result = await PermissionsAndroid.request(TERMUX_RUN_COMMAND_PERMISSION as any);
+      if (result === PermissionsAndroid.RESULTS.GRANTED) {
+        setSshTestStatus({ type: 'success', title: '已授权', message: 'LineAI 已获得 Termux RUN_COMMAND 权限。' });
+        return;
+      }
+      await sshService.openLineAiAppSettings();
+      setSshTestStatus({
+        type: 'error',
+        message: '请在 LineAI 的应用权限中允许“Run commands in Termux environment”，并先在 Termux 执行“复制授权指令”写入 allow-external-apps=true。',
+      });
+    } catch (err: any) {
+      setSshTestStatus({
+        type: 'error',
+        message: err?.message || String(err),
+      });
+    }
+  }, []);
+
+  const handleOpenTermux = useCallback(async () => {
+    try {
+      await sshService.openTermux();
+    } catch (err: any) {
+      setSshTestStatus({
+        type: 'error',
+        message: err?.message || String(err),
+      });
+    }
+  }, []);
+
+  const handleSetupTermuxOpenSsh = useCallback(async () => {
+    if (settingUpTermux) return;
+    setSettingUpTermux(true);
+    setSshTestStatus(null);
+    try {
+      const setup = await sshService.setupTermuxOpenSsh();
+      setSshConfig(setup.config);
+      const testOutput = await sshService.testConnection(setup.config);
+      setSshTestStatus({
+        type: 'success',
+        message: [
+          'Termux OpenSSH 已通过 intent 自动配置，SSH 设置已自动填入。',
+          `shell: ${setup.shell || 'unknown'}`,
+          `rc: ${setup.rcPath || 'unknown'}`,
+          redactTermuxPrivateKey(testOutput.trim() || '连接正常'),
+        ].join('\n'),
+      });
+    } catch (err: any) {
+      setSshTestStatus({
+        type: 'error',
+        message: redactTermuxPrivateKey(err?.message || String(err)),
+      });
+    } finally {
+      setSettingUpTermux(false);
+    }
+  }, [settingUpTermux]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
       <ScreenHeader title="MCP 工具" onBack={onBack} />
@@ -135,6 +229,31 @@ export default function MCPSettingsScreen({ onBack }: Props) {
             <Text style={[styles.cardDesc, { color: colors.textTertiary }]}>
               Termux 默认 host 为 127.0.0.1，端口为 8022；远程主机填写对应 IP 和端口。
             </Text>
+            <View style={styles.termuxActions}>
+              <ActionButton
+                label="复制授权指令"
+                icon={Copy}
+                onPress={handleCopyTermuxPermissionCommand}
+              />
+              <ActionButton
+                label="RUN_COMMAND 权限"
+                icon={ShieldCheck}
+                variant="secondary"
+                onPress={handleRequestTermuxPermission}
+              />
+              <ActionButton
+                label="打开 Termux"
+                icon={ExternalLink}
+                variant="secondary"
+                onPress={handleOpenTermux}
+              />
+              <ActionButton
+                label="自动配置 OpenSSH"
+                icon={Download}
+                loading={settingUpTermux}
+                onPress={handleSetupTermuxOpenSsh}
+              />
+            </View>
             <LabeledInput
               label="Host"
               value={sshConfig.host}
@@ -201,7 +320,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
                     { color: sshTestStatus.type === 'success' ? colors.success : colors.danger },
                   ]}
                 >
-                  {sshTestStatus.type === 'success' ? '连接成功' : '连接失败'}
+                  {sshTestStatus.title || (sshTestStatus.type === 'success' ? '连接成功' : '连接失败')}
                 </Text>
                 <Text style={[styles.testStatusOutput, { color: colors.textSecondary }]}>
                   {sshTestStatus.message}
@@ -209,22 +328,12 @@ export default function MCPSettingsScreen({ onBack }: Props) {
               </View>
             )}
             <View style={[styles.termuxBox, { backgroundColor: colors.codeBg, borderColor: colors.codeBorder }]}>
-              <Text style={[styles.termuxTitle, { color: colors.text }]}>Termux 安装 sshd</Text>
+              <Text style={[styles.termuxTitle, { color: colors.text }]}>Termux intent 授权</Text>
               <Text style={[styles.commandText, { color: colors.textSecondary }]}>
-                pkg update{'\n'}
-                pkg install openssh{'\n'}
-                passwd{'\n'}
-                sshd{'\n'}
-                whoami{'\n'}
-                ip addr{'\n\n'}
-                ssh-keygen -t ed25519 -f ~/.ssh/lineai_key -N ""{'\n'}
-                cat ~/.ssh/lineai_key.pub &gt;&gt; ~/.ssh/authorized_keys{'\n'}
-                chmod 700 ~/.ssh{'\n'}
-                chmod 600 ~/.ssh/authorized_keys{'\n'}
-                cat ~/.ssh/lineai_key
+                {TERMUX_ALLOW_EXTERNAL_APPS_COMMAND}
               </Text>
               <Text style={[styles.termuxHint, { color: colors.textTertiary }]}>
-                密码登录先执行 passwd；无密码登录把 private key 对应的 public key 写入 Termux 的 authorized_keys。
+                先复制授权指令到 Termux 执行，它会写入 allow-external-apps=true。然后授权 LineAI 的 RUN_COMMAND 权限，再点自动配置 OpenSSH，通过 intent 安装 openssh、生成 LineAI 专用密钥、写入 authorized_keys、检测 shell rc 并启动 sshd。Termux 没有默认 SSH 密码；如需密码登录再手动执行 passwd。
               </Text>
             </View>
           </View>
@@ -275,6 +384,55 @@ function ModeButton({ label, active, onPress }: { label: string; active: boolean
       activeOpacity={0.75}
     >
       <Text style={[styles.modeText, { color: active ? colors.textOnColor : colors.textSecondary }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function ActionButton({
+  label,
+  icon: Icon,
+  loading,
+  variant = 'primary',
+  onPress,
+}: {
+  label: string;
+  icon: typeof Copy;
+  loading?: boolean;
+  variant?: 'primary' | 'secondary';
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  const primary = variant === 'primary';
+  return (
+    <TouchableOpacity
+      style={[
+        styles.actionButton,
+        {
+          backgroundColor: primary ? colors.accent : colors.surfaceLight,
+          borderColor: primary ? colors.accent : colors.borderLight,
+        },
+        loading && styles.testButtonDisabled,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.75}
+      disabled={loading}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={primary ? colors.textOnColor : colors.textSecondary} />
+      ) : (
+        <>
+          <Icon size={15} color={primary ? colors.textOnColor : colors.textSecondary} />
+          <Text
+            style={[
+              styles.actionButtonText,
+              { color: primary ? colors.textOnColor : colors.textSecondary },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        </>
+      )}
     </TouchableOpacity>
   );
 }
@@ -368,6 +526,28 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     marginTop: spacing.sm,
+  },
+  termuxActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  actionButton: {
+    minHeight: 38,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flexGrow: 1,
+    flexBasis: '46%',
+  },
+  actionButtonText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
   },
   inputLabel: {
     fontSize: fontSizes.xs,

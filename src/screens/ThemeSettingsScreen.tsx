@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Coffee, Monitor, Moon, Paintbrush, RotateCcw, Save, Sun } from 'lucide-react-native';
+import { Check, Coffee, Code2, Contrast, GitBranch, Monitor, Moon, Paintbrush, RotateCcw, Save, Sun } from 'lucide-react-native';
 import { settingsService, ThemeMode } from '../services/settings';
 import { useTheme } from '../theme';
-import { coffeeColors, customDefaultColors, darkColors, lightColors, ThemeColors } from '../theme/themes';
+import {
+  coffeeColors,
+  customDefaultColors,
+  darkColors,
+  githubDarkColors,
+  gruvboxColors,
+  highContrastColors,
+  lightColors,
+  ThemeColors,
+  vscodeColors,
+} from '../theme/themes';
 import { spacing, radius, fontSizes } from '../constants/layout';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
@@ -15,6 +25,10 @@ const THEMES: { mode: ThemeMode; label: string; desc: string; icon: typeof Sun }
   { mode: 'light', label: '亮色模式', desc: '浅色主题，适合白天', icon: Sun },
   { mode: 'dark', label: '暗色模式', desc: '深色主题，适合夜间', icon: Moon },
   { mode: 'coffee', label: '咖啡纸', desc: '类似 Claude 的纸张和咖啡色调', icon: Coffee },
+  { mode: 'vscode', label: 'VS Code', desc: '熟悉的编辑器深色蓝调', icon: Code2 },
+  { mode: 'githubDark', label: 'GitHub Dark', desc: '接近 GitHub 的暗色代码界面', icon: GitBranch },
+  { mode: 'gruvbox', label: 'Gruvbox', desc: '复古暖色终端风格', icon: Code2 },
+  { mode: 'highContrast', label: '高对比', desc: '黑底高亮，提升辨识度', icon: Contrast },
   { mode: 'custom', label: '自定义', desc: '编辑并保存自己的颜色主题', icon: Paintbrush },
 ];
 
@@ -41,9 +55,13 @@ const SWATCHES = [
   '#2B2118', '#6C5A49', '#9B8976', '#D97757',
   '#B86F50', '#EFE4D4', '#DDD0BF', '#6A7F46',
   '#0A0A0A', '#1C1C1E', '#FFFFFF', '#0A84FF',
+  '#1E1E1E', '#252526', '#007ACC', '#D4D4D4',
+  '#0D1117', '#161B22', '#2F81F7', '#E6EDF3',
+  '#282828', '#FABD2F', '#EBDBB2', '#458588',
+  '#64D2FF', '#FFD60A', '#30D158', '#FF453A',
 ];
 
-type ThemeStarterId = 'default' | 'light' | 'dark' | 'coffee' | 'saved';
+type ThemeStarterId = 'default' | 'light' | 'dark' | 'coffee' | 'vscode' | 'githubDark' | 'gruvbox' | 'highContrast' | 'saved';
 
 const THEME_STARTERS: {
   id: Exclude<ThemeStarterId, 'saved'>;
@@ -55,6 +73,10 @@ const THEME_STARTERS: {
   { id: 'light', label: '亮色', icon: Sun, colors: { ...lightColors, codeBg: '#F2F2F7' } },
   { id: 'dark', label: '暗色', icon: Moon, colors: { ...darkColors, codeBg: '#151515' } },
   { id: 'coffee', label: '咖啡纸', icon: Coffee, colors: { ...coffeeColors, codeBg: '#EFE4D4' } },
+  { id: 'vscode', label: 'VS Code', icon: Code2, colors: vscodeColors },
+  { id: 'githubDark', label: 'GitHub', icon: GitBranch, colors: githubDarkColors },
+  { id: 'gruvbox', label: 'Gruvbox', icon: Code2, colors: gruvboxColors },
+  { id: 'highContrast', label: '高对比', icon: Contrast, colors: highContrastColors },
 ];
 
 interface Props {

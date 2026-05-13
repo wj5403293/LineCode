@@ -27,6 +27,7 @@ export interface ChatMessage {
   attachments?: InputAttachment[];
   toolCallId?: string;
   toolName?: string;
+  isError?: boolean;
   toolCalls?: ToolCall[];
   reasoningContent?: string;
   reasoningDetails?: ReasoningDetail[];

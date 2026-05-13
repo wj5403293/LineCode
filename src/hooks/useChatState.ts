@@ -275,6 +275,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       attachments: m.attachments,
       toolCalls: m.toolCalls,
       toolCallId: m.toolCallId,
+      toolName: m.toolName,
+      isError: m.isError,
       reasoningContent: m.reasoningContent,
       reasoningDetails: m.reasoningDetails,
     }));
@@ -330,6 +332,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       toolCallId: tc.id,
       timestamp: Date.now(),
       toolName: tc.name,
+      isError: toolResult.isError,
     };
 
     return { toolMsg, toolResult };

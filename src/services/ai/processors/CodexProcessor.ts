@@ -174,7 +174,9 @@ export class CodexStreamProcessor extends StreamProcessor {
         input.push({
           type: 'function_call_output',
           call_id: msg.toolCallId,
-          output: msg.content,
+          output: msg.isError
+            ? `Tool ${msg.toolName || msg.toolCallId} failed:\n${msg.content}`
+            : msg.content,
         });
       }
     }
@@ -327,6 +329,27 @@ export class CodexStreamProcessor extends StreamProcessor {
 
       if (eventType === 'response.output_item.added' && json.item) {
         this.handleOutputItem(json.item, full, reasoningFull, upsertToolCall, customToolInputs, reasoningDetails);
+        return;
+      }
+
+      if (eventType === 'response.completed' && Array.isArray(json.response?.output)) {
+        for (const item of json.response.output) {
+          const update = this.handleOutputItem(item, full, reasoningFull, upsertToolCall, customToolInputs, reasoningDetails);
+          if (update.text !== undefined) {
+            full = this.mergeFinalText(full, update.text);
+            if (full) {
+              ensureTextBlock().content = full;
+              emitBlocks();
+            }
+          }
+          if (update.reasoning !== undefined) {
+            reasoningFull = this.mergeFinalText(reasoningFull, update.reasoning);
+            if (reasoningFull) {
+              ensureThinkingBlock().content = reasoningFull;
+              emitBlocks();
+            }
+          }
+        }
         return;
       }
 

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build-prompt": "node scripts/build-prompt.js",
+    "build-hot-update": "node scripts/build-hot-update.mjs",
     "prestart": "npm run build-prompt",
     "android": "npm run build-prompt && react-native run-android",
     "ios": "npm run build-prompt && react-native run-ios",

@@ -274,6 +274,257 @@ export const coffeeColors: ThemeColors = {
   diffDelText: '#A0443E',
 };
 
+export const vscodeSyntax: SyntaxColors = {
+  keyword: '#C586C0',
+  string: '#CE9178',
+  comment: '#6A9955',
+  number: '#B5CEA8',
+  function: '#DCDCAA',
+  title: '#DCDCAA',
+  params: '#D4D4D4',
+  built_in: '#4EC9B0',
+  literal: '#569CD6',
+  type: '#4EC9B0',
+  class: '#4EC9B0',
+  attr: '#9CDCFE',
+  selector: '#D7BA7D',
+  tag: '#569CD6',
+  name: '#9CDCFE',
+  symbol: '#D4D4D4',
+  bullet: '#D7BA7D',
+  code: '#CE9178',
+  regexp: '#D16969',
+  link: '#3794FF',
+  meta: '#9B9B9B',
+  deletion: '#F48771',
+  addition: '#B5CEA8',
+  default: '#D4D4D4',
+};
+
+export const vscodeColors: ThemeColors = {
+  bg: '#1E1E1E',
+  surface: '#252526',
+  surfaceElevated: '#2D2D30',
+  surfaceLight: '#333333',
+
+  accent: '#007ACC',
+  accentDim: '#073A5A',
+  accentMuted: 'rgba(0,122,204,0.16)',
+  accentMuted2: 'rgba(0,122,204,0.24)',
+
+  text: '#D4D4D4',
+  textSecondary: '#A6A6A6',
+  textTertiary: '#6A6A6A',
+  textOnColor: '#FFFFFF',
+
+  border: '#3C3C3C',
+  borderLight: '#454545',
+  inputBg: '#3C3C3C',
+
+  userBubble: '#094771',
+  aiBubble: '#252526',
+
+  danger: '#F48771',
+  warning: '#CCA700',
+  success: '#89D185',
+  processing: '#DCDCAA',
+
+  overlay: 'rgba(0,0,0,0.58)',
+  codeBg: '#1E1E1E',
+  codeBorder: '#3C3C3C',
+
+  dangerMuted: 'rgba(244,135,113,0.14)',
+  dangerMuted2: 'rgba(244,135,113,0.22)',
+  processingMuted: 'rgba(220,220,170,0.12)',
+
+  diffAddBg: 'rgba(137,209,133,0.12)',
+  diffDelBg: 'rgba(244,135,113,0.12)',
+  diffAddText: '#89D185',
+  diffDelText: '#F48771',
+};
+
+export const githubDarkSyntax: SyntaxColors = darkSyntax;
+
+export const githubDarkColors: ThemeColors = {
+  bg: '#0D1117',
+  surface: '#010409',
+  surfaceElevated: '#161B22',
+  surfaceLight: '#21262D',
+
+  accent: '#2F81F7',
+  accentDim: '#0D419D',
+  accentMuted: 'rgba(47,129,247,0.12)',
+  accentMuted2: 'rgba(47,129,247,0.20)',
+
+  text: '#E6EDF3',
+  textSecondary: '#8B949E',
+  textTertiary: '#6E7681',
+  textOnColor: '#FFFFFF',
+
+  border: '#30363D',
+  borderLight: '#21262D',
+  inputBg: '#0D1117',
+
+  userBubble: '#1F6FEB',
+  aiBubble: '#161B22',
+
+  danger: '#F85149',
+  warning: '#D29922',
+  success: '#3FB950',
+  processing: '#D29922',
+
+  overlay: 'rgba(1,4,9,0.68)',
+  codeBg: '#0D1117',
+  codeBorder: '#30363D',
+
+  dangerMuted: 'rgba(248,81,73,0.14)',
+  dangerMuted2: 'rgba(248,81,73,0.22)',
+  processingMuted: 'rgba(210,153,34,0.12)',
+
+  diffAddBg: 'rgba(46,160,67,0.14)',
+  diffDelBg: 'rgba(248,81,73,0.14)',
+  diffAddText: '#3FB950',
+  diffDelText: '#F85149',
+};
+
+export const gruvboxSyntax: SyntaxColors = {
+  keyword: '#FB4934',
+  string: '#B8BB26',
+  comment: '#928374',
+  number: '#D3869B',
+  function: '#FABD2F',
+  title: '#FABD2F',
+  params: '#EBDBB2',
+  built_in: '#83A598',
+  literal: '#D3869B',
+  type: '#8EC07C',
+  class: '#8EC07C',
+  attr: '#FE8019',
+  selector: '#B8BB26',
+  tag: '#FB4934',
+  name: '#EBDBB2',
+  symbol: '#83A598',
+  bullet: '#83A598',
+  code: '#B8BB26',
+  regexp: '#FE8019',
+  link: '#83A598',
+  meta: '#928374',
+  deletion: '#FB4934',
+  addition: '#B8BB26',
+  default: '#EBDBB2',
+};
+
+export const gruvboxColors: ThemeColors = {
+  bg: '#282828',
+  surface: '#1D2021',
+  surfaceElevated: '#32302F',
+  surfaceLight: '#3C3836',
+
+  accent: '#FABD2F',
+  accentDim: '#665C2E',
+  accentMuted: 'rgba(250,189,47,0.14)',
+  accentMuted2: 'rgba(250,189,47,0.22)',
+
+  text: '#EBDBB2',
+  textSecondary: '#BDAE93',
+  textTertiary: '#928374',
+  textOnColor: '#282828',
+
+  border: '#504945',
+  borderLight: '#665C54',
+  inputBg: '#1D2021',
+
+  userBubble: '#458588',
+  aiBubble: '#32302F',
+
+  danger: '#FB4934',
+  warning: '#FE8019',
+  success: '#B8BB26',
+  processing: '#FABD2F',
+
+  overlay: 'rgba(29,32,33,0.66)',
+  codeBg: '#1D2021',
+  codeBorder: '#504945',
+
+  dangerMuted: 'rgba(251,73,52,0.14)',
+  dangerMuted2: 'rgba(251,73,52,0.22)',
+  processingMuted: 'rgba(250,189,47,0.13)',
+
+  diffAddBg: 'rgba(184,187,38,0.13)',
+  diffDelBg: 'rgba(251,73,52,0.13)',
+  diffAddText: '#B8BB26',
+  diffDelText: '#FB4934',
+};
+
+export const highContrastSyntax: SyntaxColors = {
+  keyword: '#FC5FA3',
+  string: '#00FF66',
+  comment: '#9EA0A6',
+  number: '#FFD60A',
+  function: '#00D7FF',
+  title: '#00D7FF',
+  params: '#FFFFFF',
+  built_in: '#5AE4FF',
+  literal: '#FFD60A',
+  type: '#A78BFA',
+  class: '#A78BFA',
+  attr: '#FF9F0A',
+  selector: '#00FF66',
+  tag: '#5AE4FF',
+  name: '#FFFFFF',
+  symbol: '#FFD60A',
+  bullet: '#FFD60A',
+  code: '#00FF66',
+  regexp: '#FF9F0A',
+  link: '#64D2FF',
+  meta: '#9EA0A6',
+  deletion: '#FF453A',
+  addition: '#30D158',
+  default: '#FFFFFF',
+};
+
+export const highContrastColors: ThemeColors = {
+  bg: '#000000',
+  surface: '#050505',
+  surfaceElevated: '#101010',
+  surfaceLight: '#1A1A1A',
+
+  accent: '#64D2FF',
+  accentDim: '#063B4C',
+  accentMuted: 'rgba(100,210,255,0.16)',
+  accentMuted2: 'rgba(100,210,255,0.24)',
+
+  text: '#FFFFFF',
+  textSecondary: '#C7C7CC',
+  textTertiary: '#8E8E93',
+  textOnColor: '#000000',
+
+  border: '#666666',
+  borderLight: '#3A3A3C',
+  inputBg: '#111111',
+
+  userBubble: '#004D80',
+  aiBubble: '#101010',
+
+  danger: '#FF453A',
+  warning: '#FFD60A',
+  success: '#30D158',
+  processing: '#FF9F0A',
+
+  overlay: 'rgba(0,0,0,0.75)',
+  codeBg: '#000000',
+  codeBorder: '#555555',
+
+  dangerMuted: 'rgba(255,69,58,0.18)',
+  dangerMuted2: 'rgba(255,69,58,0.26)',
+  processingMuted: 'rgba(255,159,10,0.16)',
+
+  diffAddBg: 'rgba(48,209,88,0.18)',
+  diffDelBg: 'rgba(255,69,58,0.18)',
+  diffAddText: '#30D158',
+  diffDelText: '#FF453A',
+};
+
 export const customDefaultColors: ThemeColors = {
   ...lightColors,
   surface: '#FFFFFF',

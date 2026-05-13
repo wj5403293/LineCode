@@ -12,6 +12,12 @@ export interface SSHConfig {
 
 const STORAGE_KEY = '@lineai_ssh_config';
 
+export const TERMUX_ALLOW_EXTERNAL_APPS_COMMAND = `mkdir -p ~/.termux
+properties_path="$HOME/.termux/termux.properties"
+touch "$properties_path"
+grep -qxF 'allow-external-apps=true' "$properties_path" || printf '\\nallow-external-apps=true\\n' >> "$properties_path"
+termux-reload-settings >/dev/null 2>&1 || true`;
+
 interface SshNativeModule {
   execute(
     host: string,
@@ -23,6 +29,9 @@ interface SshNativeModule {
     command: string,
     timeoutMs: number,
   ): Promise<string>;
+  setupTermuxSshd(timeoutMs: number): Promise<string>;
+  openLineAiAppSettings(): Promise<boolean>;
+  openTermux(): Promise<boolean>;
 }
 
 const Ssh = NativeModules.SshModule as SshNativeModule | undefined;
@@ -106,6 +115,48 @@ class SSHService {
     return this.executeCommand('echo LineAI SSH OK && whoami && pwd', 10000, config);
   }
 
+  async setupTermuxOpenSsh(): Promise<{ config: SSHConfig; output: string; shell?: string; rcPath?: string }> {
+    if (Platform.OS !== 'android' || !Ssh?.setupTermuxSshd) {
+      throw new Error('当前平台不支持 Termux 自动配置');
+    }
+
+    const output = await Ssh.setupTermuxSshd(15 * 60 * 1000);
+    const parsed = this.parseTermuxSetupOutput(output);
+    if (!parsed.username || !parsed.privateKey) {
+      throw new Error(`Termux 已返回结果，但未解析到 username 或 private key。\n${output}`);
+    }
+
+    const nextConfig: SSHConfig = {
+      host: parsed.host || DEFAULT_CONFIG.host,
+      port: parsed.port || DEFAULT_CONFIG.port,
+      username: parsed.username,
+      password: '',
+      privateKey: parsed.privateKey,
+      passphrase: '',
+    };
+    await this.saveConfig(nextConfig);
+    return {
+      config: nextConfig,
+      output,
+      shell: parsed.shell,
+      rcPath: parsed.rcPath,
+    };
+  }
+
+  async openLineAiAppSettings(): Promise<void> {
+    if (Platform.OS !== 'android' || !Ssh?.openLineAiAppSettings) {
+      throw new Error('当前平台不支持打开应用权限设置');
+    }
+    await Ssh.openLineAiAppSettings();
+  }
+
+  async openTermux(): Promise<void> {
+    if (Platform.OS !== 'android' || !Ssh?.openTermux) {
+      throw new Error('当前平台不支持打开 Termux');
+    }
+    await Ssh.openTermux();
+  }
+
   private normalizeConfig(config: SSHConfig): SSHConfig {
     return {
       host: config.host.trim() || DEFAULT_CONFIG.host,
@@ -119,6 +170,30 @@ class SSHService {
 
   private hasRequiredFields(config: SSHConfig): boolean {
     return !!(config.host && config.port && config.username && (config.password || config.privateKey));
+  }
+
+  private parseTermuxSetupOutput(output: string): {
+    username?: string;
+    host?: string;
+    port?: number;
+    shell?: string;
+    rcPath?: string;
+    privateKey?: string;
+  } {
+    const readValue = (key: string): string | undefined => {
+      const line = output.split(/\r?\n/).find(item => item.startsWith(`${key}=`));
+      return line ? line.slice(key.length + 1).trim() : undefined;
+    };
+
+    const privateKeyMatch = output.match(/LINEAI_PRIVATE_KEY_BEGIN\n([\s\S]*?)\nLINEAI_PRIVATE_KEY_END/);
+    return {
+      username: readValue('LINEAI_TERMUX_USERNAME'),
+      host: readValue('LINEAI_TERMUX_HOST'),
+      port: Number(readValue('LINEAI_TERMUX_PORT') || DEFAULT_CONFIG.port),
+      shell: readValue('LINEAI_TERMUX_SHELL'),
+      rcPath: readValue('LINEAI_TERMUX_RC'),
+      privateKey: privateKeyMatch?.[1]?.trim(),
+    };
   }
 }
 

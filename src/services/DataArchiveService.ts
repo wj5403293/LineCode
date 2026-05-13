@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzipWithPassword, zipWithPassword } from 'react-native-zip-archive';
 import { APP_NAME, APP_VERSION } from '../constants/appInfo';
@@ -28,6 +29,13 @@ interface StorageEntry {
   key: string;
   value: string;
 }
+
+interface DataArchiveNativeModule {
+  exportAsyncStorageDatabase(targetDir: string): Promise<number>;
+  restoreAsyncStorageDatabase(sourceDir: string): Promise<number>;
+}
+
+const DataArchive = NativeModules.DataArchive as DataArchiveNativeModule | undefined;
 
 async function ensureCleanDir(path: string): Promise<void> {
   if (await RNFS.exists(path)) {
@@ -91,8 +99,7 @@ class DataArchiveService {
     await RNFS.mkdir(payloadDir);
 
     try {
-      const entries = await this.exportAsyncStorage();
-      await RNFS.writeFile(`${payloadDir}/async-storage.json`, JSON.stringify(entries, null, 2), 'utf8');
+      await this.exportAsyncStorage(payloadDir);
       await copyDir(HOME_DIR, `${payloadDir}/home`);
 
       const files = await collectFiles(payloadDir);
@@ -134,7 +141,7 @@ class DataArchiveService {
       await RNFS.writeFile(zipPath, armored.slice(BACKUP_HEADER.length), 'base64');
       await unzipWithPassword(zipPath, payloadDir, BACKUP_PASSWORD_SHA256);
       await this.verifyManifest(payloadDir);
-      await this.restoreAsyncStorage(`${payloadDir}/async-storage.json`);
+      await this.restoreAsyncStorage(payloadDir);
       await ensureCleanDir(HOME_DIR);
       await copyDir(`${payloadDir}/home`, HOME_DIR);
     } finally {
@@ -144,17 +151,38 @@ class DataArchiveService {
     }
   }
 
-  private async exportAsyncStorage(): Promise<StorageEntry[]> {
+  private async exportAsyncStorage(payloadDir: string): Promise<void> {
+    if (Platform.OS === 'android' && DataArchive?.exportAsyncStorageDatabase) {
+      const dbDir = `${payloadDir}/async-storage-db`;
+      await RNFS.mkdir(dbDir);
+      const copied = await DataArchive.exportAsyncStorageDatabase(dbDir);
+      if (copied > 0) {
+        return;
+      }
+      await RNFS.unlink(dbDir);
+    }
+
     const keys = (await AsyncStorage.getAllKeys()).filter(shouldExportKey);
     const pairs = await AsyncStorage.multiGet(keys);
-    return pairs
+    const entries = pairs
       .filter((pair): pair is [string, string] => typeof pair[1] === 'string')
       .map(([key, value]) => ({ key, value }));
+    await RNFS.writeFile(`${payloadDir}/async-storage.json`, JSON.stringify(entries, null, 2), 'utf8');
   }
 
-  private async restoreAsyncStorage(path: string): Promise<void> {
+  private async restoreAsyncStorage(payloadDir: string): Promise<void> {
+    const dbDir = `${payloadDir}/async-storage-db`;
+    if (await RNFS.exists(dbDir)) {
+      if (Platform.OS !== 'android' || !DataArchive?.restoreAsyncStorageDatabase) {
+        throw new Error('此备份包含 Android AsyncStorage 数据库，需要在 Android 设备上导入。');
+      }
+      await DataArchive.restoreAsyncStorageDatabase(dbDir);
+      return;
+    }
+
+    const path = `${payloadDir}/async-storage.json`;
     if (!(await RNFS.exists(path))) {
-      throw new Error('备份包缺少 async-storage.json');
+      throw new Error('备份包缺少 AsyncStorage 数据');
     }
     const entries = JSON.parse(await RNFS.readFile(path, 'utf8')) as StorageEntry[];
     const nextEntries = entries.filter(entry => typeof entry.key === 'string' && typeof entry.value === 'string');

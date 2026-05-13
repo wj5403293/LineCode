@@ -131,10 +131,11 @@ export class AnthropicStreamProcessor extends StreamProcessor {
       if (msg.role === 'system') {
         system = msg.content;
       } else if (msg.role === 'tool') {
-        const toolResults: { type: 'tool_result'; tool_use_id: string; content: string }[] = [{
+        const toolResults: { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }[] = [{
           type: 'tool_result',
           tool_use_id: msg.toolCallId!,
           content: msg.content,
+          ...(msg.isError ? { is_error: true } : {}),
         }];
         while (i + 1 < messages.length && messages[i + 1].role === 'tool') {
           i++;
@@ -142,6 +143,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
             type: 'tool_result',
             tool_use_id: messages[i].toolCallId!,
             content: messages[i].content,
+            ...(messages[i].isError ? { is_error: true } : {}),
           });
         }
         formatted.push({
@@ -272,6 +274,26 @@ export class AnthropicStreamProcessor extends StreamProcessor {
           try {
             const json = JSON.parse(data);
             console.log('[LineCode] Stream event:', json.type, json);
+
+            if (json.type === 'message_stop') {
+              if (currentThinkingDetail) {
+                reasoningDetails.push({ ...currentThinkingDetail });
+                currentThinkingDetail = null;
+              }
+              if (currentToolCall) {
+                toolCalls.push({
+                  id: currentToolCall.id,
+                  name: currentToolCall.name,
+                  arguments: currentToolCall.input || '{}',
+                });
+                if (currentBlockIndex >= 0 && blocks[currentBlockIndex]?.type === 'tool_use') {
+                  blocks[currentBlockIndex].content = currentToolCall.input || '{}';
+                }
+                currentToolCall = null;
+              }
+              currentBlockType = null;
+              continue;
+            }
 
             if (json.type === 'content_block_start') {
               const blockType = json.content_block?.type;
