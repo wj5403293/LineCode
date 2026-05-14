@@ -64,47 +64,28 @@ export class OpenAIStreamProcessor extends StreamProcessor {
 
     const requestUrl = `${baseUrl}/chat/completions`;
 
-    let res: Response;
-    try {
-      res = await fetch(requestUrl, {
+    const res = await this.fetchWithRetry({
+      providerName: 'OpenAI',
+      requestUrl,
+      abortSignal,
+      callbacks,
+      networkHint: '请检查网络连接、Base URL 是否正确，以及是否需要配置代理/VPN',
+      httpHint: '如果收到 404，请检查 Base URL 是否包含完整路径（如 https://api.openai.com/v1）',
+      init: {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${model.apiKey}`,
         },
         body: JSON.stringify(body),
-        signal: abortSignal,
-      });
-    } catch (err: any) {
-      if (err.name === 'AbortError') throw err;
-      throw new Error(
-        `网络请求失败: ${err.message}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        `提示: 请检查网络连接、Base URL 是否正确，以及是否需要配置代理/VPN`
-      );
-    }
+      },
+    });
 
     console.log('[LineCode] OpenAI request messages:', body.messages.length);
     body.messages.forEach((msg: any, i: number) => {
       console.log(`[LineCode] Message ${i}:`, JSON.stringify(msg).substring(0, 200));
     });
     console.log('[LineCode] OpenAI HTTP response status:', res.status, res.statusText);
-
-    if (!res.ok) {
-      const rawText = await res.text();
-      let errText = rawText;
-      try {
-        const errJson = JSON.parse(rawText);
-        if (errJson?.error?.message) {
-          errText = errJson.error.message;
-        }
-      } catch {}
-      throw new Error(
-        `OpenAI ${res.status}: ${errText}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        `提示: 如果收到 404，请检查 Base URL 是否包含完整路径（如 https://api.openai.com/v1）`
-      );
-    }
 
     return this.readStream(res, callbacks, abortSignal);
   }
@@ -147,7 +128,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
       while (true) {
         if (abortSignal?.aborted) break;
 
-        const { done, value } = await reader.read();
+        const { done, value } = await this.readChunkWithTimeout(reader, 'OpenAI', abortSignal);
         console.log('[LineCode] OpenAI Stream read - done:', done, 'value length:', value?.length || 0);
         if (done) {
           console.log('[LineCode] OpenAI Stream done');
@@ -166,61 +147,72 @@ export class OpenAIStreamProcessor extends StreamProcessor {
         console.log('[LineCode] OpenAI Stream lines:', lines.length);
 
         for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+            let json: any;
             try {
-              const json = JSON.parse(line.slice(6));
-              const delta = json.choices?.[0]?.delta;
-              console.log('[LineCode] delta:', JSON.stringify(delta).substring(0, 100));
+              json = JSON.parse(line.slice(6));
+            } catch {
+              console.warn('[LineCode] OpenAI Stream invalid JSON line:', line.substring(0, 200));
+              continue;
+            }
+            if (json.error) {
+              throw new Error(`OpenAI 流式错误: ${this.describeErrorPayload(json.error)}`);
+            }
+            const delta = json.choices?.[0]?.delta;
+            const finishReason = json.choices?.[0]?.finish_reason;
+            if (finishReason === 'content_filter') {
+              throw new Error('OpenAI 流式错误: 输出被内容安全策略拦截');
+            }
+            console.log('[LineCode] delta:', JSON.stringify(delta).substring(0, 100));
 
-              const reasoningDelta = this.extractReasoningDelta(delta);
-              if (reasoningDelta) {
-                console.log('[LineCode] Captured reasoning delta:', reasoningDelta.substring(0, 20));
-                reasoningFull += reasoningDelta;
-                ensureThinkingBlock().content = reasoningFull;
-                callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
-              }
+            const reasoningDelta = this.extractReasoningDelta(delta);
+            if (reasoningDelta) {
+              console.log('[LineCode] Captured reasoning delta:', reasoningDelta.substring(0, 20));
+              reasoningFull += reasoningDelta;
+              ensureThinkingBlock().content = reasoningFull;
+              callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            }
 
-              const nextReasoningDetails = this.extractReasoningDetails(delta);
-              if (nextReasoningDetails) {
-                reasoningDetails = nextReasoningDetails;
-                if (!reasoningFull) {
-                  const detailsText = this.reasoningDetailsToText(reasoningDetails);
-                  if (detailsText) {
-                    reasoningFull = detailsText;
-                    ensureThinkingBlock().content = reasoningFull;
-                    callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
-                  }
-                }
-              }
-
-              if (delta?.content) {
-                const contentDelta = String(delta.content);
-                const parsedContent = this.parseThinkTags(contentDelta);
-                if (parsedContent.thinking) {
-                  reasoningFull += parsedContent.thinking;
+            const nextReasoningDetails = this.extractReasoningDetails(delta);
+            if (nextReasoningDetails) {
+              reasoningDetails = nextReasoningDetails;
+              if (!reasoningFull) {
+                const detailsText = this.reasoningDetailsToText(reasoningDetails);
+                if (detailsText) {
+                  reasoningFull = detailsText;
                   ensureThinkingBlock().content = reasoningFull;
+                  callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
                 }
-                full += parsedContent.text;
-                ensureTextBlock().content = full;
-                callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
               }
+            }
 
-              if (delta?.tool_calls) {
-                for (const tc of delta.tool_calls) {
-                  const idx = tc.index ?? 0;
-                  if (!toolCallsMap.has(idx)) {
-                    toolCallsMap.set(idx, { id: tc.id || '', name: '', arguments: '' });
-                  }
-                  const existing = toolCallsMap.get(idx)!;
-                  if (tc.id) existing.id = tc.id;
-                  if (tc.function?.name) {
-                    existing.name = tc.function.name;
-                    callbacks?.onToolCallDetected?.({ id: existing.id, name: existing.name });
-                  }
-                  if (tc.function?.arguments) existing.arguments += tc.function.arguments;
-                }
+            if (delta?.content) {
+              const contentDelta = String(delta.content);
+              const parsedContent = this.parseThinkTags(contentDelta);
+              if (parsedContent.thinking) {
+                reasoningFull += parsedContent.thinking;
+                ensureThinkingBlock().content = reasoningFull;
               }
-            } catch {}
+              full += parsedContent.text;
+              ensureTextBlock().content = full;
+              callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+            }
+
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                if (!toolCallsMap.has(idx)) {
+                  toolCallsMap.set(idx, { id: tc.id || '', name: '', arguments: '' });
+                }
+                const existing = toolCallsMap.get(idx)!;
+                if (tc.id) existing.id = tc.id;
+                if (tc.function?.name) {
+                  existing.name = tc.function.name;
+                  callbacks?.onToolCallDetected?.({ id: existing.id, name: existing.name });
+                }
+                if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              }
+            }
           }
         }
       }
@@ -250,6 +242,10 @@ export class OpenAIStreamProcessor extends StreamProcessor {
           content: tc.arguments,
         });
       }
+    }
+
+    if (!abortSignal?.aborted && !full.trim() && !reasoningFull.trim() && toolCalls.length === 0) {
+      throw new Error('OpenAI 响应结束但没有返回任何内容。请检查模型是否支持当前协议、流式输出是否被代理截断，或切换到正确的 Base URL。');
     }
 
     return {

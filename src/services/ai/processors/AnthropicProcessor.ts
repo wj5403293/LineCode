@@ -76,22 +76,19 @@ export class AnthropicStreamProcessor extends StreamProcessor {
       headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
     }
 
-    let res: Response;
-    try {
-      res = await fetch(requestUrl, {
+    const res = await this.fetchWithRetry({
+      providerName: 'Anthropic',
+      requestUrl,
+      abortSignal,
+      callbacks,
+      networkHint: '请检查网络连接、Base URL 是否正确，以及是否需要配置代理/VPN',
+      httpHint: '如果收到 404，请检查 Base URL 是否正确（如 https://api.anthropic.com）',
+      init: {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: abortSignal,
-      });
-    } catch (err: any) {
-      if (err.name === 'AbortError') throw err;
-      throw new Error(
-        `网络请求失败: ${err.message}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        `提示: 请检查网络连接、Base URL 是否正确，以及是否需要配置代理/VPN`
-      );
-    }
+      },
+    });
 
     console.log('[LineCode] Anthropic request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
     body.messages.forEach((msg: any, i: number) => {
@@ -99,22 +96,6 @@ export class AnthropicStreamProcessor extends StreamProcessor {
     });
 
     console.log('[LineCode] HTTP response status:', res.status, res.statusText);
-
-    if (!res.ok) {
-      const rawText = await res.text();
-      let errText = rawText;
-      try {
-        const errJson = JSON.parse(rawText);
-        if (errJson?.error?.message) {
-          errText = errJson.error.message;
-        }
-      } catch {}
-      throw new Error(
-        `Anthropic ${res.status}: ${errText}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        `提示: 如果收到 404，请检查 Base URL 是否正确（如 https://api.anthropic.com）`
-      );
-    }
 
     return this.readStream(res, callbacks, abortSignal);
   }
@@ -252,7 +233,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
       while (true) {
         if (abortSignal?.aborted) break;
 
-        const { done, value } = await reader.read();
+        const { done, value } = await this.readChunkWithTimeout(reader, 'Anthropic', abortSignal);
         console.log('[LineCode] Anthropic Stream read - done:', done, 'value length:', value?.length || 0);
         if (done) {
           console.log('[LineCode] Anthropic Stream done, blocks:', blocks.length, 'toolCalls:', toolCalls.length);
@@ -271,11 +252,20 @@ export class AnthropicStreamProcessor extends StreamProcessor {
           const data = line.slice(6).trim();
           if (data === '[DONE]') continue;
 
+          let json: any;
           try {
-            const json = JSON.parse(data);
-            console.log('[LineCode] Stream event:', json.type, json);
+            json = JSON.parse(data);
+          } catch {
+            console.warn('[LineCode] Anthropic Stream invalid JSON line:', data.substring(0, 200));
+            continue;
+          }
+          console.log('[LineCode] Stream event:', json.type, json);
 
-            if (json.type === 'message_stop') {
+          if (json.type === 'error' || json.error) {
+            throw new Error(`Anthropic 流式错误: ${this.describeErrorPayload(json.error || json)}`);
+          }
+
+          if (json.type === 'message_stop') {
               if (currentThinkingDetail) {
                 reasoningDetails.push({ ...currentThinkingDetail });
                 currentThinkingDetail = null;
@@ -292,10 +282,10 @@ export class AnthropicStreamProcessor extends StreamProcessor {
                 currentToolCall = null;
               }
               currentBlockType = null;
-              continue;
-            }
+            continue;
+          }
 
-            if (json.type === 'content_block_start') {
+          if (json.type === 'content_block_start') {
               const blockType = json.content_block?.type;
               if (blockType === 'thinking') {
                 ensureBlock('thinking');
@@ -326,7 +316,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
                 blocks[currentBlockIndex].name = json.content_block.name;
                 callbacks?.onToolCallDetected?.({ id: json.content_block.id, name: json.content_block.name });
               }
-            } else if (json.type === 'content_block_delta') {
+          } else if (json.type === 'content_block_delta') {
               if (json.delta?.type === 'thinking_delta') {
                 const idx = ensureBlock('thinking');
                 const thinking = json.delta.thinking || '';
@@ -349,7 +339,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
                   currentToolCall.input += json.delta.partial_json || '';
                 }
               }
-            } else if (json.type === 'content_block_stop') {
+          } else if (json.type === 'content_block_stop') {
               if (currentThinkingDetail) {
                 reasoningDetails.push({ ...currentThinkingDetail });
                 currentThinkingDetail = null;
@@ -360,12 +350,13 @@ export class AnthropicStreamProcessor extends StreamProcessor {
                   name: currentToolCall.name,
                   arguments: currentToolCall.input || '{}',
                 });
-                blocks[currentBlockIndex].content = currentToolCall.input || '{}';
+                if (currentBlockIndex >= 0) {
+                  blocks[currentBlockIndex].content = currentToolCall.input || '{}';
+                }
                 currentToolCall = null;
               }
               currentBlockType = null;
-            }
-          } catch {}
+          }
         }
       }
     } catch (err: any) {
@@ -382,6 +373,9 @@ export class AnthropicStreamProcessor extends StreamProcessor {
 
     const fullText = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
     const reasoningContent = blocks.filter(b => b.type === 'thinking').map(b => b.content).join('');
+    if (!abortSignal?.aborted && !fullText.trim() && !reasoningContent.trim() && toolCalls.length === 0) {
+      throw new Error('Anthropic 响应结束但没有返回任何内容。请检查模型是否支持当前协议、流式输出是否被代理截断，或切换到正确的 Base URL。');
+    }
     return {
       text: fullText,
       blocks,

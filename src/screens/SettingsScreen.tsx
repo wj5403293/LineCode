@@ -25,7 +25,7 @@ const SETTINGS_ITEMS = [
   { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
   { id: 'theme', label: '主题设置', desc: '亮色/暗色/跟随系统', icon: Palette },
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
-  { id: 'storage', label: '存储管理', desc: '查看 diff、聊天、配置和 home 使用量', icon: Database },
+  { id: 'storage', label: '存储管理', desc: '查看 diff、聊天、配置和当前工作区大小', icon: Database },
   { id: 'keepAlive', label: '保活设置', desc: '前台服务、静音播放和电池白名单', icon: BatteryCharging },
   { id: 'data', label: '数据与更新', desc: '热更新、导出和导入 .linecode', icon: Archive },
   { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },

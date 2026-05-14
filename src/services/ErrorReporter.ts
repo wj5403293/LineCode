@@ -15,13 +15,17 @@ export interface ErrorReport {
 }
 
 type Listener = (report: ErrorReport) => void;
+type ReportOptions = {
+  componentStack?: string;
+  fatal?: boolean;
+  notify?: boolean;
+};
 const STORAGE_KEY = '@linecode_error_reports';
 const MAX_REPORTS = 20;
 
 class ErrorReporter {
   private listeners = new Set<Listener>();
   private installed = false;
-  private originalGlobalHandler?: (error: Error, isFatal?: boolean) => void;
   private originalConsoleError?: typeof console.error;
   private recentMessages = new Map<string, number>();
 
@@ -30,10 +34,18 @@ class ErrorReporter {
     return () => this.listeners.delete(listener);
   }
 
-  report(error: unknown, source: ErrorReport['source'], extra?: { componentStack?: string; fatal?: boolean }): ErrorReport {
+  report(error: unknown, source: ErrorReport['source'], extra?: ReportOptions): ErrorReport {
     const report = this.createReport(error, source, extra);
     this.persist(report).catch(() => {});
-    this.listeners.forEach(listener => listener(report));
+    if (extra?.notify !== false) {
+      this.listeners.forEach(listener => {
+        try {
+          listener(report);
+        } catch {
+          // Error reporting must never become the source of another crash.
+        }
+      });
+    }
     return report;
   }
 
@@ -51,18 +63,14 @@ class ErrorReporter {
     this.installed = true;
 
     const errorUtils = (globalThis as any).ErrorUtils;
-    this.originalGlobalHandler = errorUtils?.getGlobalHandler?.();
     errorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
       this.report(error, 'global', { fatal: isFatal });
-      this.originalGlobalHandler?.(error, isFatal);
     });
 
     const globalAny = globalThis as any;
-    const previousUnhandledRejection = globalAny.onunhandledrejection;
     globalAny.onunhandledrejection = (event: any) => {
       const reason = event?.reason ?? event;
       this.report(reason, 'promise');
-      previousUnhandledRejection?.(event);
     };
 
     globalAny.HermesInternal?.enablePromiseRejectionTracker?.({
@@ -100,7 +108,7 @@ class ErrorReporter {
   private createReport(
     error: unknown,
     source: ErrorReport['source'],
-    extra?: { componentStack?: string; fatal?: boolean },
+    extra?: ReportOptions,
   ): ErrorReport {
     const err = this.normalizeError(error);
     return {

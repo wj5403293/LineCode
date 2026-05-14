@@ -4,6 +4,7 @@ import ThinkingBlock from './ThinkingBlock';
 import TextBlock from './TextBlock';
 import ToolCallBlock from '../mcp/ToolCallBlock';
 import ContextCompactBlock from '../mcp/ContextCompactBlock';
+import RenderErrorBoundary from '../RenderErrorBoundary';
 
 interface ContentBlockRendererProps {
   blocks?: ContentBlock[];
@@ -44,13 +45,14 @@ export function ContentBlockRenderer({
         {blocks.map((block, i) => {
           if (block.type === 'thinking') {
             return (
-              <ThinkingBlock
-                key={i}
-                content={block.content}
-                streaming={streaming && i === blocks.length - 1}
-                autoExpand={thinkingAutoExpand}
-                scrollable={thinkingScrollable}
-              />
+              <RenderErrorBoundary key={i} label="思考内容" resetKey={block.content}>
+                <ThinkingBlock
+                  content={block.content}
+                  streaming={streaming && i === blocks.length - 1}
+                  autoExpand={thinkingAutoExpand}
+                  scrollable={thinkingScrollable}
+                />
+              </RenderErrorBoundary>
             );
           }
           if (block.type === 'tool_use' && block.id && block.name) {
@@ -61,21 +63,26 @@ export function ContentBlockRenderer({
             };
             const tr = toolResults?.find(r => r.toolCallId === block.id);
             return (
-              <ToolCallBlock
+              <RenderErrorBoundary
                 key={i}
-                toolCall={tc}
-                homePath={homePath}
-                result={tr?.content}
-                isError={tr?.isError}
-                toolResult={tr}
-                block={block}
-                pending={block.id === shellConfirmToolCallId && !tr}
-                onShellCancel={onShellCancel}
-                onShellConfirm={onShellConfirm}
-                onShellDefaultExecute={onShellDefaultExecute}
-                onViewShellCommand={onViewShellCommand}
-                onToolReview={onToolReview}
-              />
+                label="工具调用"
+                resetKey={toolResetKey(block.id, shellConfirmToolCallId, tr)}
+              >
+                <ToolCallBlock
+                  toolCall={tc}
+                  homePath={homePath}
+                  result={tr?.content}
+                  isError={tr?.isError}
+                  toolResult={tr}
+                  block={block}
+                  pending={block.id === shellConfirmToolCallId && !tr}
+                  onShellCancel={onShellCancel}
+                  onShellConfirm={onShellConfirm}
+                  onShellDefaultExecute={onShellDefaultExecute}
+                  onViewShellCommand={onViewShellCommand}
+                  onToolReview={onToolReview}
+                />
+              </RenderErrorBoundary>
             );
           }
           if (block.type === 'tool_result') {
@@ -90,12 +97,13 @@ export function ContentBlockRenderer({
             );
           }
           return (
-            <TextBlock
-              key={i}
-              content={block.content}
-              streaming={streaming && i === blocks.length - 1}
-              codeWrap={codeWrap}
-            />
+            <RenderErrorBoundary key={i} label="消息内容" resetKey={block.content}>
+              <TextBlock
+                content={block.content}
+                streaming={streaming && i === blocks.length - 1}
+                codeWrap={codeWrap}
+              />
+            </RenderErrorBoundary>
           );
         })}
       </>
@@ -108,20 +116,25 @@ export function ContentBlockRenderer({
         {toolCalls.map((tc, i) => {
           const tr = toolResults?.find(r => r.toolCallId === tc.id);
           return (
-            <ToolCallBlock
+            <RenderErrorBoundary
               key={i}
-              toolCall={tc}
-              homePath={homePath}
-              result={tr?.content}
-              isError={tr?.isError}
-              toolResult={tr}
-              pending={tc.id === shellConfirmToolCallId && !tr}
-              onShellCancel={onShellCancel}
-              onShellConfirm={onShellConfirm}
-              onShellDefaultExecute={onShellDefaultExecute}
-              onViewShellCommand={onViewShellCommand}
-              onToolReview={onToolReview}
-            />
+              label="工具调用"
+              resetKey={toolResetKey(tc.id, shellConfirmToolCallId, tr)}
+            >
+              <ToolCallBlock
+                toolCall={tc}
+                homePath={homePath}
+                result={tr?.content}
+                isError={tr?.isError}
+                toolResult={tr}
+                pending={tc.id === shellConfirmToolCallId && !tr}
+                onShellCancel={onShellCancel}
+                onShellConfirm={onShellConfirm}
+                onShellDefaultExecute={onShellDefaultExecute}
+                onViewShellCommand={onViewShellCommand}
+                onToolReview={onToolReview}
+              />
+            </RenderErrorBoundary>
           );
         })}
       </>
@@ -173,7 +186,9 @@ export function ContentWithText({
   return (
     <>
       {hasContent && !hasBlocks && !hasToolCalls && (
-        <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+        <RenderErrorBoundary label="消息内容" resetKey={content}>
+          <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+        </RenderErrorBoundary>
       )}
       <ContentBlockRenderer
         blocks={blocks}
@@ -193,4 +208,23 @@ export function ContentWithText({
       />
     </>
   );
+}
+
+function pendingKey(toolCallId: string, shellConfirmToolCallId?: string): string {
+  return toolCallId === shellConfirmToolCallId ? 'pending' : 'idle';
+}
+
+function toolResetKey(
+  toolCallId: string,
+  shellConfirmToolCallId: string | undefined,
+  result?: ToolResult,
+): string {
+  return [
+    toolCallId,
+    pendingKey(toolCallId, shellConfirmToolCallId),
+    result?.isError ? 'error' : 'ok',
+    result?.content?.length || 0,
+    result?.diffId || '',
+    result?.reviewState || '',
+  ].join(':');
 }

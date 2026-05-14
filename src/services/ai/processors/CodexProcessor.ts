@@ -68,22 +68,26 @@ export class CodexStreamProcessor extends StreamProcessor {
 
     let res: Response;
     try {
-      res = await fetch(requestUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: abortSignal,
+      res = await this.fetchWithRetry({
+        providerName: 'Codex',
+        requestUrl,
+        abortSignal,
+        callbacks,
+        networkHint: '请检查网络连接、Base URL 是否为 Responses API 地址，以及 API Key 是否正确',
+        httpHint: 'Codex 协议需要 OpenAI Responses API，Base URL 通常为 https://api.openai.com/v1',
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        },
       });
     } catch (err: any) {
       if (err.name === 'AbortError') {
         this.turnState = undefined;
         throw err;
       }
-      throw new Error(
-        `Codex 网络请求失败: ${err.message}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        '提示: 请检查网络连接、Base URL 是否为 Responses API 地址，以及 API Key 是否正确'
-      );
+      this.turnState = undefined;
+      throw err;
     }
 
     const nextTurnState = res.headers?.get?.('x-codex-turn-state');
@@ -92,23 +96,6 @@ export class CodexStreamProcessor extends StreamProcessor {
     }
 
     console.log('[LineCode] Codex HTTP response status:', res.status, res.statusText);
-
-    if (!res.ok) {
-      this.turnState = undefined;
-      const rawText = await res.text();
-      let errText = rawText;
-      try {
-        const errJson = JSON.parse(rawText);
-        if (errJson?.error?.message) {
-          errText = errJson.error.message;
-        }
-      } catch {}
-      throw new Error(
-        `Codex ${res.status}: ${errText}\n\n` +
-        `请求地址: ${requestUrl}\n` +
-        '提示: Codex 协议需要 OpenAI Responses API，Base URL 通常为 https://api.openai.com/v1'
-      );
-    }
 
     try {
       const result = await this.readResponsesStream(res, callbacks, abortSignal);
@@ -286,11 +273,16 @@ export class CodexStreamProcessor extends StreamProcessor {
       try {
         json = JSON.parse(event.data);
       } catch {
+        console.warn('[LineCode] Codex SSE invalid JSON event:', event.data.substring(0, 200));
         return;
       }
 
       const eventType = event.event || json.type;
       console.log('[LineCode] Codex SSE event:', eventType);
+
+      if (json.error) {
+        throw new Error(`Codex 流式错误: ${this.describeErrorPayload(json.error)}`);
+      }
 
       if (eventType === 'response.output_text.delta' && typeof json.delta === 'string') {
         full += json.delta;
@@ -386,7 +378,7 @@ export class CodexStreamProcessor extends StreamProcessor {
       while (true) {
         if (abortSignal?.aborted) break;
 
-        const { done, value } = await reader.read();
+        const { done, value } = await this.readChunkWithTimeout(reader, 'Codex', abortSignal);
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
@@ -416,6 +408,10 @@ export class CodexStreamProcessor extends StreamProcessor {
 
     if (toolCalls.length > 0) {
       callbacks?.onToolCalls?.(toolCalls);
+    }
+
+    if (!abortSignal?.aborted && !full.trim() && !reasoningFull.trim() && toolCalls.length === 0) {
+      throw new Error('Codex 响应结束但没有返回任何内容。请检查模型是否支持 Responses API、流式输出是否被代理截断，或切换到正确的 Base URL。');
     }
 
     return {

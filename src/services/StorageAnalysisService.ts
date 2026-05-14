@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { projectService } from './ProjectService';
 import { workspaceFs } from './WorkspaceFileSystem';
@@ -15,6 +16,19 @@ export interface StorageAnalysis {
   totalBytes: number;
   categories: StorageCategory[];
   generatedAt: number;
+}
+
+interface AsyncStorageEntrySize {
+  key: string;
+  bytes: number;
+}
+
+interface DataArchiveNativeModule {
+  getAsyncStorageEntrySizes?: () => Promise<AsyncStorageEntrySize[]>;
+}
+
+function getDataArchive(): DataArchiveNativeModule | undefined {
+  return NativeModules.DataArchive as DataArchiveNativeModule | undefined;
 }
 
 function byteLength(value: string): number {
@@ -40,25 +54,17 @@ function matchCategory(key: string): StorageCategory['id'] {
   return 'config';
 }
 
+function shouldAnalyzeKey(key: string): boolean {
+  return key.startsWith('@lineai_') || key.startsWith('@linecode_');
+}
+
 function formatDesc(keys: number, prefix: string): string {
   return `${prefix}，${keys} 个存储键`;
 }
 
 class StorageAnalysisService {
   async analyze(): Promise<StorageAnalysis> {
-    const keys = (await AsyncStorage.getAllKeys()).filter(key => key.startsWith('@lineai_') || key.startsWith('@linecode_'));
-    const pairs = await AsyncStorage.multiGet(keys);
-    const buckets: Record<string, { bytes: number; items: number }> = {
-      diffs: { bytes: 0, items: 0 },
-      chats: { bytes: 0, items: 0 },
-      config: { bytes: 0, items: 0 },
-    };
-
-    for (const [key, value] of pairs) {
-      const id = matchCategory(key);
-      buckets[id].items += 1;
-      buckets[id].bytes += byteLength(value || '');
-    }
+    const buckets = await this.analyzeAsyncStorage();
 
     const homePath = await projectService.getCurrentHomePath();
     const homeStats = await workspaceFs.getDirStats(homePath).catch(() => ({ bytes: 0, files: 0, directories: 0 }));
@@ -88,7 +94,7 @@ class StorageAnalysisService {
       },
       {
         id: 'home',
-        label: 'Home 目录',
+        label: '当前工作区大小',
         desc: `${homeStats.files} 个文件，${homeStats.directories} 个目录`,
         bytes: homeStats.bytes,
         items: homeStats.files + homeStats.directories,
@@ -96,7 +102,7 @@ class StorageAnalysisService {
       {
         id: 'linecode',
         label: '.linecode 内部目录',
-        desc: `${linecodeStats.files} 个文件，${linecodeStats.directories} 个目录，不含当前 home`,
+        desc: `${linecodeStats.files} 个文件，${linecodeStats.directories} 个目录，不含当前工作区`,
         bytes: linecodeStats.bytes,
         items: linecodeStats.files + linecodeStats.directories,
       },
@@ -107,6 +113,44 @@ class StorageAnalysisService {
       totalBytes: categories.reduce((sum, item) => sum + item.bytes, 0),
       generatedAt: Date.now(),
     };
+  }
+
+  private async analyzeAsyncStorage(): Promise<Record<string, { bytes: number; items: number }>> {
+    const buckets: Record<string, { bytes: number; items: number }> = {
+      diffs: { bytes: 0, items: 0 },
+      chats: { bytes: 0, items: 0 },
+      config: { bytes: 0, items: 0 },
+    };
+
+    if (Platform.OS === 'android') {
+      const dataArchive = getDataArchive();
+      if (dataArchive?.getAsyncStorageEntrySizes) {
+        const entries = await dataArchive.getAsyncStorageEntrySizes();
+        for (const entry of entries) {
+          if (!shouldAnalyzeKey(entry.key)) continue;
+          const id = matchCategory(entry.key);
+          buckets[id].items += 1;
+          buckets[id].bytes += Number.isFinite(entry.bytes) ? entry.bytes : 0;
+        }
+        return buckets;
+      }
+
+      const keys = (await AsyncStorage.getAllKeys()).filter(shouldAnalyzeKey);
+      for (const key of keys) {
+        const id = matchCategory(key);
+        buckets[id].items += 1;
+      }
+      return buckets;
+    }
+
+    const keys = (await AsyncStorage.getAllKeys()).filter(shouldAnalyzeKey);
+    const pairs = await AsyncStorage.multiGet(keys);
+    for (const [key, value] of pairs) {
+      const id = matchCategory(key);
+      buckets[id].items += 1;
+      buckets[id].bytes += byteLength(value || '');
+    }
+    return buckets;
   }
 
   private async analyzeInternalLinecode(currentHomePath: string) {

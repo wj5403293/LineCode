@@ -5,6 +5,8 @@ import { ChevronRight, ChevronDown } from 'lucide-react-native';
 import { spacing, fontSizes } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createThinkingMdStyle } from './markdownStyles';
+import { latexMarkdownIt } from './latexMarkdown';
+import { createMessageMarkdownRules } from './markdownRules';
 
 interface Props {
   content: string;
@@ -16,6 +18,7 @@ interface Props {
 export default React.memo(function ThinkingBlock({ content, streaming, autoExpand, scrollable }: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
+  const markdownRules = useMemo(() => createMessageMarkdownRules(), []);
   const [expanded, setExpanded] = useState(autoExpand || false);
 
   useEffect(() => {
@@ -42,11 +45,11 @@ export default React.memo(function ThinkingBlock({ content, streaming, autoExpan
       {expanded && (
         scrollable ? (
           <ScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
-            <Markdown style={mdStyle}>{content}</Markdown>
+            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
           </ScrollView>
         ) : (
           <View style={[styles.content, { borderTopColor: colors.borderLight }]}>
-            <Markdown style={mdStyle}>{content}</Markdown>
+            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
           </View>
         )
       )}

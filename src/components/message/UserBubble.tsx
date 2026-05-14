@@ -4,8 +4,9 @@ import Markdown from 'react-native-markdown-display';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createUserMdStyle } from './markdownStyles';
-import CodeBlock from '../CodeBlock';
 import { InputAttachment } from '../../types';
+import { latexMarkdownIt } from './latexMarkdown';
+import { createMessageMarkdownRules } from './markdownRules';
 
 interface Props {
   content: string;
@@ -19,46 +20,10 @@ function stripLegacyAttachmentBlock(content: string): string {
   return content.startsWith('附加文件位置:\n') ? '' : content;
 }
 
-const selectableUserRules = {
-  text: (node: any, _children: any, _parent: any, markdownStyles: any, inheritedStyles = {}) => (
-    <Text key={node.key} selectable style={[inheritedStyles, markdownStyles.text]}>
-      {node.content}
-    </Text>
-  ),
-  textgroup: (node: any, children: React.ReactNode, _parent: any, markdownStyles: any) => (
-    <Text key={node.key} selectable style={markdownStyles.textgroup}>
-      {children}
-    </Text>
-  ),
-  strong: (node: any, children: React.ReactNode, _parent: any, markdownStyles: any) => (
-    <Text key={node.key} selectable style={markdownStyles.strong}>
-      {children}
-    </Text>
-  ),
-  em: (node: any, children: React.ReactNode, _parent: any, markdownStyles: any) => (
-    <Text key={node.key} selectable style={markdownStyles.em}>
-      {children}
-    </Text>
-  ),
-  code_inline: (node: any, _children: any, _parent: any, markdownStyles: any, inheritedStyles = {}) => (
-    <Text key={node.key} selectable style={[inheritedStyles, markdownStyles.code_inline]}>
-      {node.content}
-    </Text>
-  ),
-  fence: (node: any) => {
-    const language = node.attributes?.language || '';
-    const code = node.content || '';
-    return <CodeBlock key={node.key} language={language} code={code} />;
-  },
-  code_block: (node: any) => {
-    const code = node.content || '';
-    return <CodeBlock key={node.key} code={code} />;
-  },
-};
-
 export default React.memo(function UserBubble({ content, attachments }: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createUserMdStyle(colors), [colors]);
+  const markdownRules = useMemo(() => createMessageMarkdownRules(), []);
   const sanitizedContent = stripLegacyAttachmentBlock(content);
   const fallbackContent = content.startsWith('附加文件位置:\n') ? '已附加文件' : '';
   const displayContent = sanitizedContent || fallbackContent;
@@ -69,7 +34,7 @@ export default React.memo(function UserBubble({ content, attachments }: Props) {
       <View style={styles.stack}>
         {!!visibleContent && (
           <View style={[styles.bubble, { backgroundColor: colors.userBubble }]}>
-            <Markdown style={mdStyle} rules={selectableUserRules}>{visibleContent}</Markdown>
+            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{visibleContent}</Markdown>
           </View>
         )}
         {!!attachments?.length && (

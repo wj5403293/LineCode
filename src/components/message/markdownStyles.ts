@@ -49,6 +49,15 @@ export function createMdStyle(c: ThemeColors) {
       paddingLeft: spacing.sm,
       color: c.textSecondary,
     },
+    latex_textgroup: {
+      flexDirection: 'row' as const,
+      flexWrap: 'wrap' as const,
+      alignItems: 'center' as const,
+    },
+    latex_block: {
+      width: '100%' as const,
+      maxWidth: '100%' as const,
+    },
   };
 }
 

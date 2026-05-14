@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Code2, User, MessageCircle, FileText, ChevronRight } from 'lucide-react-native';
+import { Code2, User, MessageCircle, FileText, ChevronRight, Bug } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { APP_VERSION } from '../constants/appInfo';
@@ -10,16 +10,17 @@ interface AboutItemProps {
   label: string;
   value?: string;
   onPress?: () => void;
+  hiddenPress?: boolean;
 }
 
-function AboutItem({ icon, label, value, onPress }: AboutItemProps) {
+function AboutItem({ icon, label, value, onPress, hiddenPress }: AboutItemProps) {
   const { colors } = useTheme();
 
   return (
     <TouchableOpacity
       style={[styles.item, { backgroundColor: colors.surfaceElevated }]}
       onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
+      activeOpacity={onPress && !hiddenPress ? 0.7 : 1}
       disabled={!onPress}
     >
       <View style={[styles.itemIcon, { backgroundColor: colors.accentMuted }]}>{icon}</View>
@@ -27,17 +28,32 @@ function AboutItem({ icon, label, value, onPress }: AboutItemProps) {
         <Text style={[styles.itemLabel, { color: colors.text }]}>{label}</Text>
         {value && <Text style={[styles.itemValue, { color: colors.textSecondary }]}>{value}</Text>}
       </View>
-      {onPress && <ChevronRight size={18} color={colors.textTertiary} />}
+      {onPress && !hiddenPress && <ChevronRight size={18} color={colors.textTertiary} />}
     </TouchableOpacity>
   );
 }
 
 interface Props {
   onOpenLicenses: () => void;
+  onOpenDebug: () => void;
 }
 
-export default function AboutScreen({ onOpenLicenses }: Props) {
+const AUTHOR_UNLOCK_TAPS = 5;
+const QQ_UNLOCK_TAPS = 4;
+
+export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
   const { colors } = useTheme();
+  const [authorTaps, setAuthorTaps] = useState(0);
+  const [qqTaps, setQqTaps] = useState(0);
+  const debugUnlocked = authorTaps === AUTHOR_UNLOCK_TAPS && qqTaps === QQ_UNLOCK_TAPS;
+
+  const handleAuthorPress = useCallback(() => {
+    setAuthorTaps(count => (count >= AUTHOR_UNLOCK_TAPS ? 0 : count + 1));
+  }, []);
+
+  const handleQqPress = useCallback(() => {
+    setQqTaps(count => (count >= QQ_UNLOCK_TAPS ? 0 : count + 1));
+  }, []);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.surface }]} contentContainerStyle={styles.content}>
@@ -55,13 +71,28 @@ export default function AboutScreen({ onOpenLicenses }: Props) {
           icon={<User size={20} color={colors.accent} />}
           label="作者"
           value="LangLang"
+          onPress={handleAuthorPress}
+          hiddenPress
         />
         <AboutItem
           icon={<MessageCircle size={20} color={colors.accent} />}
           label="QQ"
           value="3772548978"
+          onPress={handleQqPress}
+          hiddenPress
         />
       </View>
+
+      {debugUnlocked && (
+        <View style={styles.section}>
+          <AboutItem
+            icon={<Bug size={20} color={colors.accent} />}
+            label="调试模式"
+            value="错误处理器测试和最近错误报告"
+            onPress={onOpenDebug}
+          />
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>法律信息</Text>

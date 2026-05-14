@@ -16,6 +16,7 @@ import ShellCommandScreen from '../screens/ShellCommandScreen';
 import DataSettingsScreen from '../screens/DataSettingsScreen';
 import StorageManagementScreen from '../screens/StorageManagementScreen';
 import KeepAliveSettingsScreen from '../screens/KeepAliveSettingsScreen';
+import DebugSettingsScreen from '../screens/DebugSettingsScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -32,6 +33,7 @@ export type RootStackParamList = {
   DataSettings: undefined;
   StorageManagement: undefined;
   KeepAliveSettings: undefined;
+  DebugSettings: undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
 };
@@ -68,6 +70,11 @@ export default function RootNavigator() {
             onStorage={() => navigation.navigate('StorageManagement')}
             onKeepAlive={() => navigation.navigate('KeepAliveSettings')}
           />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="DebugSettings">
+        {({ navigation }) => (
+          <DebugSettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="KeepAliveSettings">
@@ -133,7 +140,10 @@ export default function RootNavigator() {
       </Stack.Screen>
       <Stack.Screen name="About">
         {({ navigation }) => (
-          <AboutScreen onOpenLicenses={() => navigation.navigate('Licenses')} />
+          <AboutScreen
+            onOpenLicenses={() => navigation.navigate('Licenses')}
+            onOpenDebug={() => navigation.navigate('DebugSettings')}
+          />
         )}
       </Stack.Screen>
       <Stack.Screen name="Licenses">

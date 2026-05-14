@@ -191,6 +191,45 @@ function composeUserContent(text: string, attachments: InputAttachment[]): strin
   return attachments.length > 0 ? '已附加文件' : '';
 }
 
+function getErrorText(err: any): string {
+  if (!err) return '未知错误';
+  if (typeof err?.message === 'string' && err.message.trim()) return err.message.trim();
+  const text = String(err);
+  return text.trim() || '未知错误';
+}
+
+function buildRequestFailedText(err: any): string {
+  return `请求失败:\n\n${getErrorText(err)}`;
+}
+
+function markMessageRequestFailed(message: Message, errorText: string): Message {
+  const existingContent = message.content?.trim() || '';
+  const nextContent = existingContent
+    ? `${existingContent}\n\n${errorText}`
+    : errorText;
+
+  if (message.blocks?.length) {
+    const errorBlock: ContentBlock = {
+      type: 'text',
+      content: `${message.blocks.some(block => block.content?.trim()) ? '\n\n' : ''}${errorText}`,
+    };
+    return {
+      ...message,
+      content: nextContent,
+      blocks: [...message.blocks, errorBlock],
+      streaming: false,
+      isError: true,
+    };
+  }
+
+  return {
+    ...message,
+    content: nextContent,
+    streaming: false,
+    isError: true,
+  };
+}
+
 export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffort, preserveReasoning: boolean) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [model, setModel] = useState<Model | null>(null);
@@ -652,6 +691,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
         const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
 
         const result = await aiService.sendMessage(model, chatMessages, {
+          onStatus: (status) => {
+            if (activeAbortSignal.aborted) return;
+            syncMessages(prev => prev.map(m =>
+              m.id === aiId && !m.blocks?.length ? { ...m, content: status } : m,
+            ), convId);
+            scrollToBottom(false);
+          },
           onBlocks: (blocks) => {
             if (activeAbortSignal.aborted) return;
             syncMessages(prev => prev.map(m =>
@@ -786,22 +832,24 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
         console.log('[LineCode] Aborted by user');
       } else {
         console.error('[LineCode] sendMessage error:', err);
-        const errMsg = err?.message || String(err) || '请求失败';
+        const errorText = buildRequestFailedText(err);
         syncMessages(prev => {
           const last = prev[prev.length - 1];
           if (last?.streaming) {
             return prev.map(m => m.id === last.id
-              ? { ...m, content: `请求失败: ${errMsg}`, streaming: false }
+              ? markMessageRequestFailed(m, errorText)
               : m
             );
           }
           return [...prev, {
             id: `err_${Date.now()}`,
             role: 'assistant' as const,
-            content: `请求失败: ${errMsg}`,
+            content: errorText,
             timestamp: Date.now(),
+            isError: true,
           }];
         }, convId);
+        scrollToBottom(false);
       }
     } finally {
       if (abortSignal?.aborted) {
