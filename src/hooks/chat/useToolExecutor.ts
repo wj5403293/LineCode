@@ -20,7 +20,7 @@ export function useToolExecutor(
     return executeTool(tc, {
       ...options,
       onProgress: (update: Partial<ContentBlock>) => {
-        if (tc.name === 'agent') {
+        if (tc.name === 'agent' || tc.name === 'agent_pipeline') {
           setMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.blocks) {
               const updatedBlocks = m.blocks.map(b => {

@@ -1,18 +1,22 @@
-import { AgentTool } from './tools/builtins/AgentTool';
+interface ManagedAgentTool {
+  abort(): void;
+  continueAfterUnlock?: () => void;
+  getWaitingForUnlock?: () => { filePath: string; lockedBy: string } | null;
+}
 
 class AgentToolManager {
-  private currentAgentTool: AgentTool | null = null;
+  private currentAgentTool: ManagedAgentTool | null = null;
 
-  setCurrent(tool: AgentTool | null) {
+  setCurrent(tool: ManagedAgentTool | null) {
     this.currentAgentTool = tool;
   }
 
-  getCurrent(): AgentTool | null {
+  getCurrent(): ManagedAgentTool | null {
     return this.currentAgentTool;
   }
 
   continueAfterUnlock() {
-    this.currentAgentTool?.continueAfterUnlock();
+    this.currentAgentTool?.continueAfterUnlock?.();
   }
 
   abort() {
@@ -20,7 +24,7 @@ class AgentToolManager {
   }
 
   getWaitingForUnlock() {
-    return this.currentAgentTool?.getWaitingForUnlock();
+    return this.currentAgentTool?.getWaitingForUnlock?.();
   }
 }
 

@@ -1,11 +1,12 @@
-import RNFS from 'react-native-fs';
 import { BaseTool, ToolContext } from '../BaseTool';
-import { ToolResult, AgentInstance, Model, ToolCall, ContentBlock, AgentToolCall } from '../../../types';
+import { ToolResult, AgentInstance, Model, ContentBlock, AgentToolCall } from '../../../types';
 import { aiService, ChatMessage } from '../../../services/ai';
 import { fileLock } from '../../../services/FileLock';
 import { modelStorage } from '../../../services/storage';
 import { settingsService } from '../../../services/settings';
-import { createDefaultRegistry, ToolRegistry } from '../index';
+import { createDefaultRegistry } from '../index';
+import { AgentProgressStore } from '../../AgentProgressStore';
+import { agentToolManager } from '../../AgentToolManager';
 
 type AgentType = 'explore' | 'sub-coding';
 
@@ -163,7 +164,9 @@ export class AgentPipelineTool extends BaseTool {
     model: Model,
     homePath: string,
     previousResults: Map<string, AgentResult>,
+    progressStore: AgentProgressStore,
     onProgress?: (update: Partial<ContentBlock>) => void,
+    onConfirm?: ToolContext['onConfirm'],
   ): Promise<AgentResult> {
     const agentId = this.nextAgentId++;
     const agent: AgentInstance = {
@@ -183,15 +186,32 @@ export class AgentPipelineTool extends BaseTool {
 
     const toolCallRecords: AgentToolCall[] = [];
     let thinkingContent = '';
+    const progressId = pipelineAgent.id || String(agentId);
 
     const progressUpdate = (update: Partial<ContentBlock>) => {
-      onProgress?.({
-        agentType: pipelineAgent.type,
-        agentStatus: update.agentStatus || 'running',
-        agentOutput: update.agentOutput,
-        agentThinking: update.agentThinking ?? thinkingContent,
-        agentToolCalls: update.agentToolCalls ?? [...toolCallRecords],
+      const status = update.agentStatus || agent.status;
+      const output = update.agentOutput ?? agent.output;
+      const thinking = update.agentThinking ?? thinkingContent;
+      const toolCalls = update.agentToolCalls ?? [...toolCallRecords];
+      progressStore.upsert({
+        id: progressId,
+        name: pipelineAgent.description,
+        type: pipelineAgent.type,
+        status,
+        output,
+        thinking,
+        toolCalls,
+        toolCallCount,
+        startTime: agent.startTime,
+        endTime: agent.endTime,
       });
+      onProgress?.(progressStore.toContentBlock({
+        agentType: pipelineAgent.type,
+        agentStatus: status,
+        agentOutput: output,
+        agentThinking: thinking,
+        agentToolCalls: toolCalls,
+      }));
     };
 
     progressUpdate({ agentStatus: 'running', agentOutput: '' });
@@ -298,14 +318,21 @@ export class AgentPipelineTool extends BaseTool {
             tcInput = JSON.parse(tc.arguments);
           } catch {}
 
+          toolCallRecords.push({
+            name: tc.name,
+            input: tcInput,
+          });
+          progressUpdate({ agentToolCalls: [...toolCallRecords] });
+
           const tool = registry.get(tc.name);
           if (!tool) {
-            toolCallRecords.push({
+            toolCallRecords[toolCallRecords.length - 1] = {
               name: tc.name,
               input: tcInput,
               result: `未知工具: ${tc.name}`,
               isError: true,
-            });
+            };
+            progressUpdate({ agentToolCalls: [...toolCallRecords] });
             messages.push({
               role: 'tool',
               content: `未知工具: ${tc.name}`,
@@ -315,7 +342,7 @@ export class AgentPipelineTool extends BaseTool {
             continue;
           }
 
-          const context: ToolContext = { homePath };
+          const context: ToolContext = { homePath, onProgress, onConfirm };
           let toolResult: ToolResult;
 
           try {
@@ -329,12 +356,12 @@ export class AgentPipelineTool extends BaseTool {
             };
           }
 
-          toolCallRecords.push({
+          toolCallRecords[toolCallRecords.length - 1] = {
             name: tc.name,
             input: tcInput,
             result: toolResult.content,
             isError: toolResult.isError,
-          });
+          };
 
           progressUpdate({ agentToolCalls: [...toolCallRecords] });
 
@@ -412,7 +439,9 @@ export class AgentPipelineTool extends BaseTool {
     this.agents = [];
     this.nextAgentId = 1;
     this.aborted = false;
+    agentToolManager.setCurrent(this);
 
+    const progressStore = new AgentProgressStore();
     const levels = topologicalSort(pipelineAgents);
     const results = new Map<string, AgentResult>();
     const agentMap = new Map<string, PipelineAgent>();
@@ -438,7 +467,9 @@ export class AgentPipelineTool extends BaseTool {
             model,
             context.homePath,
             results,
+            progressStore,
             onProgress,
+            context.onConfirm,
           );
         });
 
@@ -458,6 +489,8 @@ export class AgentPipelineTool extends BaseTool {
         isError: true,
         toolCallId: '',
       };
+    } finally {
+      agentToolManager.setCurrent(null);
     }
 
     const successCount = Array.from(results.values()).filter(r => r.status === 'done').length;

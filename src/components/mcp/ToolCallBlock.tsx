@@ -1,11 +1,12 @@
 import React from 'react';
-import { ToolCall, ContentBlock, ToolResult } from '../../types';
+import { ToolCall, ContentBlock, ToolResult, AgentProgressItem } from '../../types';
 import ToolCallRead from './ToolCallRead';
 import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
 import ToolCallShell from './ToolCallShell';
 import AgentBlock from './AgentBlock';
+import AgentPipelineBlock from './AgentPipelineBlock';
 import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool, parseToolInput } from '../../mcp/toolUtils';
 import { agentToolManager } from '../../mcp/AgentToolManager';
 
@@ -22,6 +23,23 @@ interface Props {
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
+}
+
+function createFallbackPipelineAgents(input: Record<string, unknown>, status: AgentProgressItem['status']): AgentProgressItem[] {
+  const agents = Array.isArray(input.agents) ? input.agents : [];
+  return agents.map((raw, index) => {
+    const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const type = item.type === 'sub-coding' ? 'sub-coding' : 'explore';
+    return {
+      id: String(item.id || index + 1),
+      name: String(item.description || item.id || `Agent ${index + 1}`),
+      type,
+      status,
+      output: '',
+      toolCalls: [],
+      toolCallCount: 0,
+    };
+  });
 }
 
 export default React.memo(function ToolCallBlock({
@@ -41,13 +59,29 @@ export default React.memo(function ToolCallBlock({
   const input = parseToolInput(toolCall);
 
   if (isAgentTool(toolCall.name)) {
+    if (toolCall.name === 'agent_pipeline') {
+      const fallbackStatus = result ? (isError ? 'error' : 'done') : 'running';
+      const agents = block?.agentItems?.length
+        ? block.agentItems
+        : createFallbackPipelineAgents(input, fallbackStatus);
+      return (
+        <AgentPipelineBlock
+          agents={agents}
+          fallbackName={String(input.description || 'Agent Pipeline')}
+          streaming={!result}
+          homePath={homePath}
+          onCancelWait={() => agentToolManager.abort()}
+        />
+      );
+    }
+
     const agentType = (input.type as 'explore' | 'sub-coding') || 'explore';
     const agentStatus = block?.agentStatus || (result ? (isError ? 'error' : 'done') : 'running');
     const agentOutput = block?.agentOutput || result;
     const agentThinking = block?.agentThinking;
     const agentToolCalls = block?.agentToolCalls;
     const waitingForUnlock = block?.waitingForUnlock;
-    const agentStreaming = !result && !block?.agentOutput && (agentStatus === 'running' || agentStatus === 'waiting_unlock');
+    const agentStreaming = agentStatus === 'running' || agentStatus === 'waiting_unlock';
     
     return (
       <AgentBlock

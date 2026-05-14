@@ -1,16 +1,14 @@
 import { Model, ContentBlock } from '../../../types';
 import { getApiModelId } from '../../../utils/modelContext';
 import { StreamProcessor, StreamCallbacks, StreamOptions, StreamResult, ChatMessage } from './StreamProcessor';
-
-type OpenAICompatibleThinkingProvider = 'deepseek' | 'kimi' | 'qwen' | 'glm' | 'minimax' | 'mimo' | 'unknown';
-
-interface ProviderCapabilities {
-  provider: OpenAICompatibleThinkingProvider;
-  requestStyle: 'thinking' | 'enable_thinking' | 'reasoning_split' | 'openai';
-  supportsPreserveReasoning: boolean;
-}
+import { OpenAICompatibilityDetector, OpenAIReasoningRequestAdapter } from './openai/OpenAICompatibility';
+import { OpenAIMessageFormatter } from './openai/OpenAIMessageFormatter';
 
 export class OpenAIStreamProcessor extends StreamProcessor {
+  private compatibilityDetector = new OpenAICompatibilityDetector();
+  private reasoningAdapter = new OpenAIReasoningRequestAdapter();
+  private messageFormatter = new OpenAIMessageFormatter();
+
   async process(
     model: Model,
     messages: ChatMessage[],
@@ -24,22 +22,16 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     const abortSignal = options?.abortSignal;
     const apiModelId = getApiModelId(model.modelId);
 
-    const baseUrlLower = baseUrl.toLowerCase();
-    const modelIdLower = apiModelId.toLowerCase();
-    const capabilities = this.detectCapabilities(baseUrlLower, modelIdLower);
-    const hasToolExchange = messages.some(m =>
-      m.role === 'tool' || (m.role === 'assistant' && !!m.toolCalls?.length)
+    const capabilities = this.compatibilityDetector.detect(baseUrl, apiModelId);
+    const messageFormatOptions = this.reasoningAdapter.getMessageFormatOptions(
+      capabilities,
+      messages,
+      reasoningEffort,
+      preserveReasoning,
     );
-    const shouldPreserveReasoning =
-      reasoningEffort !== 'off' &&
-      capabilities.supportsPreserveReasoning &&
-      (
-        (preserveReasoning && !hasToolExchange) ||
-        capabilities.provider === 'deepseek'
-      );
     const body: any = {
       model: apiModelId,
-      messages: this.formatMessages(messages, shouldPreserveReasoning),
+      messages: this.messageFormatter.format(messages, messageFormatOptions),
       stream: true,
     };
 
@@ -50,28 +42,18 @@ export class OpenAIStreamProcessor extends StreamProcessor {
       reasoningEffort,
       'preserveReasoning:',
       preserveReasoning,
+      'includeReasoning:',
+      messageFormatOptions.includeReasoning,
+      'padMissingToolCallReasoning:',
+      messageFormatOptions.padMissingToolCallReasoning,
     );
 
-    if (capabilities.requestStyle === 'thinking') {
-      body.thinking = { type: reasoningEffort === 'off' ? 'disabled' : 'enabled' };
-      this.applyReasoningEffort(body, capabilities.provider, reasoningEffort);
-      if (shouldPreserveReasoning && capabilities.provider === 'kimi') {
-        body.thinking.keep = 'all';
-      }
-      if (shouldPreserveReasoning && capabilities.provider === 'glm') {
-        body.clear_thinking = false;
-      }
-    } else if (capabilities.requestStyle === 'enable_thinking') {
-      body.enable_thinking = reasoningEffort !== 'off';
-      this.applyReasoningEffort(body, capabilities.provider, reasoningEffort);
-      if (shouldPreserveReasoning) {
-        body.preserve_thinking = true;
-      }
-    } else if (capabilities.requestStyle === 'reasoning_split') {
-      body.reasoning_split = reasoningEffort !== 'off';
-    } else if (reasoningEffort !== 'off') {
-      body.reasoning = { effort: reasoningEffort };
-    }
+    this.reasoningAdapter.applyRequestReasoning(
+      body,
+      capabilities,
+      reasoningEffort,
+      messageFormatOptions.includeReasoning,
+    );
 
     if (tools.length > 0) {
       body.tools = tools;
@@ -125,93 +107,6 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     }
 
     return this.readStream(res, callbacks, abortSignal);
-  }
-
-  private detectCapabilities(baseUrlLower: string, modelIdLower: string): ProviderCapabilities {
-    if (baseUrlLower.includes('deepseek') || modelIdLower.includes('deepseek')) {
-      return { provider: 'deepseek', requestStyle: 'thinking', supportsPreserveReasoning: true };
-    }
-    if (baseUrlLower.includes('moonshot') || baseUrlLower.includes('kimi') || modelIdLower.includes('kimi')) {
-      return { provider: 'kimi', requestStyle: 'thinking', supportsPreserveReasoning: true };
-    }
-    if (baseUrlLower.includes('dashscope') || baseUrlLower.includes('aliyuncs') || modelIdLower.includes('qwen')) {
-      return { provider: 'qwen', requestStyle: 'enable_thinking', supportsPreserveReasoning: true };
-    }
-    if (baseUrlLower.includes('bigmodel') || baseUrlLower.includes('zhipu') || modelIdLower.includes('glm')) {
-      return { provider: 'glm', requestStyle: 'thinking', supportsPreserveReasoning: true };
-    }
-    if (baseUrlLower.includes('minimax') || modelIdLower.includes('minimax') || modelIdLower.includes('abab') || modelIdLower.includes('m2')) {
-      return { provider: 'minimax', requestStyle: 'reasoning_split', supportsPreserveReasoning: true };
-    }
-    if (baseUrlLower.includes('mimo') || baseUrlLower.includes('xiaomi') || modelIdLower.includes('mimo')) {
-      return { provider: 'mimo', requestStyle: 'thinking', supportsPreserveReasoning: true };
-    }
-    return { provider: 'unknown', requestStyle: 'openai', supportsPreserveReasoning: false };
-  }
-
-  private applyReasoningEffort(
-    body: Record<string, unknown>,
-    provider: OpenAICompatibleThinkingProvider,
-    reasoningEffort: string,
-  ): void {
-    if (reasoningEffort === 'off') return;
-
-    if (provider === 'deepseek') {
-      body.reasoning_effort = reasoningEffort === 'max' ? 'max' : 'high';
-      return;
-    }
-
-    if (provider === 'qwen') {
-      const budgetMap: Record<string, number> = {
-        low: 1024,
-        medium: 4096,
-        high: 8192,
-        max: 16000,
-      };
-      body.thinking_budget = budgetMap[reasoningEffort] || budgetMap.medium;
-    }
-  }
-
-  private formatMessages(messages: ChatMessage[], preserveReasoning: boolean): any[] {
-    return messages.map(m => {
-      if (m.role === 'system') {
-        return { role: 'system', content: m.content };
-      }
-      if (m.role === 'tool') {
-        return { role: 'tool', tool_call_id: m.toolCallId, content: this.formatToolResultContent(m) };
-      }
-      if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-        const validToolCalls = m.toolCalls.filter(tc => tc.id && tc.name);
-        const msg: any = {
-          role: 'assistant',
-          content: m.content || '',
-          tool_calls: validToolCalls.map(tc => ({
-            id: tc.id,
-            type: 'function',
-            function: { name: tc.name, arguments: tc.arguments },
-          })),
-        };
-        if (preserveReasoning && m.reasoningContent) {
-          console.log('[LineCode] Adding reasoning_content to message:', m.reasoningContent.substring(0, 50));
-          msg.reasoning_content = m.reasoningContent;
-        }
-        if (preserveReasoning && m.reasoningDetails) {
-          msg.reasoning_details = m.reasoningDetails;
-        }
-        return msg.tool_calls.length > 0 ? msg : { role: 'assistant', content: m.content || '' };
-      }
-      if (m.role === 'assistant') {
-        const msg: any = { role: 'assistant', content: m.content };
-        if (preserveReasoning && m.reasoningContent) {
-          msg.reasoning_content = m.reasoningContent;
-        }
-        if (preserveReasoning && m.reasoningDetails) {
-          msg.reasoning_details = m.reasoningDetails;
-        }
-        return msg;
-      }
-      return { role: 'user', content: m.content };
-    });
   }
 
   private async readStream(
@@ -364,11 +259,6 @@ export class OpenAIStreamProcessor extends StreamProcessor {
       reasoningContent: reasoningFull || undefined,
       reasoningDetails,
     };
-  }
-
-  private formatToolResultContent(message: ChatMessage): string {
-    if (!message.isError) return message.content;
-    return `Tool ${message.toolName || message.toolCallId || ''} failed:\n${message.content}`;
   }
 
   private extractReasoningDelta(delta: any): string {

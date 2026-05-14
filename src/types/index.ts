@@ -8,6 +8,23 @@ export interface AgentToolCall {
   lockedFilePath?: string;
 }
 
+export interface AgentProgressItem {
+  id: string;
+  name: string;
+  type: 'explore' | 'sub-coding';
+  status: 'running' | 'done' | 'error' | 'waiting_unlock';
+  output?: string;
+  thinking?: string;
+  toolCalls?: AgentToolCall[];
+  toolCallCount?: number;
+  startTime?: number;
+  endTime?: number;
+  waitingForUnlock?: {
+    filePath: string;
+    lockedBy: string;
+  };
+}
+
 export interface ContentBlock {
   type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'agent' | 'compact';
   content: string;
@@ -21,6 +38,7 @@ export interface ContentBlock {
   agentOutput?: string;
   agentThinking?: string;
   agentToolCalls?: AgentToolCall[];
+  agentItems?: AgentProgressItem[];
   waitingForUnlock?: {
     filePath: string;
     lockedBy: string;

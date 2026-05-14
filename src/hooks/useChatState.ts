@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
-import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment } from '../types';
+import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment, AgentProgressItem } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage } from '../services/ai';
 import { ToneMode, ReasoningEffort } from '../services/settings';
@@ -55,6 +55,21 @@ function markAgentToolCallsTerminated(toolCalls?: AgentToolCall[]): AgentToolCal
   });
 }
 
+function markAgentItemsTerminated(items?: AgentProgressItem[]): AgentProgressItem[] | undefined {
+  if (!items) return items;
+  return items.map(item => {
+    if (item.status !== 'running' && item.status !== 'waiting_unlock') return item;
+    return {
+      ...item,
+      status: 'error' as const,
+      output: item.output || TERMINATED_RESULT,
+      toolCalls: markAgentToolCallsTerminated(item.toolCalls),
+      waitingForUnlock: undefined,
+      endTime: item.endTime || Date.now(),
+    };
+  });
+}
+
 function markBlocksTerminated(blocks?: ContentBlock[]): {
   blocks?: ContentBlock[];
   toolResults: ToolResult[];
@@ -75,13 +90,18 @@ function markBlocksTerminated(blocks?: ContentBlock[]): {
 
     if (block.type !== 'tool_use') return block;
 
-    if (block.agentStatus === 'running' || block.agentStatus === 'waiting_unlock') {
+    const hasRunningAgentItems = block.agentItems?.some(item =>
+      item.status === 'running' || item.status === 'waiting_unlock'
+    );
+
+    if (block.agentStatus === 'running' || block.agentStatus === 'waiting_unlock' || hasRunningAgentItems) {
       changed = true;
       return {
         ...block,
         agentStatus: 'error' as const,
         agentOutput: block.agentOutput || TERMINATED_RESULT,
         agentToolCalls: markAgentToolCallsTerminated(block.agentToolCalls),
+        agentItems: markAgentItemsTerminated(block.agentItems),
         waitingForUnlock: undefined,
       };
     }
@@ -327,7 +347,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   ): Promise<{ toolMsg: Message; toolResult: ToolResult }> => {
     const toolResult = await executeTool(tc, {
       onProgress: (update: Partial<ContentBlock>) => {
-        if (tc.name === 'agent') {
+        if (tc.name === 'agent' || tc.name === 'agent_pipeline') {
           syncMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.blocks) {
               const updatedBlocks = m.blocks.map(b => {
