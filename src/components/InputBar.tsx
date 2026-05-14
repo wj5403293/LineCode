@@ -1,7 +1,10 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  type KeyboardEvent,
 } from 'react-native';
 import { ArrowUp, Plus, Square, X } from 'lucide-react-native';
 import { spacing, fontSizes } from '../constants/theme';
@@ -153,6 +157,9 @@ export default React.memo(function InputBar({
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>('idle');
   const [remoteMessage, setRemoteMessage] = useState('');
   const [remoteTree, setRemoteTree] = useState<FileTreeNode | null>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const containerRef = useRef<View>(null);
+  const keyboardVisibleRef = useRef(false);
   const { colors } = useTheme();
   const { tree: localTree, loadTree, expandNode } = useFileTree(homePath);
   const hasText = text.trim().length > 0;
@@ -169,11 +176,74 @@ export default React.memo(function InputBar({
     () => [styles.actionBtn, { backgroundColor: sendBtnBg }, streaming && styles.stopBtn],
     [streaming, sendBtnBg],
   );
+  const containerStyle = useMemo(() => [
+    styles.container,
+    {
+      backgroundColor: colors.bg,
+      borderTopColor: colors.border,
+      transform: [{ translateY: -keyboardOffset }],
+    },
+  ], [colors.bg, colors.border, keyboardOffset]);
 
   useEffect(() => {
     setAttachments([]);
     setPickerVisible(false);
   }, [mode]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return undefined;
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const clearTimers = () => {
+      while (timers.length) {
+        const timer = timers.pop();
+        if (timer) clearTimeout(timer);
+      }
+    };
+
+    const applyOffset = (nextOffset: number) => {
+      const normalizedOffset = Math.max(0, Math.ceil(nextOffset));
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKeyboardOffset(prev => prev === normalizedOffset ? prev : normalizedOffset);
+    };
+
+    const measureOverlap = (event: KeyboardEvent) => {
+      if (!keyboardVisibleRef.current) return;
+      containerRef.current?.measureInWindow((_x, y, _width, height) => {
+        if (!keyboardVisibleRef.current) return;
+        const keyboardHeight = event.endCoordinates.height;
+        const keyboardTop = event.endCoordinates.screenY > 0
+          ? event.endCoordinates.screenY
+          : Dimensions.get('window').height - keyboardHeight;
+        applyOffset(y + height - keyboardTop);
+      });
+    };
+
+    const scheduleMeasure = (event: KeyboardEvent, delay: number) => {
+      const timer = setTimeout(() => measureOverlap(event), delay);
+      timers.push(timer);
+    };
+
+    const showSubscription = Keyboard.addListener('keyboardDidShow', event => {
+      keyboardVisibleRef.current = true;
+      clearTimers();
+      scheduleMeasure(event, 0);
+      scheduleMeasure(event, 80);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardVisibleRef.current = false;
+      clearTimers();
+      applyOffset(0);
+    });
+
+    return () => {
+      keyboardVisibleRef.current = false;
+      clearTimers();
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const detectRemotePython = useCallback(async (): Promise<string> => {
     const output = await sshService.executeCommand('command -v python3 || command -v python || command -v py || true', 10000);
@@ -282,92 +352,95 @@ export default React.memo(function InputBar({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
+      pointerEvents="box-none"
     >
-      <View style={[styles.container, { backgroundColor: colors.bg, borderTopColor: colors.border }]}>
-        {attachments.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.chipList}
-          >
-            {attachments.map(item => (
-              <View key={`${item.source}:${item.path}`} style={[styles.chip, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                <Text style={[styles.chipText, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="middle">
-                  {item.name}
-                </Text>
-                <TouchableOpacity
-                  style={styles.chipRemove}
-                  onPress={() => handleRemoveAttachment(item.path, item.source)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <X size={14} color={colors.textTertiary} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-
-        <View style={[styles.inputPanel, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-          <View style={styles.metaRow}>
-            <Text style={[styles.modelText, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="middle">
-              {modelLabel}
-            </Text>
-            <Text style={[styles.contextText, { color: contextPercent >= 80 ? colors.warning : colors.textTertiary }]}>
-              {contextLabel}
-            </Text>
-          </View>
-          <View style={[styles.panelDivider, { backgroundColor: colors.borderLight }]} />
-          <View style={styles.inputRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.surfaceLight }, streaming && styles.disabledBtn]}
-              onPress={openPicker}
-              disabled={streaming || pickerBusy}
-              activeOpacity={0.7}
+      <View ref={containerRef} collapsable={false} pointerEvents="box-none">
+        <View style={containerStyle}>
+          {attachments.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.chipList}
             >
-              {pickerBusy
-                ? <ActivityIndicator size="small" color={colors.textTertiary} />
-                : <Plus size={22} color={colors.textSecondary} strokeWidth={2.5} />}
-            </TouchableOpacity>
+              {attachments.map(item => (
+                <View key={`${item.source}:${item.path}`} style={[styles.chip, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                  <Text style={[styles.chipText, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="middle">
+                    {item.name}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.chipRemove}
+                    onPress={() => handleRemoveAttachment(item.path, item.source)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={14} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
 
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
-              value={text}
-              onChangeText={setText}
-              placeholder="输入消息..."
-              placeholderTextColor={colors.textTertiary}
-              multiline
-              maxLength={4000}
-              returnKeyType="send"
-              blurOnSubmit
-              onSubmitEditing={handleSend}
-              editable={!streaming}
-            />
-            <TouchableOpacity
-              style={sendBtnStyle}
-              onPress={streaming ? onStop : handleSend}
-              disabled={!streaming && !canSend}
-              activeOpacity={0.7}
-            >
-              {streaming
-                ? <Square size={18} color={colors.textOnColor} fill={colors.textOnColor} />
-                : <ArrowUp size={22} color={canSend ? colors.textOnColor : colors.textTertiary} strokeWidth={2.5} />}
-            </TouchableOpacity>
+          <View style={[styles.inputPanel, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <View style={styles.metaRow}>
+              <Text style={[styles.modelText, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="middle">
+                {modelLabel}
+              </Text>
+              <Text style={[styles.contextText, { color: contextPercent >= 80 ? colors.warning : colors.textTertiary }]}>
+                {contextLabel}
+              </Text>
+            </View>
+            <View style={[styles.panelDivider, { backgroundColor: colors.borderLight }]} />
+            <View style={styles.inputRow}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.surfaceLight }, streaming && styles.disabledBtn]}
+                onPress={openPicker}
+                disabled={streaming || pickerBusy}
+                activeOpacity={0.7}
+              >
+                {pickerBusy
+                  ? <ActivityIndicator size="small" color={colors.textTertiary} />
+                  : <Plus size={22} color={colors.textSecondary} strokeWidth={2.5} />}
+              </TouchableOpacity>
+
+              <TextInput
+                style={[styles.input, { color: colors.text }]}
+                value={text}
+                onChangeText={setText}
+                placeholder="输入消息..."
+                placeholderTextColor={colors.textTertiary}
+                multiline
+                maxLength={4000}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={handleSend}
+                editable={!streaming}
+              />
+              <TouchableOpacity
+                style={sendBtnStyle}
+                onPress={streaming ? onStop : handleSend}
+                disabled={!streaming && !canSend}
+                activeOpacity={0.7}
+              >
+                {streaming
+                  ? <Square size={18} color={colors.textOnColor} fill={colors.textOnColor} />
+                  : <ArrowUp size={22} color={canSend ? colors.textOnColor : colors.textTertiary} strokeWidth={2.5} />}
+              </TouchableOpacity>
+            </View>
           </View>
+
+          <AttachmentPickerModal
+            visible={pickerVisible}
+            title={pickerSource === 'ssh' ? '选择 SSH 文件' : '选择本地文件'}
+            tree={pickerTree}
+            selectedPaths={selectedPaths}
+            loading={pickerLoading}
+            message={pickerMessage}
+            action={pickerAction}
+            onClose={() => setPickerVisible(false)}
+            onExpand={handleExpand}
+            onToggleFile={handleToggleFile}
+          />
         </View>
-
-        <AttachmentPickerModal
-          visible={pickerVisible}
-          title={pickerSource === 'ssh' ? '选择 SSH 文件' : '选择本地文件'}
-          tree={pickerTree}
-          selectedPaths={selectedPaths}
-          loading={pickerLoading}
-          message={pickerMessage}
-          action={pickerAction}
-          onClose={() => setPickerVisible(false)}
-          onExpand={handleExpand}
-          onToggleFile={handleToggleFile}
-        />
       </View>
     </KeyboardAvoidingView>
   );
