@@ -1,0 +1,2 @@
+#include "../Pods/Target Support Files/Pods-LineAI/Pods-LineAI.release.xcconfig"
+#include "Version.xcconfig"

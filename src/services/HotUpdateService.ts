@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { APP_VERSION } from '../constants/appInfo';
+import { APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } from '../constants/appInfo';
 import { settingsService } from './settings';
 
 const HOT_UPDATE_DETAIL_URL = 'https://www.freelybase.com/base.zip.txt';
@@ -45,11 +45,6 @@ interface HotUpdateManifest {
   bundleSha256?: string;
   bundle_sha256?: string;
   files?: ManifestFile[];
-}
-
-function semverToCode(version: string): number {
-  const [major = '0', minor = '0', patch = '0'] = version.split('.');
-  return Number(major) * 1_000_000 + Number(minor) * 1_000 + Number(patch);
 }
 
 function normalizeSha(value: string): string {
@@ -138,7 +133,7 @@ class HotUpdateService {
     };
 
     const state = await this.getState();
-    const localVersionCode = state?.installedVersionCode ?? semverToCode(APP_VERSION);
+    const localVersionCode = state?.installedVersionCode ?? APP_HOT_UPDATE_VERSION_CODE;
     return info.versionCode > localVersionCode ? info : null;
   }
 
@@ -272,7 +267,7 @@ class HotUpdateService {
   private async markFailed(info: HotUpdateInfo, err: unknown): Promise<void> {
     const previous = await this.getState();
     await AsyncStorage.setItem(STATE_KEY, JSON.stringify({
-      installedVersionCode: previous?.installedVersionCode ?? semverToCode(APP_VERSION),
+      installedVersionCode: previous?.installedVersionCode ?? APP_HOT_UPDATE_VERSION_CODE,
       installedVersionName: previous?.installedVersionName ?? APP_VERSION,
       installedAt: previous?.installedAt ?? 0,
       failedVersionCode: info.versionCode,

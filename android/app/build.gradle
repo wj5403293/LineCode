@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -58,6 +60,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
+def appVersion = new JsonSlurper().parse(rootProject.file("../version.json"))
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -91,8 +94,8 @@ android {
         applicationId "com.lineai"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.5.0"
+        versionCode appVersion.androidVersionCode as Integer
+        versionName appVersion.version as String
     }
 
     splits {

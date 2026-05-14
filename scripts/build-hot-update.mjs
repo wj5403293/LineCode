@@ -56,9 +56,9 @@ function parseArgs(argv) {
     throw new Error('Only android hot updates are supported by the app runtime.');
   }
 
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  args.versionName ||= pkg.version || '0.0.0';
-  args.versionCode ||= semverToCode(args.versionName);
+  const appVersion = JSON.parse(readFileSync(path.join(ROOT, 'version.json'), 'utf8'));
+  args.versionName ||= appVersion.version || '0.0.0';
+  args.versionCode ||= appVersion.hotUpdateVersionCode || semverToCode(args.versionName);
   args.changelog ||= `Hot update ${args.versionName}`;
 
   if (!Number.isInteger(args.versionCode) || args.versionCode <= 0) {
@@ -73,8 +73,8 @@ function printHelp() {
   node scripts/build-hot-update.mjs [options]
 
 Options:
-  --version-code <number>      Update versionCode. Defaults to semver code from package.json version.
-  --version-name <name>        Update versionName. Defaults to package.json version.
+  --version-code <number>      Update versionCode. Defaults to version.json hotUpdateVersionCode.
+  --version-name <name>        Update versionName. Defaults to version.json version.
   --changelog <text>           Changelog text written after the first two lines of base.zip.txt.
   --changelog-file <path>      Read changelog text from a file.
   --out-dir <path>             Output directory. Default: dist/hot-update
