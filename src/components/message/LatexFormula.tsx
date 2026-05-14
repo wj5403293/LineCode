@@ -25,14 +25,31 @@ function LatexError({ math, style }: LatexErrorProps) {
   );
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export default React.memo(function LatexFormula({ math, color, display }: LatexFormulaProps) {
   const { width: windowWidth } = useWindowDimensions();
   const [rendered, setRendered] = useState(false);
 
   const html = useMemo(() => {
+    const expression = display ? `$$${escapeHtml(math)}$$` : `\\(${escapeHtml(math)}\\)`;
     const fontSize = display ? 18 : 16;
     const lineHeight = display ? 1.45 : 1.35;
-    const payload = JSON.stringify({ math, display: !!display });
+    const mathJaxConfig = JSON.stringify({
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+      },
+      svg: {
+        fontCache: 'none',
+      },
+    });
 
     return [
       '<!doctype html><html><head>',
@@ -46,31 +63,24 @@ export default React.memo(function LatexFormula({ math, color, display }: LatexF
       'mjx-container[jax="SVG"] svg{max-width:100%;height:auto;}',
       '</style>',
       '<script>',
-      `window.__LINEAI_MATH__=${payload};`,
-      'window.MathJax={startup:{typeset:false},tex:{packages:{"[+]":["ams","newcommand","noundefined","autoload","require"]}},svg:{fontCache:"none"}};',
+      `window.MathJax=${mathJaxConfig};`,
+      'window.MathJax.startup={',
+      'typeset:true,',
+      'pageReady:function(){',
+      'function post(value){if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(value);}}',
+      'return MathJax.startup.defaultPageReady().then(function(){',
+      'var formula=document.getElementById("formula");',
+      'if(formula){formula.style.visibility="visible";}',
+      'post("rendered");',
+      '}).catch(function(error){console.error(error);post("error");});',
+      '}',
+      '};',
       '</script>',
       '<script>',
       MATHJAX_TEX_SVG,
       '</script>',
       '</head><body>',
-      '<div id="formula"></div>',
-      '<script>',
-      '(function(){',
-      'var data=window.__LINEAI_MATH__||{};',
-      'function post(value){if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(value);}}',
-      'function fail(error){console.error(error);post("error");}',
-      'MathJax.startup.promise.then(function(){',
-      'return MathJax.tex2svgPromise(data.math||"",{display:!!data.display});',
-      '}).then(function(node){',
-      'var formula=document.getElementById("formula");',
-      'if(!formula){post("error");return;}',
-      'formula.innerHTML="";',
-      'formula.appendChild(node);',
-      'formula.style.visibility="visible";',
-      'post("rendered");',
-      '}).catch(fail);',
-      '})();',
-      '</script>',
+      `<div id="formula">${expression}</div>`,
       '</body></html>',
     ].join('');
   }, [color, display, math]);
