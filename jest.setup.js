@@ -51,15 +51,6 @@ jest.mock('react-native-markdown-display', () => {
   return ({ children }) => React.createElement(Text, null, children);
 });
 
-jest.mock('react-native-math-view/src/fallback/SvgXml', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    __esModule: true,
-    default: (props) => React.createElement(View, props),
-  };
-});
-
 jest.mock('@react-native-clipboard/clipboard', () => ({
   setString: jest.fn(),
   getString: jest.fn(() => Promise.resolve('')),

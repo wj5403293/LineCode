@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { ChevronRight, ChevronDown } from 'lucide-react-native';
+import { Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { ChevronRight, ChevronDown, Sparkles } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
-import { spacing, fontSizes } from '../../../constants/theme';
+import { spacing, fontSizes, radius } from '../../../constants/theme';
 import { useTheme } from '../../../theme';
 import { createThinkingMdStyle } from '../../message/markdownStyles';
 
@@ -22,11 +22,13 @@ export function AgentThinking({ thinking, streaming, expanded, onToggle }: Agent
   return (
     <>
       <TouchableOpacity
-        style={styles.thinkingHeader}
+        style={[styles.thinkingHeader, { backgroundColor: colors.codeBg, borderColor: colors.codeBorder }]}
         onPress={onToggle}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={streaming ? '思考中' : '思考完毕'}
       >
-        <Text style={[styles.thinkingIcon, { color: colors.textTertiary }]}>✦</Text>
+        <Sparkles size={12} color={colors.textTertiary} />
         <Text style={[styles.thinkingLabel, { color: colors.textTertiary }]}>
           {streaming ? '思考中...' : '思考完毕'}
         </Text>
@@ -49,11 +51,12 @@ const styles = StyleSheet.create({
   thinkingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     marginBottom: spacing.sm,
-  },
-  thinkingIcon: {
-    fontSize: 10,
   },
   thinkingLabel: {
     fontSize: fontSizes.xs,

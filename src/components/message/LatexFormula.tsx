@@ -1,18 +1,10 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { StyleProp, TextStyle } from 'react-native';
+import { WebView } from 'react-native-webview';
+import type { WebViewMessageEvent } from 'react-native-webview';
+import { MATHJAX_TEX_SVG } from '../../assets/mathjaxTexSvg';
 import { fontSizes, spacing } from '../../constants/theme';
-
-interface MathViewProps {
-  math: string;
-  color?: string;
-  resizeMode?: 'cover' | 'contain';
-  config?: Record<string, unknown>;
-  style?: StyleProp<TextStyle>;
-  renderError?: React.ComponentType<any>;
-}
-
-const MathView = require('react-native-math-view/src/fallback/SvgXml').default as React.ComponentType<MathViewProps>;
 
 interface LatexFormulaProps {
   math: string;
@@ -34,21 +26,110 @@ function LatexError({ math, style }: LatexErrorProps) {
 }
 
 export default React.memo(function LatexFormula({ math, color, display }: LatexFormulaProps) {
-  const config = useMemo(() => ({
-    displayAlign: display ? 'center' : 'auto',
-    inline: !display,
-  }), [display]);
+  const { width: windowWidth } = useWindowDimensions();
+  const [rendered, setRendered] = useState(false);
+
+  const html = useMemo(() => {
+    const fontSize = display ? 18 : 16;
+    const lineHeight = display ? 1.45 : 1.35;
+    const payload = JSON.stringify({ math, display: !!display });
+
+    return [
+      '<!doctype html><html><head>',
+      '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">',
+      '<style>',
+      'html,body{margin:0;padding:0;background:transparent;overflow:hidden;}',
+      'body{-webkit-text-size-adjust:100%;}',
+      `#formula{visibility:hidden;color:${color};font-size:${fontSize}px;line-height:${lineHeight};}`,
+      'mjx-container{margin:0!important;}',
+      'mjx-container[jax="SVG"]{display:inline-block;}',
+      'mjx-container[jax="SVG"] svg{max-width:100%;height:auto;}',
+      '</style>',
+      '<script>',
+      `window.__LINEAI_MATH__=${payload};`,
+      'window.MathJax={startup:{typeset:false},tex:{packages:{"[+]":["ams","newcommand","noundefined","autoload","require"]}},svg:{fontCache:"none"}};',
+      '</script>',
+      '<script>',
+      MATHJAX_TEX_SVG,
+      '</script>',
+      '</head><body>',
+      '<div id="formula"></div>',
+      '<script>',
+      '(function(){',
+      'var data=window.__LINEAI_MATH__||{};',
+      'function post(value){if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(value);}}',
+      'function fail(error){console.error(error);post("error");}',
+      'MathJax.startup.promise.then(function(){',
+      'return MathJax.tex2svgPromise(data.math||"",{display:!!data.display});',
+      '}).then(function(node){',
+      'var formula=document.getElementById("formula");',
+      'if(!formula){post("error");return;}',
+      'formula.innerHTML="";',
+      'formula.appendChild(node);',
+      'formula.style.visibility="visible";',
+      'post("rendered");',
+      '}).catch(fail);',
+      '})();',
+      '</script>',
+      '</body></html>',
+    ].join('');
+  }, [color, display, math]);
+
+  const formulaStyle = useMemo(() => ({
+    backgroundColor: 'transparent',
+    height: display
+      ? Math.min(Math.max(56, Math.ceil(math.length / 48) * 30 + 28), 180)
+      : 32,
+    width: display
+      ? Math.max(240, windowWidth - spacing.lg * 2)
+      : Math.min(Math.max(Math.ceil(math.length * 8.5) + 34, 48), Math.max(120, windowWidth - 96)),
+  }), [display, math.length, windowWidth]);
+
+  useEffect(() => {
+    setRendered(false);
+  }, [html]);
+
+  const handleRendered = useCallback((event: WebViewMessageEvent) => {
+    if (event.nativeEvent.data === 'rendered') {
+      setRendered(true);
+    }
+  }, []);
+
+  const fallbackLabel = display ? `$$${math}$$` : math;
 
   const formula = (
-    <MathView
-      math={math}
-      color={color}
-      resizeMode="contain"
-      config={config}
-      renderError={LatexError}
-      style={[display ? styles.blockFormula : styles.inlineFormula, { color }]}
-    />
+    <View style={[styles.formulaFrame, formulaStyle]}>
+      <WebView
+        source={{ html }}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled={false}
+        scrollEnabled={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        setSupportMultipleWindows={false}
+        androidLayerType="software"
+        textZoom={100}
+        onMessage={handleRendered}
+        style={[styles.webView, formulaStyle]}
+      />
+      {!rendered && (
+        <View pointerEvents="none" style={styles.fallbackOverlay}>
+          <Text
+            selectable
+            numberOfLines={display ? undefined : 1}
+            style={[styles.fallbackText, { color }, display && styles.blockFallbackText]}
+          >
+            {fallbackLabel}
+          </Text>
+        </View>
+      )}
+    </View>
   );
+
+  if (!math.trim()) {
+    return <LatexError math={math} style={{ color }} />;
+  }
 
   if (display) {
     return (
@@ -75,11 +156,8 @@ const styles = StyleSheet.create({
   inlineWrap: {
     alignSelf: 'center',
     marginHorizontal: 2,
-    minHeight: 22,
+    minHeight: 28,
     justifyContent: 'center',
-  },
-  inlineFormula: {
-    minHeight: 18,
   },
   blockScroll: {
     maxWidth: '100%',
@@ -91,8 +169,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
   },
-  blockFormula: {
-    minHeight: 36,
+  formulaFrame: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  webView: {
+    backgroundColor: 'transparent',
+  },
+  fallbackOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    backgroundColor: 'transparent',
+  },
+  fallbackText: {
+    fontFamily: 'monospace',
+    fontSize: fontSizes.sm,
+  },
+  blockFallbackText: {
+    textAlign: 'center',
   },
   errorText: {
     fontFamily: 'monospace',

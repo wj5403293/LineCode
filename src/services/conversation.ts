@@ -5,7 +5,17 @@ const KEYS = {
   CONVERSATION_LIST: '@lineai_conversation_list',
   CURRENT: '@lineai_current_conversation',
   CONVERSATION_PREFIX: '@lineai_conv_',
+  CONVERSATION_CHUNK_PREFIX: '@lineai_conv_chunk_',
 } as const;
+
+const CHUNK_SIZE = 512 * 1024;
+
+interface ConversationChunkManifest {
+  chunked: true;
+  id: string;
+  chunks: number;
+  size: number;
+}
 
 export interface ConversationMeta {
   id: string;
@@ -37,7 +47,10 @@ class ConversationStore {
     try {
       const json = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + id);
       if (json) {
-        const conv = JSON.parse(json) as Conversation;
+        const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest;
+        const conv = this.isChunkManifest(parsed)
+          ? await this.readChunkedConversation(parsed)
+          : parsed as Conversation;
         this.cache.set(id, conv);
         return conv;
       }
@@ -50,7 +63,7 @@ class ConversationStore {
   private async saveConversation(conv: Conversation): Promise<void> {
     this.cache.set(conv.id, conv);
     try {
-      await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, JSON.stringify(conv));
+      await this.writeConversationData(conv);
     } catch (err) {
       console.error('[LineCode] Failed to save conversation:', conv.id, err);
     }
@@ -59,6 +72,7 @@ class ConversationStore {
   private async deleteConversationData(id: string): Promise<void> {
     this.cache.delete(id);
     try {
+      await this.deleteConversationChunks(id);
       await AsyncStorage.removeItem(KEYS.CONVERSATION_PREFIX + id);
     } catch (err) {
       console.error('[LineCode] Failed to delete conversation:', id, err);
@@ -139,6 +153,64 @@ class ConversationStore {
     await AsyncStorage.removeItem(KEYS.CONVERSATION_LIST);
     await AsyncStorage.removeItem(KEYS.CURRENT);
     this.cache.clear();
+  }
+
+  private isChunkManifest(value: Conversation | ConversationChunkManifest): value is ConversationChunkManifest {
+    return !!value && (value as ConversationChunkManifest).chunked === true;
+  }
+
+  private chunkKey(id: string, index: number): string {
+    return `${KEYS.CONVERSATION_CHUNK_PREFIX}${id}_${index}`;
+  }
+
+  private async writeConversationData(conv: Conversation): Promise<void> {
+    const json = JSON.stringify(conv);
+    await this.deleteConversationChunks(conv.id);
+
+    if (json.length <= CHUNK_SIZE) {
+      await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, json);
+      return;
+    }
+
+    const chunks: [string, string][] = [];
+    for (let offset = 0; offset < json.length; offset += CHUNK_SIZE) {
+      chunks.push([this.chunkKey(conv.id, chunks.length), json.slice(offset, offset + CHUNK_SIZE)]);
+    }
+
+    await AsyncStorage.multiSet(chunks);
+    await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, JSON.stringify({
+      chunked: true,
+      id: conv.id,
+      chunks: chunks.length,
+      size: json.length,
+    } satisfies ConversationChunkManifest));
+  }
+
+  private async readChunkedConversation(manifest: ConversationChunkManifest): Promise<Conversation> {
+    const keys = Array.from({ length: manifest.chunks }, (_, index) => this.chunkKey(manifest.id, index));
+    const pairs = await AsyncStorage.multiGet(keys);
+    const chunks = pairs.map(([key, value]) => {
+      if (value === null) {
+        throw new Error(`Conversation chunk missing: ${key}`);
+      }
+      return value;
+    });
+    const json = chunks.join('');
+    return JSON.parse(json) as Conversation;
+  }
+
+  private async deleteConversationChunks(id: string): Promise<void> {
+    const json = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + id);
+    if (!json) return;
+
+    try {
+      const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest;
+      if (!this.isChunkManifest(parsed)) return;
+      const keys = Array.from({ length: parsed.chunks }, (_, index) => this.chunkKey(id, index));
+      await AsyncStorage.multiRemove(keys);
+    } catch {
+      // Legacy or corrupt entries have no managed chunks to delete.
+    }
   }
 }
 

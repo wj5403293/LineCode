@@ -7,6 +7,9 @@ import { settingsService } from '../../../services/settings';
 import { createDefaultRegistry, ToolRegistry } from '../index';
 import { agentToolManager } from '../../AgentToolManager';
 import { workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { buildAgentWorkspacePrompt } from './agentWorkspacePrompt';
+import { diffService } from '../../../services/DiffService';
+import { isWriteTool } from '../../toolUtils';
 
 type AgentType = 'explore' | 'sub-coding';
 
@@ -262,6 +265,10 @@ export class AgentTool extends BaseTool {
     const context: ToolContext = { homePath };
 
     try {
+      if (isWriteTool(toolCall.name)) {
+        return await this.executeWriteToolCall(tool, input, context, toolCall.id);
+      }
+
       const result = await tool.execute(input, context);
       return { ...result, toolCallId: toolCall.id };
     } catch (err: any) {
@@ -271,6 +278,58 @@ export class AgentTool extends BaseTool {
         isError: true,
       };
     }
+  }
+
+  private async executeWriteToolCall(
+    tool: BaseTool,
+    input: Record<string, unknown>,
+    context: ToolContext,
+    toolCallId: string,
+  ): Promise<ToolResult> {
+    const filePath = String(input.file_path || '');
+    const fullPath = workspaceFs.resolvePath(filePath, context.homePath);
+    let oldContent = '';
+    let existed = false;
+
+    try {
+      existed = await workspaceFs.exists(fullPath);
+      if (existed) {
+        const stat = await workspaceFs.stat(fullPath);
+        if (stat.isDirectory()) {
+          return {
+            toolCallId,
+            content: `路径是一个目录，无法写入文件: ${filePath}\n如需创建文件，请指定完整文件路径。`,
+            isError: true,
+          };
+        }
+        oldContent = await workspaceFs.readFile(fullPath);
+      }
+    } catch (err: any) {
+      return {
+        toolCallId,
+        content: `无法读取原文件: ${filePath} (${err?.message || String(err)})`,
+        isError: true,
+      };
+    }
+
+    const result = await tool.execute(input, context);
+    const nextResult = { ...result, toolCallId };
+
+    if (!nextResult.isError) {
+      let newContent = '';
+      try {
+        newContent = await workspaceFs.readFile(fullPath);
+      } catch {
+        newContent = String(input.content || '');
+      }
+
+      if (oldContent !== newContent) {
+        const diff = await diffService.recordDiff(fullPath, oldContent, newContent, existed);
+        nextResult.diffId = diff.id;
+      }
+    }
+
+    return nextResult;
   }
 
   async execute(input: { type: AgentType; description: string; prompt: string }, context: ToolContext): Promise<ToolResult> {
@@ -345,7 +404,10 @@ export class AgentTool extends BaseTool {
     let toolCallCount = 0;
 
     try {
-      const systemPrompt = AGENT_PROMPTS[type] + `\n\n你的 Agent ID 是 #${agent.id}，任务: ${description}`;
+      const workspacePrompt = buildAgentWorkspacePrompt(context.homePath);
+      const systemPrompt = AGENT_PROMPTS[type]
+        + `\n\n你的 Agent ID 是 #${agent.id}，任务: ${description}`
+        + (workspacePrompt ? `\n\n${workspacePrompt}` : '');
       
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
@@ -434,6 +496,7 @@ export class AgentTool extends BaseTool {
             input: tcInput,
             result: toolResult.content,
             isError: toolResult.isError,
+            diffId: toolResult.diffId,
           });
 
           progressUpdate({ agentToolCalls: [...toolCallRecords] });

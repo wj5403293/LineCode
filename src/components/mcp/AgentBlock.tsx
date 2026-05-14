@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { View, ScrollView, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import { Clock, X } from 'lucide-react-native';
+import { Clock, FilePenLine, Wrench, X } from 'lucide-react-native';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createMdStyle } from '../message/markdownStyles';
@@ -38,7 +38,6 @@ export default React.memo(function AgentBlock({
   streaming,
   homePath,
   waitingForUnlock,
-  onContinueAfterUnlock,
   onCancelWait,
 }: Props) {
   const { colors } = useTheme();
@@ -46,6 +45,7 @@ export default React.memo(function AgentBlock({
   const [expanded, setExpanded] = useState(true);
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
   const [waitSeconds, setWaitSeconds] = useState(0);
+  const [reviewStates, setReviewStates] = useState<Record<string, 'accepted' | 'rejected'>>({});
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleToggle = useCallback(() => {
@@ -78,22 +78,38 @@ export default React.memo(function AgentBlock({
     return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}秒`;
   };
 
+  const getToolKey = useCallback((tc: AgentToolCall, index: number) => (
+    `${tc.diffId || `${tc.name}:${String(tc.input?.file_path || 'file')}`}:${index}`
+  ), []);
+
+  const handleToolReview = useCallback((key: string) => (
+    (_toolCallId: string, state: 'accepted' | 'rejected') => {
+      setReviewStates(prev => ({ ...prev, [key]: state }));
+    }
+  ), []);
+
+  const visibleToolCalls = toolCalls || [];
   const fileChanges = toolCalls?.filter(tc => isWriteTool(tc.name) || isDeleteTool(tc.name)) || [];
+  const readCount = toolCalls?.filter(tc => isReadTool(tc.name)).length || 0;
   const hasFileChanges = fileChanges.length > 0;
+  const hasVisibleTools = visibleToolCalls.length > 0;
   const isRunning = status === 'running' || streaming;
+  const hasDetails = !!thinking || hasVisibleTools || !!output || isRunning || status === 'error';
   const isWaitingUnlock = status === 'waiting_unlock';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.accentMuted, borderColor: colors.accentMuted2 }]}>
+    <View style={[styles.container, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}>
       <AgentHeader
         name={name}
         agentType={agentType}
         status={status}
         expanded={expanded}
+        toolCount={toolCalls?.length || 0}
+        fileChangeCount={fileChanges.length}
         onToggle={handleToggle}
       />
 
-      {expanded && (
+      {expanded && hasDetails && (
         <View style={[styles.content, { borderTopColor: colors.codeBorder }]}>
           <ScrollView style={styles.outputScroll} nestedScrollEnabled>
             <AgentThinking
@@ -103,21 +119,33 @@ export default React.memo(function AgentBlock({
               onToggle={() => setThinkingExpanded(prev => !prev)}
             />
 
-            {toolCalls && toolCalls.length > 0 && (
-              <View style={styles.allToolsSection}>
-                <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>工具调用</Text>
+            {hasVisibleTools && (
+              <View style={styles.toolsSection}>
+                <View style={styles.sectionHeader}>
+                  <Wrench size={12} color={colors.textTertiary} />
+                  <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>
+                    工具调用{readCount > 0 ? ` · ${readCount} 次读取` : ''}{fileChanges.length > 0 ? ` · ${fileChanges.length} 处变更` : ''}
+                  </Text>
+                </View>
                 <View style={styles.toolsList}>
-                  {toolCalls.map((tc, i) => (
-                    <ToolCallRenderer
-                      key={i}
-                      name={tc.name}
-                      input={tc.input}
-                      result={tc.result}
-                      isError={tc.isError}
-                      homePath={homePath}
-                      streaming={!tc.result}
-                    />
-                  ))}
+                  {visibleToolCalls.map((tc, i) => {
+                    const toolKey = getToolKey(tc, i);
+                    return (
+                      <ToolCallRenderer
+                        key={toolKey}
+                        name={tc.name}
+                        input={tc.input}
+                        result={tc.result}
+                        isError={tc.isError}
+                        toolCallId={toolKey}
+                        diffId={tc.diffId}
+                        reviewState={reviewStates[toolKey]}
+                        homePath={homePath}
+                        streaming={!tc.result}
+                        onReview={handleToolReview(toolKey)}
+                      />
+                    );
+                  })}
                 </View>
               </View>
             )}
@@ -137,29 +165,38 @@ export default React.memo(function AgentBlock({
       )}
 
       {hasFileChanges && (
-        <View style={styles.fileChangesSection}>
-          <View style={[styles.divider, { backgroundColor: colors.codeBorder }]} />
-          <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>文件变更</Text>
+        <View style={[styles.fileChangesSection, { borderTopColor: colors.codeBorder }]}>
+          <View style={styles.sectionHeader}>
+            <FilePenLine size={12} color={colors.textTertiary} />
+            <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>文件变更</Text>
+          </View>
           <View style={styles.toolsList}>
-            {fileChanges.map((tc, i) => (
-              <ToolCallRenderer
-                key={i}
-                name={tc.name}
-                input={tc.input}
-                result={tc.result}
-                isError={tc.isError}
-                homePath={homePath}
-                streaming={!tc.result}
-              />
-            ))}
+            {fileChanges.map((tc, i) => {
+              const originalIndex = visibleToolCalls.indexOf(tc);
+              const toolKey = getToolKey(tc, originalIndex >= 0 ? originalIndex : i);
+              return (
+                <ToolCallRenderer
+                  key={toolKey}
+                  name={tc.name}
+                  input={tc.input}
+                  result={tc.result}
+                  isError={tc.isError}
+                  toolCallId={toolKey}
+                  diffId={tc.diffId}
+                  reviewState={reviewStates[toolKey]}
+                  homePath={homePath}
+                  streaming={!tc.result}
+                  onReview={handleToolReview(toolKey)}
+                />
+              );
+            })}
           </View>
         </View>
       )}
 
       {isWaitingUnlock && waitingForUnlock && (
-        <View style={styles.waitingSection}>
-          <View style={[styles.divider, { backgroundColor: colors.codeBorder }]} />
-          <View style={[styles.waitingContent, { backgroundColor: colors.processingMuted }]}>
+        <View style={[styles.waitingSection, { borderTopColor: colors.codeBorder }]}>
+          <View style={[styles.waitingContent, { backgroundColor: colors.processingMuted, borderColor: colors.codeBorder }]}>
             <View style={styles.waitingHeader}>
               <Clock size={16} color={colors.processing} />
               <Text style={[styles.waitingTitle, { color: colors.processing }]}>等待文件解锁</Text>
@@ -214,20 +251,23 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 12,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: spacing.sm,
-  },
   fileChangesSection: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  allToolsSection: {
+  toolsSection: {
     marginBottom: spacing.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
   },
   toolsLabel: {
     fontSize: 11,
-    marginBottom: spacing.xs,
+    fontWeight: '600',
   },
   toolsList: {
     gap: 4,
@@ -235,9 +275,12 @@ const styles = StyleSheet.create({
   waitingSection: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   waitingContent: {
     borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.md,
   },
   waitingHeader: {

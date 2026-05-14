@@ -19,7 +19,7 @@ export class FileWriteTool extends BaseTool {
   async execute(input: { file_path: string; content: string }, context: ToolContext): Promise<ToolResult> {
     try {
       const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
-      const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+      const dir = workspaceFs.parentPath(filePath);
 
       const dirExists = await workspaceFs.exists(dir);
       if (!dirExists) {
@@ -61,7 +61,7 @@ export class FileWriteTool extends BaseTool {
     const exists = await workspaceFs.exists(dirPath);
     if (exists) return;
 
-    const parentDir = dirPath.substring(0, dirPath.lastIndexOf('/'));
+    const parentDir = workspaceFs.parentPath(dirPath);
     if (parentDir && parentDir !== dirPath) {
       await this.mkdirRecursive(parentDir);
     }

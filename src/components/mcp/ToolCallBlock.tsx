@@ -107,6 +107,7 @@ export default React.memo(function ToolCallBlock({
   if (isWriteTool(toolCall.name)) {
     return (
       <ToolCallWrite
+        name={toolCall.name}
         input={input}
         result={result}
         isError={isError}

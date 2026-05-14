@@ -69,7 +69,7 @@ export function useFileTree(rootPath: string) {
   }, [tree, loadTree]);
 
   const createItem = useCallback(async (parentPath: string, name: string, isDirectory: boolean) => {
-    const fullPath = `${parentPath}/${name}`;
+    const fullPath = workspaceFs.resolvePath(name, parentPath);
     if (isDirectory) {
       await workspaceFs.mkdir(fullPath);
     } else {

@@ -151,6 +151,11 @@ class ProjectService {
 
   async ensureProjectPath(project: ProjectOption): Promise<void> {
     if (project.source === 'saf') {
+      const hasPermission = await workspaceFs.hasSafPermission(project.path).catch(() => false);
+      if (!hasPermission) {
+        throw new Error(`外部项目目录权限已失效，请重新选择目录: ${project.label}`);
+      }
+
       const exists = await workspaceFs.exists(project.path);
       if (!exists) {
         throw new Error(`外部项目目录不可访问: ${project.label}`);

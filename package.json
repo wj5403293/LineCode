@@ -1,6 +1,6 @@
 {
   "name": "LineCode",
-  "version": "1.6.1",
+  "version": "1.6.6",
   "private": true,
   "scripts": {
     "build-prompt": "node scripts/build-prompt.js",
@@ -21,6 +21,7 @@
     "@react-navigation/native-stack": "^7.14.14",
     "highlight.js": "^11.11.1",
     "lucide-react-native": "^1.14.0",
+    "mathjax": "^3.2.2",
     "node-libs-react-native": "^1.2.1",
     "react": "19.2.3",
     "react-native": "0.85.3",
@@ -28,7 +29,6 @@
     "react-native-gesture-handler": "^2.31.2",
     "react-native-get-random-values": "^2.0.0",
     "react-native-markdown-display": "^7.0.2",
-    "react-native-math-view": "^3.9.5",
     "react-native-nitro-http-server": "^1.9.2",
     "react-native-reanimated": "^4.3.1",
     "react-native-saf-x": "^2.2.3",

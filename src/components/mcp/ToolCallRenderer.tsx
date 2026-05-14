@@ -13,8 +13,12 @@ interface ToolCallRendererProps {
   input: Record<string, unknown>;
   result?: string;
   isError?: boolean;
+  toolCallId?: string;
+  diffId?: string;
+  reviewState?: 'accepted' | 'rejected';
   homePath?: string;
   streaming?: boolean;
+  onReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
 export function ToolCallRenderer({
@@ -22,8 +26,12 @@ export function ToolCallRenderer({
   input,
   result,
   isError,
+  toolCallId,
+  diffId,
+  reviewState,
   homePath,
   streaming,
+  onReview,
 }: ToolCallRendererProps) {
   const { colors } = useTheme();
 
@@ -41,12 +49,16 @@ export function ToolCallRenderer({
   if (isWriteTool(name)) {
     return (
       <ToolCallWrite
+        name={name}
         input={input}
         result={result}
         isError={isError}
-        toolCallId={name}
+        toolCallId={toolCallId || diffId || name}
+        diffId={diffId}
+        reviewState={reviewState}
         homePath={homePath || ''}
         streaming={streaming || false}
+        onReview={onReview}
       />
     );
   }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { Bot, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock } from 'lucide-react-native';
-import { spacing, fontSizes } from '../../../constants/theme';
+import { Bot, ChevronRight, ChevronDown, CheckCircle, XCircle, Clock, Code2, Search } from 'lucide-react-native';
+import { spacing, fontSizes, radius } from '../../../constants/theme';
 import { useTheme } from '../../../theme';
 
 interface AgentHeaderProps {
@@ -9,23 +9,60 @@ interface AgentHeaderProps {
   agentType: 'explore' | 'sub-coding';
   status: 'running' | 'done' | 'error' | 'waiting_unlock';
   expanded: boolean;
+  toolCount?: number;
+  fileChangeCount?: number;
   onToggle: () => void;
 }
 
-export function AgentHeader({ name, agentType, status, expanded, onToggle }: AgentHeaderProps) {
+function getStatusLabel(status: AgentHeaderProps['status']): string {
+  if (status === 'running') return '运行中';
+  if (status === 'done') return '完成';
+  if (status === 'waiting_unlock') return '等待解锁';
+  return '失败';
+}
+
+export function AgentHeader({
+  name,
+  agentType,
+  status,
+  expanded,
+  toolCount = 0,
+  fileChangeCount = 0,
+  onToggle,
+}: AgentHeaderProps) {
   const { colors } = useTheme();
   const typeLabel = agentType === 'explore' ? '探索' : '编程';
   const typeColor = agentType === 'explore' ? colors.accent : colors.danger;
+  const TypeIcon = agentType === 'explore' ? Search : Code2;
+  const statusLabel = getStatusLabel(status);
+  const meta = [
+    toolCount > 0 ? `${toolCount} 工具` : null,
+    fileChangeCount > 0 ? `${fileChangeCount} 文件` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
-    <TouchableOpacity style={styles.header} onPress={onToggle} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.header}
+      onPress={onToggle}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}，${typeLabel} Agent，${statusLabel}`}
+    >
       <View style={styles.left}>
-        <View style={[styles.iconBadge, { backgroundColor: `${typeColor}20` }]}>
+        <View style={[styles.iconBadge, { borderColor: typeColor }]}>
           <Bot size={14} color={typeColor} />
         </View>
         <View style={styles.titleSection}>
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{name}</Text>
-          <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{typeLabel} Agent</Text>
+          <View style={styles.metaRow}>
+            <View style={[styles.typePill, { backgroundColor: colors.codeBg, borderColor: colors.codeBorder }]}>
+              <TypeIcon size={10} color={typeColor} />
+              <Text style={[styles.typeText, { color: typeColor }]}>{typeLabel}</Text>
+            </View>
+            {!!meta && (
+              <Text style={[styles.subtitle, { color: colors.textTertiary }]} numberOfLines={1}>{meta}</Text>
+            )}
+          </View>
         </View>
       </View>
       <View style={styles.right}>
@@ -38,6 +75,9 @@ export function AgentHeader({ name, agentType, status, expanded, onToggle }: Age
         ) : (
           <XCircle size={14} color={colors.danger} />
         )}
+        <Text style={[styles.statusText, { color: status === 'error' ? colors.danger : colors.textTertiary }]} numberOfLines={1}>
+          {statusLabel}
+        </Text>
         {expanded
           ? <ChevronDown size={16} color={colors.textTertiary} />
           : <ChevronRight size={16} color={colors.textTertiary} />
@@ -64,24 +104,51 @@ const styles = StyleSheet.create({
   iconBadge: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     justifyContent: 'center',
     alignItems: 'center',
   },
   titleSection: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: fontSizes.sm,
     fontWeight: '600',
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 3,
+  },
+  typePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
   subtitle: {
     fontSize: fontSizes.xs,
-    marginTop: 1,
+    flexShrink: 1,
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flexShrink: 0,
+  },
+  statusText: {
+    fontSize: fontSizes.xs,
+    fontWeight: '600',
+    maxWidth: 64,
   },
 });

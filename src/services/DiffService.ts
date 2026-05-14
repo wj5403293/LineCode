@@ -146,7 +146,7 @@ class DiffService {
       return;
     }
 
-    const dir = record.filePath.substring(0, record.filePath.lastIndexOf('/'));
+    const dir = workspaceFs.parentPath(record.filePath);
     if (dir) {
       const dirExists = await workspaceFs.exists(dir);
       if (!dirExists) {

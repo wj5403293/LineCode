@@ -3,6 +3,7 @@ export interface AgentToolCall {
   input: Record<string, unknown>;
   result?: string;
   isError?: boolean;
+  diffId?: string;
   isLocked?: boolean;
   lockedBy?: string;
   lockedFilePath?: string;
