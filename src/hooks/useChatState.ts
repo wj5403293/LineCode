@@ -17,6 +17,7 @@ import {
   shouldCompactContext,
   toCompactTranscript,
 } from '../services/contextCompaction';
+import { getUserMessageRecallText } from '../utils/messageText';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -621,6 +622,35 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     persistTerminatedMessages();
   }, [persistTerminatedMessages]);
 
+  const recallUserMessage = useCallback((messageId: string): string => {
+    const current = messagesRef.current;
+    const index = current.findIndex(m => m.id === messageId && m.role === 'user');
+    if (index < 0) return '';
+
+    if (streamingRef.current || compactingRef.current || abortControllerRef.current) {
+      abortControllerRef.current?.abort();
+      agentToolManager.abort();
+      compactingRef.current = false;
+      streamingRef.current = false;
+      setCompacting(false);
+      setStreaming(false);
+      setPendingToolCall(prev => {
+        if (prev?.confirmResolve) {
+          prev.confirmResolve(false);
+        }
+        return null;
+      });
+      abortControllerRef.current = null;
+    }
+
+    const target = current[index];
+    const recalledText = getUserMessageRecallText(target.content);
+    const next = current.slice(0, index);
+    localMessagesRef.current = next.filter(m => !m.excludeFromContext);
+    syncMessages(next);
+    return recalledText;
+  }, [syncMessages]);
+
   const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
     if (!model || streamingRef.current || compactingRef.current) return;
     const sentContent = composeUserContent(text, attachments);
@@ -953,5 +983,6 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     resetShellAutoApprove,
     handleCompactContext,
     reloadModel,
+    recallUserMessage,
   };
 }

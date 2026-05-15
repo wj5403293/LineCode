@@ -1,40 +1,28 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Markdown from 'react-native-markdown-display';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
-import { createUserMdStyle } from './markdownStyles';
 import { InputAttachment } from '../../types';
-import { latexMarkdownIt } from './latexMarkdown';
-import { createMessageMarkdownRules } from './markdownRules';
+import { getUserMessageCopyText, getVisibleUserMessageText } from '../../utils/messageText';
+import MessageActionBar from './MessageActionBar';
 
 interface Props {
   content: string;
   attachments?: InputAttachment[];
+  onRecall?: () => void;
 }
 
-function stripLegacyAttachmentBlock(content: string): string {
-  const marker = '\n\n附加文件位置:\n';
-  const markerIndex = content.indexOf(marker);
-  if (markerIndex !== -1) return content.slice(0, markerIndex).trim();
-  return content.startsWith('附加文件位置:\n') ? '' : content;
-}
-
-export default React.memo(function UserBubble({ content, attachments }: Props) {
+export default React.memo(function UserBubble({ content, attachments, onRecall }: Props) {
   const { colors } = useTheme();
-  const mdStyle = useMemo(() => createUserMdStyle(colors), [colors]);
-  const markdownRules = useMemo(() => createMessageMarkdownRules(), []);
-  const sanitizedContent = stripLegacyAttachmentBlock(content);
-  const fallbackContent = content.startsWith('附加文件位置:\n') ? '已附加文件' : '';
-  const displayContent = sanitizedContent || fallbackContent;
-  const visibleContent = displayContent === '已附加文件' && attachments?.length ? '' : displayContent;
+  const visibleContent = getVisibleUserMessageText(content, attachments);
+  const copyText = getUserMessageCopyText(content, attachments);
 
   return (
     <View style={styles.row}>
       <View style={styles.stack}>
         {!!visibleContent && (
           <View style={[styles.bubble, { backgroundColor: colors.userBubble }]}>
-            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{visibleContent}</Markdown>
+            <Text style={[styles.text, { color: colors.textOnColor }]}>{visibleContent}</Text>
           </View>
         )}
         {!!attachments?.length && (
@@ -57,6 +45,7 @@ export default React.memo(function UserBubble({ content, attachments }: Props) {
             ))}
           </View>
         )}
+        <MessageActionBar copyText={copyText} align="right" onRecall={onRecall} />
       </View>
     </View>
   );
@@ -78,6 +67,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.lg,
     borderBottomRightRadius: 4,
+  },
+  text: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   attachmentList: {
     marginTop: spacing.xs,

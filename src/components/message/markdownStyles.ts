@@ -53,6 +53,12 @@ export function createMdStyle(c: ThemeColors) {
       flexDirection: 'row' as const,
       flexWrap: 'wrap' as const,
       alignItems: 'center' as const,
+      width: '100%' as const,
+    },
+    latex_inline: {
+      flexShrink: 0,
+      alignSelf: 'center' as const,
+      marginHorizontal: 2,
     },
     latex_block: {
       width: '100%' as const,

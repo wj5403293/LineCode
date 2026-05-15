@@ -4,6 +4,7 @@ import { ContentBlock, ToolCall, ToolResult } from '../../types';
 import { spacing } from '../../constants/theme';
 import { ContentWithText } from './ContentBlockRenderer';
 import TextBlock from './TextBlock';
+import MessageActionBar from './MessageActionBar';
 
 interface Props {
   content: string;
@@ -47,31 +48,36 @@ export default React.memo(function AIBubbleFullscreen({
 
   return (
     <View style={styles.row}>
-      {hasContent && !hasBlocks && !hasToolCalls && (
-        <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
-      )}
-      {showStreamingPlaceholder && (
-        <TextBlock content="" streaming codeWrap={codeWrap} />
-      )}
-      {(hasBlocks || hasToolCalls) && (
-        <ContentWithText
-          content={content}
-          blocks={blocks}
-          toolCalls={toolCalls}
-          toolResults={toolResults}
-          streaming={streaming}
-          codeWrap={codeWrap}
-          thinkingAutoExpand={thinkingAutoExpand}
-          thinkingScrollable={thinkingScrollable}
-          homePath={homePath}
-          shellConfirmToolCallId={shellConfirmToolCallId}
-          onShellCancel={onShellCancel}
-          onShellConfirm={onShellConfirm}
-          onShellDefaultExecute={onShellDefaultExecute}
-          onViewShellCommand={onViewShellCommand}
-          onToolReview={onToolReview}
-        />
-      )}
+      <View style={styles.stack}>
+        {hasContent && !hasBlocks && !hasToolCalls && (
+          <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+        )}
+        {showStreamingPlaceholder && (
+          <TextBlock content="" streaming codeWrap={codeWrap} />
+        )}
+        {(hasBlocks || hasToolCalls) && (
+          <ContentWithText
+            content={content}
+            blocks={blocks}
+            toolCalls={toolCalls}
+            toolResults={toolResults}
+            streaming={streaming}
+            codeWrap={codeWrap}
+            thinkingAutoExpand={thinkingAutoExpand}
+            thinkingScrollable={thinkingScrollable}
+            homePath={homePath}
+            shellConfirmToolCallId={shellConfirmToolCallId}
+            onShellCancel={onShellCancel}
+            onShellConfirm={onShellConfirm}
+            onShellDefaultExecute={onShellDefaultExecute}
+            onViewShellCommand={onViewShellCommand}
+            onToolReview={onToolReview}
+          />
+        )}
+        {!streaming && !!content.trim() && (
+          <MessageActionBar copyText={content} align="left" />
+        )}
+      </View>
     </View>
   );
 });
@@ -80,5 +86,8 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
+  },
+  stack: {
+    alignItems: 'flex-start',
   },
 });

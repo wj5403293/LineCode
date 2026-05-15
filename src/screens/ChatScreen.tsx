@@ -69,6 +69,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     contextSizeLabel,
     contextPercent,
     compacting,
+    recallUserMessage,
   } = chat;
   const { dialog, openDialog, closeDialog } = useDialog();
   const conversation = useConversationManager();
@@ -92,6 +93,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   );
   const [createProjectVisible, setCreateProjectVisible] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const [recalledDraft, setRecalledDraft] = useState<string | undefined>();
 
   useFocusEffect(
     useCallback(() => {
@@ -151,6 +153,10 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
       onShellDefaultExecute={handleShellAutoExecute}
       onViewShellCommand={onViewShellCommand}
       onToolReview={handleToolReview}
+      onRecallUserMessage={(message) => {
+        const draft = recallUserMessage(message.id);
+        setRecalledDraft(draft);
+      }}
     />
   ), [
     codeWrap,
@@ -163,6 +169,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleShellAutoExecute,
     onViewShellCommand,
     handleToolReview,
+    recallUserMessage,
   ]);
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -325,6 +332,8 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           modelId={model?.modelId || ''}
           contextSizeLabel={contextSizeLabel}
           contextPercent={contextPercent}
+          draftText={recalledDraft}
+          onDraftConsumed={() => setRecalledDraft(undefined)}
         />
 
         <Dialog

@@ -15,10 +15,11 @@ import { useTheme } from '../theme';
 interface Props {
   onBack: () => void;
   onAdd: () => void;
+  onEdit: (modelId: string) => void;
   onSelect: () => void;
 }
 
-export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
+export default function ModelListScreen({ onBack, onAdd, onEdit, onSelect }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [models, setModels] = useState<Model[]>([]);
@@ -47,8 +48,13 @@ export default function ModelListScreen({ onBack, onAdd, onSelect }: Props) {
   }, [multiSelect, onSelect]);
 
   const handleLongPress = useCallback((id: string) => {
-    setMultiSelect([id]);
-  }, []);
+    const model = models.find(item => item.id === id);
+    Alert.alert(model?.name || '模型', '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '修改', onPress: () => onEdit(id) },
+      { text: '多选', onPress: () => setMultiSelect([id]) },
+    ]);
+  }, [models, onEdit]);
 
   const handleDelete = useCallback(() => {
     Alert.alert('删除模型', `确定删除 ${multiSelect.length} 个模型？`, [

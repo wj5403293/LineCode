@@ -90,7 +90,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
       },
     });
 
-    console.log('[LineCode] Anthropic request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
+    console.log('[LineCode] Anthropic request body:', this.previewForLog(body, 500, 2));
     body.messages.forEach((msg: any, i: number) => {
       console.log(`[LineCode] Message ${i}: role=${msg.role}`, msg.content);
     });
@@ -241,7 +241,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
         }
 
         const decoded = decoder.decode(value, { stream: true });
-        console.log('[LineCode] Anthropic Stream raw:', decoded.substring(0, 200));
+        console.log('[LineCode] Anthropic Stream raw:', this.previewForLog(decoded, 200));
         buffer += decoded;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -256,7 +256,7 @@ export class AnthropicStreamProcessor extends StreamProcessor {
           try {
             json = JSON.parse(data);
           } catch {
-            console.warn('[LineCode] Anthropic Stream invalid JSON line:', data.substring(0, 200));
+            console.warn('[LineCode] Anthropic Stream invalid JSON line:', this.previewForLog(data, 200));
             continue;
           }
           console.log('[LineCode] Stream event:', json.type, json);

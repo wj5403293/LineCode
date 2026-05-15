@@ -60,7 +60,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
       body.tool_choice = 'auto';
     }
 
-    console.log('[LineCode] OpenAI request body:', JSON.stringify(body, null, 2)?.substring(0, 500));
+    console.log('[LineCode] OpenAI request body:', this.previewForLog(body, 500, 2));
 
     const requestUrl = `${baseUrl}/chat/completions`;
 
@@ -83,7 +83,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
 
     console.log('[LineCode] OpenAI request messages:', body.messages.length);
     body.messages.forEach((msg: any, i: number) => {
-      console.log(`[LineCode] Message ${i}:`, JSON.stringify(msg).substring(0, 200));
+      console.log(`[LineCode] Message ${i}:`, this.previewForLog(msg, 200));
     });
     console.log('[LineCode] OpenAI HTTP response status:', res.status, res.statusText);
 
@@ -134,13 +134,13 @@ export class OpenAIStreamProcessor extends StreamProcessor {
           console.log('[LineCode] OpenAI Stream done');
           console.log('[LineCode] - blocks:', blocks.length);
           console.log('[LineCode] - toolCallsMap:', toolCallsMap.size);
-          console.log('[LineCode] - full text:', full.substring(0, 100) || '(empty)');
-          console.log('[LineCode] - reasoningFull:', reasoningFull.substring(0, 100) || '(empty)');
+          console.log('[LineCode] - full text:', this.previewForLog(full, 100) || '(empty)');
+          console.log('[LineCode] - reasoningFull:', this.previewForLog(reasoningFull, 100) || '(empty)');
           break;
         }
 
         const decoded = decoder.decode(value, { stream: true });
-        console.log('[LineCode] OpenAI Stream raw:', decoded.substring(0, 300));
+        console.log('[LineCode] OpenAI Stream raw:', this.previewForLog(decoded, 300));
         buffer += decoded;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -152,7 +152,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
             try {
               json = JSON.parse(line.slice(6));
             } catch {
-              console.warn('[LineCode] OpenAI Stream invalid JSON line:', line.substring(0, 200));
+              console.warn('[LineCode] OpenAI Stream invalid JSON line:', this.previewForLog(line, 200));
               continue;
             }
             if (json.error) {
@@ -163,11 +163,11 @@ export class OpenAIStreamProcessor extends StreamProcessor {
             if (finishReason === 'content_filter') {
               throw new Error('OpenAI 流式错误: 输出被内容安全策略拦截');
             }
-            console.log('[LineCode] delta:', JSON.stringify(delta).substring(0, 100));
+            console.log('[LineCode] delta:', this.previewForLog(delta, 100));
 
             const reasoningDelta = this.extractReasoningDelta(delta);
             if (reasoningDelta) {
-              console.log('[LineCode] Captured reasoning delta:', reasoningDelta.substring(0, 20));
+              console.log('[LineCode] Captured reasoning delta:', this.previewForLog(reasoningDelta, 20));
               reasoningFull += reasoningDelta;
               ensureThinkingBlock().content = reasoningFull;
               callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));

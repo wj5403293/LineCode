@@ -29,4 +29,11 @@ describe('latexMarkdownIt', () => {
     expect(inline.some(token => token.type === 'latex_inline')).toBe(false);
     expect(block.some((token: any) => token.type === 'latex_block')).toBe(false);
   });
+
+  it('leaves unclosed display math as text', () => {
+    const tokens = latexMarkdownIt.parse('before\n$$\nunclosed\n\nafter', {});
+
+    expect(tokens.some((token: any) => token.type === 'latex_block')).toBe(false);
+    expect(tokens.map((token: any) => token.type)).toContain('paragraph_open');
+  });
 });

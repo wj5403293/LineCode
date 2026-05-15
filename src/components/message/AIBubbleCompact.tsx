@@ -5,6 +5,7 @@ import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { ContentWithText } from './ContentBlockRenderer';
 import TextBlock from './TextBlock';
+import MessageActionBar from './MessageActionBar';
 
 interface Props {
   content: string;
@@ -52,31 +53,36 @@ export default React.memo(function AIBubbleCompact({
       <View style={[styles.avatar, { backgroundColor: colors.accentDim }]}>
         <Text style={[styles.avatarText, { color: colors.accent }]}>AI</Text>
       </View>
-      <View style={[styles.bubble, { backgroundColor: colors.aiBubble }]}>
-        {hasContent && !hasBlocks && !hasToolCalls && (
-          <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
-        )}
-        {showStreamingPlaceholder && (
-          <TextBlock content="" streaming codeWrap={codeWrap} />
-        )}
-        {(hasBlocks || hasToolCalls) && (
-          <ContentWithText
-            content={content}
-            blocks={blocks}
-            toolCalls={toolCalls}
-            toolResults={toolResults}
-            streaming={streaming}
-            codeWrap={codeWrap}
-            thinkingAutoExpand={thinkingAutoExpand}
-            thinkingScrollable={thinkingScrollable}
-            homePath={homePath}
-            shellConfirmToolCallId={shellConfirmToolCallId}
-            onShellCancel={onShellCancel}
-            onShellConfirm={onShellConfirm}
-            onShellDefaultExecute={onShellDefaultExecute}
-            onViewShellCommand={onViewShellCommand}
-            onToolReview={onToolReview}
-          />
+      <View style={styles.stack}>
+        <View style={[styles.bubble, { backgroundColor: colors.aiBubble }]}>
+          {hasContent && !hasBlocks && !hasToolCalls && (
+            <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+          )}
+          {showStreamingPlaceholder && (
+            <TextBlock content="" streaming codeWrap={codeWrap} />
+          )}
+          {(hasBlocks || hasToolCalls) && (
+            <ContentWithText
+              content={content}
+              blocks={blocks}
+              toolCalls={toolCalls}
+              toolResults={toolResults}
+              streaming={streaming}
+              codeWrap={codeWrap}
+              thinkingAutoExpand={thinkingAutoExpand}
+              thinkingScrollable={thinkingScrollable}
+              homePath={homePath}
+              shellConfirmToolCallId={shellConfirmToolCallId}
+              onShellCancel={onShellCancel}
+              onShellConfirm={onShellConfirm}
+              onShellDefaultExecute={onShellDefaultExecute}
+              onViewShellCommand={onViewShellCommand}
+              onToolReview={onToolReview}
+            />
+          )}
+        </View>
+        {!streaming && !!content.trim() && (
+          <MessageActionBar copyText={content} align="left" />
         )}
       </View>
     </View>
@@ -97,6 +103,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.lg,
     borderBottomLeftRadius: 4,
+  },
+  stack: {
+    flex: 1,
+    alignItems: 'flex-start',
   },
   avatar: {
     width: 24,

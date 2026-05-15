@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
   ActivityIndicator, Modal, FlatList,
@@ -18,6 +18,7 @@ import { getModelProviderPreset } from '../constants/modelProviders';
 interface Props {
   onBack: () => void;
   presetId?: string;
+  modelId?: string;
 }
 
 const CUSTOM_ID = '__custom__';
@@ -47,12 +48,13 @@ const PROVIDER_BASE_URL_HINTS: Record<ProviderId, string> = {
   anthropic: 'Anthropic 协议必须填到 /anthropic 结尾，例如 https://api.example.com/anthropic；不要加 /v1/messages。',
 };
 
-export default function ModelAddScreen({ onBack, presetId }: Props) {
+export default function ModelAddScreen({ onBack, presetId, modelId: editingModelId }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
   const preset = getModelProviderPreset(presetId);
   const lockedPreset = !!preset;
+  const isEditing = !!editingModelId;
   const [provider, setProvider] = useState<ProviderId>(preset?.provider || 'openai');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -64,6 +66,27 @@ export default function ModelAddScreen({ onBack, presetId }: Props) {
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
+
+  useEffect(() => {
+    if (!editingModelId) return;
+    let cancelled = false;
+    modelStorage.getModels().then(models => {
+      if (cancelled) return;
+      const target = models.find(item => item.id === editingModelId);
+      if (!target) return;
+      setProvider(target.provider);
+      setName(target.name);
+      setApiKey(target.apiKey);
+      setBaseUrl(target.baseUrl || '');
+      setModelId(target.modelId);
+      setIsCustomId(true);
+      setFetchedModels([]);
+      setFetchError(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingModelId]);
 
   const effectiveBaseUrl = preset
     ? (baseUrl.trim() || preset.baseUrl)
@@ -144,25 +167,33 @@ export default function ModelAddScreen({ onBack, presetId }: Props) {
     if (!canSave) return;
 
     const models = await modelStorage.getModels();
-    const newModel: Model = {
-      id: String(Date.now()),
+    const existingModel = editingModelId ? models.find(item => item.id === editingModelId) : undefined;
+    const nextModel: Model = {
+      id: existingModel?.id || String(Date.now()),
       name: resolvedName,
       provider,
-      providerLabel: preset?.label,
+      providerLabel: preset?.label || existingModel?.providerLabel,
       modelId: modelId.trim(),
       apiKey: apiKey.trim(),
       baseUrl: baseUrl.trim() || undefined,
     };
 
-    const updated = [...models, newModel];
+    const updated = existingModel
+      ? models.map(item => item.id === existingModel.id ? nextModel : item)
+      : [...models, nextModel];
     await modelStorage.saveModels(updated);
 
     if (updated.length === 1) {
-      await modelStorage.setSelectedModelId(newModel.id);
+      await modelStorage.setSelectedModelId(nextModel.id);
+    } else if (existingModel) {
+      const selectedId = await modelStorage.getSelectedModelId();
+      if (selectedId === existingModel.id) {
+        await modelStorage.setSelectedModelId(existingModel.id);
+      }
     }
 
     onBack();
-  }, [resolvedName, modelId, apiKey, baseUrl, provider, preset?.label, canSave, onBack]);
+  }, [resolvedName, modelId, apiKey, baseUrl, provider, preset?.label, canSave, onBack, editingModelId]);
 
   const handleOpenPromo = useCallback(() => {
     openURL(GPT55_PROMO_URL, (url) => navigation.navigate('InAppBrowser', { url })).catch(() => {});
@@ -186,7 +217,7 @@ export default function ModelAddScreen({ onBack, presetId }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <ScreenHeader title="添加模型" onBack={onBack} rightAction={rightAction} />
+      <ScreenHeader title={isEditing ? '修改模型' : '添加模型'} onBack={onBack} rightAction={rightAction} />
 
       <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -199,17 +230,17 @@ export default function ModelAddScreen({ onBack, presetId }: Props) {
               style={[
                 styles.toggleBtn,
                 { backgroundColor: provider === p ? colors.accent : colors.surfaceLight },
-                lockedPreset && p !== provider && styles.toggleBtnDisabled,
+                (lockedPreset || isEditing) && p !== provider && styles.toggleBtnDisabled,
               ]}
               onPress={() => {
-                if (lockedPreset) return;
+                if (lockedPreset || isEditing) return;
                 setProvider(p);
                 setBaseUrl(baseUrl);
                 setFetchedModels([]);
                 setModelId('');
                 setIsCustomId(false);
               }}
-              disabled={lockedPreset}
+              disabled={lockedPreset || isEditing}
             >
               <Text style={[styles.toggleText, { color: provider === p ? colors.textOnColor : colors.textSecondary }]}>
                 {PROVIDER_LABELS[p]}

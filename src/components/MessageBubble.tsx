@@ -18,6 +18,7 @@ interface Props {
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
+  onRecallUserMessage?: (message: Message) => void;
 }
 
 const MemoizedUserBubble = React.memo(UserBubble);
@@ -37,13 +38,20 @@ function MessageBubble({
   onShellDefaultExecute,
   onViewShellCommand,
   onToolReview,
+  onRecallUserMessage,
 }: Props) {
   if (message.hidden) {
     return null;
   }
 
   if (message.role === 'user') {
-    return <MemoizedUserBubble content={message.content} attachments={message.attachments} />;
+    return (
+      <MemoizedUserBubble
+        content={message.content}
+        attachments={message.attachments}
+        onRecall={() => onRecallUserMessage?.(message)}
+      />
+    );
   }
 
   if (message.role === 'tool') {

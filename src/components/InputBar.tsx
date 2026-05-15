@@ -34,6 +34,8 @@ interface Props {
   modelId: string;
   contextSizeLabel: string;
   contextPercent: number;
+  draftText?: string;
+  onDraftConsumed?: () => void;
 }
 
 type PickerSource = 'local' | 'ssh';
@@ -149,6 +151,8 @@ export default React.memo(function InputBar({
   modelId,
   contextSizeLabel,
   contextPercent,
+  draftText,
+  onDraftConsumed,
 }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<InputAttachment[]>([]);
@@ -244,6 +248,14 @@ export default React.memo(function InputBar({
       hideSubscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (draftText === undefined) return;
+    setText(draftText);
+    setAttachments([]);
+    setPickerVisible(false);
+    onDraftConsumed?.();
+  }, [draftText, onDraftConsumed]);
 
   const detectRemotePython = useCallback(async (): Promise<string> => {
     const output = await sshService.executeCommand('command -v python3 || command -v python || command -v py || true', 10000);

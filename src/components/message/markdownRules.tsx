@@ -13,6 +13,33 @@ function hasLatexChild(node: ASTNode): boolean {
   return node.children?.some(hasLatexChild) || false;
 }
 
+function splitChildrenByLatex(children: React.ReactNode[]): React.ReactNode[] {
+  const groups: React.ReactNode[] = [];
+  let inlineChildren: React.ReactNode[] = [];
+
+  const flushInline = (key: string) => {
+    if (inlineChildren.length === 0) return;
+    groups.push(
+      <Text key={key} selectable>
+        {inlineChildren}
+      </Text>
+    );
+    inlineChildren = [];
+  };
+
+  children.forEach((child, index) => {
+    if (React.isValidElement(child) && child.type === LatexFormula) {
+      flushInline(`text-${index}`);
+      groups.push(child);
+      return;
+    }
+    inlineChildren.push(child);
+  });
+
+  flushInline('text-end');
+  return groups;
+}
+
 function textColor(styles: any, inheritedStyles = {}): string {
   const flattened = StyleSheet.flatten([
     styles.body,
@@ -35,7 +62,7 @@ export function createMessageMarkdownRules({
     textgroup: (node, children, _parent, styles) => (
       hasLatexChild(node) ? (
         <View key={node.key} style={styles.latex_textgroup}>
-          {children}
+          {splitChildrenByLatex(children)}
         </View>
       ) : (
         <Text key={node.key} selectable style={styles.textgroup}>
@@ -44,14 +71,26 @@ export function createMessageMarkdownRules({
       )
     ),
     strong: (node, children, _parent, styles) => (
-      <Text key={node.key} selectable style={styles.strong}>
-        {children}
-      </Text>
+      hasLatexChild(node) ? (
+        <View key={node.key} style={styles.latex_textgroup}>
+          {splitChildrenByLatex(children)}
+        </View>
+      ) : (
+        <Text key={node.key} selectable style={styles.strong}>
+          {children}
+        </Text>
+      )
     ),
     em: (node, children, _parent, styles) => (
-      <Text key={node.key} selectable style={styles.em}>
-        {children}
-      </Text>
+      hasLatexChild(node) ? (
+        <View key={node.key} style={styles.latex_textgroup}>
+          {splitChildrenByLatex(children)}
+        </View>
+      ) : (
+        <Text key={node.key} selectable style={styles.em}>
+          {children}
+        </Text>
+      )
     ),
     code_inline: (node, _children, _parent, styles, inheritedStyles = {}) => (
       <Text key={node.key} selectable style={[inheritedStyles, styles.code_inline]}>

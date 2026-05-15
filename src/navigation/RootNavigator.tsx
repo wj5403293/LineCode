@@ -23,7 +23,7 @@ export type RootStackParamList = {
   Settings: undefined;
   ModelList: undefined;
   ModelAddOptions: undefined;
-  ModelAdd: { presetId?: string } | undefined;
+  ModelAdd: { presetId?: string; modelId?: string } | undefined;
   OutputSettings: undefined;
   LLMSettings: undefined;
   MCPSettings: undefined;
@@ -102,6 +102,7 @@ export default function RootNavigator() {
           <ModelListScreen
             onBack={() => navigation.goBack()}
             onAdd={() => navigation.navigate('ModelAddOptions')}
+            onEdit={(modelId) => navigation.navigate('ModelAdd', { modelId })}
             onSelect={() => navigation.navigate('Chat')}
           />
         )}
@@ -119,6 +120,7 @@ export default function RootNavigator() {
         {({ navigation, route }) => (
           <ModelAddScreen
             presetId={route.params?.presetId}
+            modelId={route.params?.modelId}
             onBack={() => navigation.goBack()}
           />
         )}

@@ -214,6 +214,17 @@ export abstract class StreamProcessor {
     }
   }
 
+  protected previewForLog(value: unknown, maxLength: number, space?: number): string {
+    if (typeof value === 'string') return value.slice(0, maxLength);
+    try {
+      const serialized = JSON.stringify(value, null, space);
+      if (typeof serialized === 'string') return serialized.slice(0, maxLength);
+    } catch {
+      // Fall through to String() for circular or otherwise unserializable values.
+    }
+    return String(value).slice(0, maxLength);
+  }
+
   private extractApiErrorText(rawText: string): string {
     if (!rawText) return '';
     try {

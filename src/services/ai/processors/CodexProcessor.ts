@@ -273,7 +273,7 @@ export class CodexStreamProcessor extends StreamProcessor {
       try {
         json = JSON.parse(event.data);
       } catch {
-        console.warn('[LineCode] Codex SSE invalid JSON event:', event.data.substring(0, 200));
+        console.warn('[LineCode] Codex SSE invalid JSON event:', this.previewForLog(event.data, 200));
         return;
       }
 
