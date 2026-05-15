@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MessageSquare, Trash2 } from 'lucide-react-native';
-import { Conversation } from '../../services/conversation';
+import { ConversationMeta } from '../../services/conversation';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 
 interface ConversationItemProps {
-  item: Conversation;
+  item: ConversationMeta;
   isActive: boolean;
   onSelect: () => void;
   onDelete: () => void;

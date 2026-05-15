@@ -1,13 +1,13 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { Plus } from 'lucide-react-native';
-import { Conversation } from '../../services/conversation';
+import { ConversationMeta } from '../../services/conversation';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { ConversationItem } from './ConversationItem';
 
 interface ConversationListProps {
-  conversations: Conversation[];
+  conversations: ConversationMeta[];
   currentId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
@@ -23,7 +23,7 @@ export function ConversationList({
 }: ConversationListProps) {
   const { colors } = useTheme();
 
-  const renderItem = useCallback(({ item }: { item: Conversation }) => (
+  const renderItem = useCallback(({ item }: { item: ConversationMeta }) => (
     <ConversationItem
       item={item}
       isActive={item.id === currentId}
@@ -32,7 +32,7 @@ export function ConversationList({
     />
   ), [currentId, onSelect, onDelete]);
 
-  const keyExtractor = useCallback((item: Conversation) => item.id, []);
+  const keyExtractor = useCallback((item: ConversationMeta) => item.id, []);
 
   return (
     <>

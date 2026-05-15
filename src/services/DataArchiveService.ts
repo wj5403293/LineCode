@@ -3,9 +3,11 @@ import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzipWithPassword, zipWithPassword } from 'react-native-zip-archive';
 import { APP_NAME, APP_VERSION } from '../constants/appInfo';
+import { CONVERSATION_FILES_DIR } from './conversation';
 import { projectService } from './ProjectService';
 
 const ARCHIVE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/archive`;
+const CONVERSATION_ARCHIVE_DIR = 'conversations';
 const BACKUP_HEADER = 'LINECODE-BACKUP-v1\n';
 const BACKUP_PASSWORD_SHA256 = '3b8c62235f137315bfc69ccd3080ce02ec14aba98b040be5716529f0e5357c83';
 const ZIP_ENCRYPTION_METHOD = 'AES-256' as Parameters<typeof zipWithPassword>[3];
@@ -100,6 +102,7 @@ class DataArchiveService {
 
     try {
       await this.exportAsyncStorage(payloadDir);
+      await copyDir(CONVERSATION_FILES_DIR, `${payloadDir}/${CONVERSATION_ARCHIVE_DIR}`);
       const homeDir = await projectService.getCurrentHomePath();
       if (homeDir.startsWith('content://')) {
         throw new Error('导出完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
@@ -146,6 +149,7 @@ class DataArchiveService {
       await unzipWithPassword(zipPath, payloadDir, BACKUP_PASSWORD_SHA256);
       await this.verifyManifest(payloadDir);
       await this.restoreAsyncStorage(payloadDir);
+      await this.restoreConversationFiles(payloadDir);
       const homeDir = await projectService.getCurrentHomePath();
       if (homeDir.startsWith('content://')) {
         throw new Error('导入完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
@@ -157,6 +161,13 @@ class DataArchiveService {
         await RNFS.unlink(workDir);
       }
     }
+  }
+
+  private async restoreConversationFiles(payloadDir: string): Promise<void> {
+    const source = `${payloadDir}/${CONVERSATION_ARCHIVE_DIR}`;
+    await ensureCleanDir(CONVERSATION_FILES_DIR);
+    if (!(await RNFS.exists(source))) return;
+    await copyDir(source, CONVERSATION_FILES_DIR);
   }
 
   private async exportAsyncStorage(payloadDir: string): Promise<void> {

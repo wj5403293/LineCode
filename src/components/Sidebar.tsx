@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated as RNAnimated
 import { X, Archive, FolderOpen, FolderPlus } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
 import { createDocument, copyFile } from 'react-native-saf-x';
-import { Conversation, conversationStore } from '../services/conversation';
+import { ConversationMeta, conversationStore } from '../services/conversation';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import FileTree from './FileTree';
@@ -31,7 +31,7 @@ interface Props {
 function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, projectLabel, onOpenProject, onCreateProject }: Props) {
   const { colors } = useTheme();
   const displayHomePath = workspaceFs.toDisplayPath(homePath);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<ConversationMeta[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('conversations');
   const slideAnim = useRef(new RNAnimated.Value(-SIDEBAR_WIDTH)).current;
   const backdropAnim = useRef(new RNAnimated.Value(0)).current;
@@ -43,7 +43,7 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      conversationStore.getConversations().then(setConversations);
+      conversationStore.getConversationMetas().then(setConversations);
       RNAnimated.parallel([
         RNAnimated.spring(slideAnim, {
           toValue: 0,
@@ -74,7 +74,7 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, 
         setMounted(false);
       });
     }
-  }, [visible]);
+  }, [backdropAnim, slideAnim, visible]);
 
   const handleDelete = useCallback(async (id: string) => {
     await conversationStore.deleteConversation(id);

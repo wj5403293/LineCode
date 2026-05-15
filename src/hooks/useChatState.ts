@@ -316,8 +316,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     if (!convId || nextMessages.length === 0) return;
     const json = JSON.stringify(nextMessages);
     if (lastPersistedJsonRef.current === json) return;
-    lastPersistedJsonRef.current = json;
     await conversationStore.updateConversation(convId, { messages: nextMessages });
+    lastPersistedJsonRef.current = json;
   }, []);
 
   const syncMessages = useCallback((

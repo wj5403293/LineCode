@@ -13,8 +13,7 @@ export function useConversationManager() {
   }, []);
 
   const handleSelectConversation = useCallback(async (id: string) => {
-    const conversations = await conversationStore.getConversations();
-    const conv = conversations.find(c => c.id === id);
+    const conv = await conversationStore.getConversation(id);
     if (conv) {
       setConversationId(conv.id);
       await conversationStore.setCurrentConversationId(id);

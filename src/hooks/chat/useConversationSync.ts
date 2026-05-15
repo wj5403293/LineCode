@@ -31,8 +31,7 @@ export function useConversationSync(
   const initConversation = useCallback(async () => {
     const convId = await conversationStore.getCurrentConversationId();
     if (convId) {
-      const conversations = await conversationStore.getConversations();
-      const conv = conversations.find(c => c.id === convId);
+      const conv = await conversationStore.getConversation(convId);
       if (conv) {
         setConversationId(conv.id);
         setMessages(conv.messages);

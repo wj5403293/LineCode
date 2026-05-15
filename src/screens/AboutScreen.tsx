@@ -1,9 +1,21 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Code2, User, MessageCircle, FileText, ChevronRight, Bug } from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Share,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
+import { Code2, User, MessageCircle, FileText, ChevronRight, Bug, Download } from 'lucide-react-native';
+import { copyFile, createDocument } from 'react-native-saf-x';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { APP_VERSION } from '../constants/appInfo';
+import { errorReporter } from '../services/ErrorReporter';
 
 interface AboutItemProps {
   icon: React.ReactNode;
@@ -45,6 +57,7 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
   const { colors } = useTheme();
   const [authorTaps, setAuthorTaps] = useState(0);
   const [qqTaps, setQqTaps] = useState(0);
+  const [exportingCrashLog, setExportingCrashLog] = useState(false);
   const debugUnlocked = authorTaps === AUTHOR_UNLOCK_TAPS && qqTaps === QQ_UNLOCK_TAPS;
 
   const handleAuthorPress = useCallback(() => {
@@ -54,6 +67,35 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
   const handleQqPress = useCallback(() => {
     setQqTaps(count => (count >= QQ_UNLOCK_TAPS ? 0 : count + 1));
   }, []);
+
+  const handleExportCrashLog = useCallback(async () => {
+    if (exportingCrashLog) return;
+    setExportingCrashLog(true);
+    try {
+      const log = await errorReporter.exportLastCrashLog();
+      if (Platform.OS === 'android') {
+        const doc = await createDocument('', {
+          initialName: log.fileName,
+          mimeType: 'text/plain',
+        });
+        if (!doc) {
+          Alert.alert('导出取消', '未选择保存位置。');
+          return;
+        }
+        await copyFile(`file://${log.path}`, doc.uri, { replaceIfDestinationExists: true });
+        Alert.alert('导出完成', `已保存到: ${doc.name || log.fileName}`);
+      } else {
+        await Share.share({
+          title: log.fileName,
+          url: `file://${log.path}`,
+        });
+      }
+    } catch (err: any) {
+      Alert.alert('导出失败', err?.message || String(err));
+    } finally {
+      setExportingCrashLog(false);
+    }
+  }, [exportingCrashLog]);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.surface }]} contentContainerStyle={styles.content}>
@@ -93,6 +135,18 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
           />
         </View>
       )}
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>诊断</Text>
+        <AboutItem
+          icon={exportingCrashLog
+            ? <ActivityIndicator size="small" color={colors.accent} />
+            : <Download size={20} color={colors.accent} />}
+          label="导出最近一次崩溃日志"
+          value={exportingCrashLog ? '正在导出...' : '保存本机最后一份崩溃文本'}
+          onPress={handleExportCrashLog}
+        />
+      </View>
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>法律信息</Text>
