@@ -2,6 +2,17 @@ const MarkdownIt = require('markdown-it');
 
 const BACKSLASH = 0x5c;
 const DOLLAR = 0x24;
+const DISPLAY_ENVIRONMENTS = new Set([
+  'equation',
+  'equation*',
+  'align',
+  'align*',
+  'aligned',
+  'gather',
+  'gather*',
+  'multline',
+  'multline*',
+]);
 
 function isEscaped(src: string, pos: number): boolean {
   let count = 0;
@@ -24,6 +35,12 @@ function findClosingMarker(src: string, marker: string, from: number): number {
     pos = match + marker.length;
   }
   return -1;
+}
+
+function environmentNameFromBegin(value: string): string | null {
+  const match = value.match(/^\\begin\{([^}]+)\}/);
+  if (!match) return null;
+  return DISPLAY_ENVIRONMENTS.has(match[1]) ? match[1] : null;
 }
 
 function findClosingDollar(src: string, from: number): number {
@@ -78,7 +95,7 @@ function latexInlineRule(state: any, silent: boolean): boolean {
       const close = findClosingMarker(src, '\\]', pos + 2);
       if (close === -1 || close >= posMax) return false;
       if (!silent) {
-        pushLatexToken(state, 'latex_block', '\\[', src.slice(pos + 2, close), true);
+        pushLatexToken(state, 'latex_inline', '\\[', src.slice(pos + 2, close), false);
       }
       state.pos = close + 2;
       return true;
@@ -93,7 +110,7 @@ function latexInlineRule(state: any, silent: boolean): boolean {
     const close = findClosingMarker(src, '$$', pos + 2);
     if (close === -1 || close >= posMax) return false;
     if (!silent) {
-      pushLatexToken(state, 'latex_block', '$$', src.slice(pos + 2, close), true);
+      pushLatexToken(state, 'latex_inline', '$$', src.slice(pos + 2, close), false);
     }
     state.pos = close + 2;
     return true;
@@ -131,7 +148,9 @@ function latexBlockRule(state: any, startLine: number, endLine: number, silent: 
   let content = '';
   let nextLine = startLine;
 
-  if (sameLineClose > 0) {
+  if (sameLineClose !== -1) {
+    const trailing = firstContent.slice(sameLineClose + closeMarkup.length);
+    if (trailing.trim()) return false;
     content = firstContent.slice(0, sameLineClose);
   } else {
     const lines: string[] = [];
@@ -161,8 +180,36 @@ function latexBlockRule(state: any, startLine: number, endLine: number, silent: 
   return true;
 }
 
+function latexEnvironmentBlockRule(state: any, startLine: number, endLine: number, silent: boolean): boolean {
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+
+  const firstLine = getLine(state, startLine);
+  const envName = environmentNameFromBegin(firstLine);
+  if (!envName) return false;
+
+  const closeMarkup = `\\end{${envName}}`;
+  let nextLine = startLine;
+  const lines: string[] = [];
+
+  for (nextLine = startLine; nextLine < endLine; nextLine++) {
+    const line = getLine(state, nextLine);
+    lines.push(line);
+    if (findClosingMarker(line, closeMarkup, 0) !== -1) {
+      if (silent) return true;
+      pushLatexToken(state, 'latex_block', `\\begin{${envName}}`, lines.join('\n'), true);
+      state.line = nextLine + 1;
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function latexMarkdownPlugin(md: any) {
   md.inline.ruler.before('escape', 'latex_inline', latexInlineRule);
+  md.block.ruler.before('fence', 'latex_environment_block', latexEnvironmentBlockRule, {
+    alt: ['paragraph', 'reference', 'blockquote', 'list'],
+  });
   md.block.ruler.before('fence', 'latex_block', latexBlockRule, {
     alt: ['paragraph', 'reference', 'blockquote', 'list'],
   });

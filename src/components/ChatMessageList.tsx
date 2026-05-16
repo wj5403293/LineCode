@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, NativeScrollEvent, NativeSyntheticEvent, StyleSheet } from 'react-native';
 import MessageBubble from './MessageBubble';
 import { Message } from '../types';
 import { DisplayMode } from '../services/settings';
 import { spacing } from '../constants/theme';
+import { ContainedScrollProvider } from './ContainedScrollContext';
 
 interface Props {
   messages: Message[];
@@ -50,6 +51,11 @@ function ChatMessageList({
     () => messages.filter(message => !message.hidden),
     [messages],
   );
+  const [listScrollEnabled, setListScrollEnabled] = useState(true);
+
+  const handleOuterScrollEnabled = useCallback((enabled: boolean) => {
+    setListScrollEnabled(prev => prev === enabled ? prev : enabled);
+  }, []);
 
   const renderItem = useCallback(({ item }: { item: Message }) => (
     <MessageBubble
@@ -87,24 +93,27 @@ function ChatMessageList({
   const keyExtractor = useCallback((item: Message) => item.id, []);
 
   return (
-    <FlatList
-      ref={listRef}
-      data={visibleMessages}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      style={styles.list}
-      contentContainerStyle={styles.listContent}
-      onContentSizeChange={() => onScrollToBottom(false)}
-      onScrollBeginDrag={onScrollBeginDrag}
-      onScroll={onScroll}
-      onScrollEndDrag={onScroll}
-      onMomentumScrollEnd={onScroll}
-      scrollEventThrottle={32}
-      removeClippedSubviews
-      maxToRenderPerBatch={8}
-      updateCellsBatchingPeriod={50}
-      windowSize={8}
-    />
+    <ContainedScrollProvider setOuterScrollEnabled={handleOuterScrollEnabled}>
+      <FlatList
+        ref={listRef}
+        data={visibleMessages}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        onContentSizeChange={() => onScrollToBottom(false)}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScroll={onScroll}
+        onScrollEndDrag={onScroll}
+        onMomentumScrollEnd={onScroll}
+        scrollEnabled={listScrollEnabled}
+        scrollEventThrottle={32}
+        removeClippedSubviews
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={8}
+      />
+    </ContainedScrollProvider>
   );
 }
 

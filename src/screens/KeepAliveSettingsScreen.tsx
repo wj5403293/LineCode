@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, PermissionsAndroid, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BatteryCharging, Bell, Music, Zap } from 'lucide-react-native';
@@ -25,16 +25,27 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [settings, setSettings] = useState<KeepAliveSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
 
   useEffect(() => {
-    settingsService.getKeepAliveSettings().then(setSettings).catch(() => {});
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    settingsService.getKeepAliveSettings()
+      .then(nextSettings => {
+        settingsRef.current = nextSettings;
+        setSettings(nextSettings);
+      })
+      .catch(() => {});
   }, []);
 
   const update = useCallback(async (patch: Partial<KeepAliveSettings>) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
+    const next = { ...settingsRef.current, ...patch };
     await settingsService.setKeepAliveSettings(next);
-  }, [settings]);
+    settingsRef.current = next;
+    setSettings(next);
+  }, []);
 
   const requestNotificationPermission = useCallback(async (): Promise<boolean> => {
     if (Platform.OS !== 'android' || Platform.Version < 33) return true;
@@ -42,8 +53,8 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
     return result === PermissionsAndroid.RESULTS.GRANTED;
   }, []);
 
-  const handleWakeLock = useCallback((enabled: boolean) => {
-    update({ wakeLock: enabled }).catch(() => {});
+  const handleWakeLock = useCallback(async (enabled: boolean) => {
+    await update({ wakeLock: enabled });
     if (!enabled) setKeepAwake(false);
   }, [update]);
 
@@ -52,25 +63,40 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
       const granted = await requestNotificationPermission();
       if (!granted) {
         Alert.alert('通知权限未开启', 'Android 13 及以上需要允许通知后才能显示“正在编码”。');
-        return;
+        throw new Error('通知权限未开启');
       }
     }
+    const previous = settingsRef.current.foregroundService;
     await update({ foregroundService: enabled });
-    await setForegroundCodingService(enabled);
+    try {
+      await setForegroundCodingService(enabled);
+    } catch (err) {
+      await update({ foregroundService: previous });
+      throw err;
+    }
   }, [requestNotificationPermission, update]);
 
   const handleFakeMusic = useCallback(async (enabled: boolean) => {
+    const previous = settingsRef.current.fakeMusic;
     await update({ fakeMusic: enabled });
-    await setFakeMusicPlayback(enabled);
+    try {
+      await setFakeMusicPlayback(enabled);
+    } catch (err) {
+      await update({ fakeMusic: previous });
+      throw err;
+    }
   }, [update]);
 
   const handleBattery = useCallback(async (enabled: boolean) => {
+    const previous = settingsRef.current.ignoreBatteryOptimizations;
     await update({ ignoreBatteryOptimizations: enabled });
     if (enabled) {
       try {
         await requestIgnoreBatteryOptimizations();
       } catch (err: any) {
+        await update({ ignoreBatteryOptimizations: previous });
         Alert.alert('申请失败', err?.message || String(err));
+        throw err;
       }
     }
   }, [update]);

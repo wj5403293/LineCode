@@ -4,7 +4,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -13,6 +12,7 @@ import { Download, X } from 'lucide-react-native';
 import { HotUpdateInfo } from '../services/HotUpdateService';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
+import SettingsSwitch from './SettingsSwitch';
 
 interface Props {
   visible: boolean;
@@ -20,7 +20,7 @@ interface Props {
   autoUpdateEnabled: boolean;
   installing: boolean;
   error?: string | null;
-  onToggleAutoUpdate: (enabled: boolean) => void;
+  onToggleAutoUpdate: (enabled: boolean) => void | Promise<void>;
   onUpdate: () => void;
   onCancel: () => void;
 }
@@ -72,11 +72,9 @@ export default function UpdatePromptModal({
               <Text style={[styles.switchLabel, { color: colors.text }]}>自动检查更新</Text>
               <Text style={[styles.switchDesc, { color: colors.textTertiary }]}>启动时检查 base.zip 详情</Text>
             </View>
-            <Switch
+            <SettingsSwitch
               value={autoUpdateEnabled}
               onValueChange={onToggleAutoUpdate}
-              trackColor={{ false: colors.surfaceLight, true: colors.accentDim }}
-              thumbColor={autoUpdateEnabled ? colors.accent : colors.textTertiary}
               disabled={installing}
             />
           </View>

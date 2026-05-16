@@ -1,17 +1,19 @@
 import React from 'react';
-import { View, Text, Switch, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { spacing, fontSizes } from '../constants/theme';
 import { useTheme } from '../theme';
+import SettingsSwitch from './SettingsSwitch';
 
 interface Props {
   icon: React.ReactNode;
   label: string;
   desc?: string;
   value: boolean;
-  onValueChange: (value: boolean) => void;
+  onValueChange: (value: boolean) => void | Promise<void>;
+  disabled?: boolean;
 }
 
-export default React.memo(function SwitchRow({ icon, label, desc, value, onValueChange }: Props) {
+export default React.memo(function SwitchRow({ icon, label, desc, value, onValueChange, disabled }: Props) {
   const { colors } = useTheme();
 
   return (
@@ -23,11 +25,10 @@ export default React.memo(function SwitchRow({ icon, label, desc, value, onValue
           {desc && <Text style={[styles.desc, { color: colors.textTertiary }]}>{desc}</Text>}
         </View>
       </View>
-      <Switch
+      <SettingsSwitch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: colors.surfaceLight, true: colors.accentDim }}
-        thumbColor={value ? colors.accent : colors.textTertiary}
+        disabled={disabled}
       />
     </View>
   );

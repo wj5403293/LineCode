@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { View, ScrollView, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Clock, FilePenLine, Wrench, X } from 'lucide-react-native';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createMdStyle } from '../message/markdownStyles';
 import { AgentToolCall } from '../../types';
+import ContainedScrollView from '../ContainedScrollView';
 import { AgentHeader } from './agent/AgentHeader';
 import { AgentThinking } from './agent/AgentThinking';
 import { ToolCallRenderer } from './ToolCallRenderer';
@@ -111,7 +112,7 @@ export default React.memo(function AgentBlock({
 
       {expanded && hasDetails && (
         <View style={[styles.content, { borderTopColor: colors.codeBorder }]}>
-          <ScrollView style={styles.outputScroll} nestedScrollEnabled>
+          <ContainedScrollView style={styles.outputScroll}>
             <AgentThinking
               thinking={thinking}
               streaming={streaming}
@@ -160,7 +161,7 @@ export default React.memo(function AgentBlock({
             ) : status === 'error' ? (
               <Text style={[styles.errorText, { color: colors.danger }]}>执行失败</Text>
             ) : null}
-          </ScrollView>
+          </ContainedScrollView>
         </View>
       )}
 

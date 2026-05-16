@@ -12,6 +12,7 @@ import ErrorReportScreen from './src/screens/ErrorReportScreen';
 import { ErrorReport, errorReporter } from './src/services/ErrorReporter';
 import UpdatePromptModal from './src/components/UpdatePromptModal';
 import { HotUpdateInfo, hotUpdateService } from './src/services/HotUpdateService';
+import { settingsService } from './src/services/settings';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -49,6 +50,22 @@ function AppContent() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    const reloadAutoUpdate = () => {
+      hotUpdateService.isAutoUpdateEnabled()
+        .then(enabled => {
+          if (mounted) setAutoUpdateEnabled(enabled);
+        })
+        .catch(() => {});
+    };
+    const unsubscribe = settingsService.subscribe(reloadAutoUpdate);
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
   const handleNavigateUrl = useCallback((url: string) => {
     if (navigationRef.isReady()) {
       navigationRef.navigate('InAppBrowser', { url });
@@ -58,8 +75,8 @@ function AppContent() {
   }, []);
 
   const handleToggleAutoUpdate = useCallback(async (enabled: boolean) => {
-    setAutoUpdateEnabled(enabled);
     await hotUpdateService.setAutoUpdateEnabled(enabled);
+    setAutoUpdateEnabled(enabled);
   }, []);
 
   const handleInstallUpdate = useCallback(async () => {

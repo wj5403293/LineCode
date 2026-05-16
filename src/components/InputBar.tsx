@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -8,8 +9,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowUp, Plus, Square, X } from 'lucide-react-native';
 import { spacing, fontSizes } from '../constants/theme';
 import { useTheme } from '../theme';
@@ -157,7 +160,14 @@ export default React.memo(function InputBar({
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>('idle');
   const [remoteMessage, setRemoteMessage] = useState('');
   const [remoteTree, setRemoteTree] = useState<FileTreeNode | null>(null);
+  const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const [baselineWindowSize, setBaselineWindowSize] = useState({
+    width: windowWidth,
+    height: windowHeight,
+  });
   const { tree: localTree, loadTree, expandNode } = useFileTree(homePath);
   const hasText = text.trim().length > 0;
   const canSend = hasText || attachments.length > 0;
@@ -173,13 +183,21 @@ export default React.memo(function InputBar({
     () => [styles.actionBtn, { backgroundColor: sendBtnBg }, streaming && styles.stopBtn],
     [streaming, sendBtnBg],
   );
+  const androidKeyboardLift = useMemo(() => {
+    if (Platform.OS !== 'android' || androidKeyboardInset <= 0) return 0;
+    const resizedByWindow = Math.max(0, baselineWindowSize.height - windowHeight);
+    return Math.max(0, androidKeyboardInset - resizedByWindow - insets.bottom);
+  }, [androidKeyboardInset, baselineWindowSize.height, insets.bottom, windowHeight]);
   const containerStyle = useMemo(() => [
     styles.container,
     {
       backgroundColor: colors.bg,
       borderTopColor: colors.border,
+      paddingBottom: Platform.OS === 'android'
+        ? spacing.lg + androidKeyboardLift
+        : spacing.lg,
     },
-  ], [colors.bg, colors.border]);
+  ], [androidKeyboardLift, colors.bg, colors.border]);
 
   useEffect(() => {
     setAttachments([]);
@@ -193,6 +211,34 @@ export default React.memo(function InputBar({
     setPickerVisible(false);
     onDraftConsumed?.();
   }, [draftText, onDraftConsumed]);
+
+  useEffect(() => {
+    if (androidKeyboardInset === 0) {
+      setBaselineWindowSize(prev => {
+        const widthChanged = Math.abs(prev.width - windowWidth) > 1;
+        return {
+          width: windowWidth,
+          height: widthChanged ? windowHeight : Math.max(prev.height, windowHeight),
+        };
+      });
+    }
+  }, [androidKeyboardInset, windowHeight, windowWidth]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const showSub = Keyboard.addListener('keyboardDidShow', event => {
+      setAndroidKeyboardInset(Math.max(0, event.endCoordinates?.height || 0));
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setAndroidKeyboardInset(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const detectRemotePython = useCallback(async (): Promise<string> => {
     const output = await sshService.executeCommand('command -v python3 || command -v python || command -v py || true', 10000);

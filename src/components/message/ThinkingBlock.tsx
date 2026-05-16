@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { ChevronRight, ChevronDown } from 'lucide-react-native';
 import { spacing, fontSizes } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createThinkingMdStyle } from './markdownStyles';
 import { createMessageMarkdownRules } from './markdownRules';
+import ContainedScrollView from '../ContainedScrollView';
 
 interface Props {
   content: string;
@@ -23,16 +24,17 @@ export default React.memo(function ThinkingBlock({
   mathFormulaRenderingEnabled,
 }: Props) {
   const { colors } = useTheme();
+  const shouldRenderMath = !!mathFormulaRenderingEnabled && !streaming;
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
   const mathMarkdownRules = useMemo(
-    () => mathFormulaRenderingEnabled
+    () => shouldRenderMath
       ? createMessageMarkdownRules({ mathFormulaRenderingEnabled: true })
       : undefined,
-    [mathFormulaRenderingEnabled],
+    [shouldRenderMath],
   );
   const mathMarkdownIt = useMemo(
-    () => mathFormulaRenderingEnabled ? require('./latexMarkdown').latexMarkdownIt : undefined,
-    [mathFormulaRenderingEnabled],
+    () => shouldRenderMath ? require('./latexMarkdown').latexMarkdownIt : undefined,
+    [shouldRenderMath],
   );
   const [expanded, setExpanded] = useState(autoExpand || false);
 
@@ -59,16 +61,16 @@ export default React.memo(function ThinkingBlock({
       </TouchableOpacity>
       {expanded && (
         scrollable ? (
-          <ScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
-            {mathFormulaRenderingEnabled ? (
+          <ContainedScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]}>
+            {shouldRenderMath ? (
               <Markdown style={mdStyle} rules={mathMarkdownRules} markdownit={mathMarkdownIt}>{content}</Markdown>
             ) : (
               <Markdown style={mdStyle}>{content}</Markdown>
             )}
-          </ScrollView>
+          </ContainedScrollView>
         ) : (
           <View style={[styles.content, { borderTopColor: colors.borderLight }]}>
-            {mathFormulaRenderingEnabled ? (
+            {shouldRenderMath ? (
               <Markdown style={mdStyle} rules={mathMarkdownRules} markdownit={mathMarkdownIt}>{content}</Markdown>
             ) : (
               <Markdown style={mdStyle}>{content}</Markdown>

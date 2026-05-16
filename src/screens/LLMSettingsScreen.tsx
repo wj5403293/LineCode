@@ -44,33 +44,33 @@ export default function LLMSettingsScreen({ onBack }: Props) {
   }, []);
 
   const handleDisplayMode = useCallback(async (mode: DisplayMode) => {
-    setCurrentDisplayMode(mode);
     await settingsService.setDisplayMode(mode);
+    setCurrentDisplayMode(mode);
   }, []);
 
   const handleToneMode = useCallback(async (mode: ToneMode) => {
-    setCurrentToneMode(mode);
     await settingsService.setToneMode(mode);
+    setCurrentToneMode(mode);
   }, []);
 
   const handleThinkingScroll = useCallback(async (value: boolean) => {
-    setThinkingScrollEnabled(value);
     await settingsService.setThinkingScroll(value);
+    setThinkingScrollEnabled(value);
   }, []);
 
   const handleThinkingAutoExpand = useCallback(async (value: boolean) => {
-    setThinkingAutoExpandEnabled(value);
     await settingsService.setThinkingAutoExpand(value);
+    setThinkingAutoExpandEnabled(value);
   }, []);
 
   const handleReasoningEffort = useCallback(async (effort: ReasoningEffort) => {
-    setReasoningEffortState(effort);
     await settingsService.setReasoningEffort(effort);
+    setReasoningEffortState(effort);
   }, []);
 
   const handlePreserveReasoning = useCallback(async (value: boolean) => {
-    setPreserveReasoningEnabled(value);
     await settingsService.setPreserveReasoning(value);
+    setPreserveReasoningEnabled(value);
   }, []);
 
   return (

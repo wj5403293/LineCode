@@ -65,6 +65,10 @@ export function useSettings() {
     reloadSettings();
   }, [reloadSettings]);
 
+  useEffect(() => {
+    return settingsService.subscribe(reloadSettings);
+  }, [reloadSettings]);
+
   const updatePermissionMode = useCallback(async (mode: PermissionMode) => {
     await settingsService.setPermissionMode(mode);
     setPermissionMode(mode);

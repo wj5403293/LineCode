@@ -6,7 +6,6 @@ import {
   Platform,
   View,
   Text,
-  Switch,
   StyleSheet,
   ScrollView,
   TextInput,
@@ -32,6 +31,7 @@ import {
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
+import SettingsSwitch from '../components/SettingsSwitch';
 
 interface Props {
   onBack: () => void;
@@ -463,11 +463,9 @@ export default function MCPSettingsScreen({ onBack }: Props) {
                   <Text style={[styles.cardTitle, { color: colors.text }]}>{config.name}</Text>
                   <Text style={[styles.cardDesc, { color: colors.textTertiary }]}>{config.description}</Text>
                 </View>
-                <Switch
+                <SettingsSwitch
                   value={config.enabled}
                   onValueChange={(enabled) => handleToggle(config.id, enabled)}
-                  trackColor={{ false: colors.surfaceLight, true: colors.accentDim }}
-                  thumbColor={config.enabled ? colors.accent : colors.textTertiary}
                 />
               </View>
               <View style={[styles.toolsList, { borderTopColor: colors.borderLight }]}>

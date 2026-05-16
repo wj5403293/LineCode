@@ -31,8 +31,8 @@ export default function OutputSettingsScreen({ onBack }: Props) {
   }, []);
 
   const handleToggleCodeWrap = useCallback(async (value: boolean) => {
-    setCodeWrapEnabled(value);
     await settingsService.setCodeWrap(value);
+    setCodeWrapEnabled(value);
   }, []);
 
   const handleBrowserMode = useCallback(async (mode: BrowserMode) => {

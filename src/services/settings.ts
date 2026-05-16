@@ -61,7 +61,22 @@ const KEYS = {
   KEEP_ALIVE: '@linecode_keep_alive_settings',
 } as const;
 
+type SettingsListener = () => void;
+
 class SettingsService {
+  private listeners = new Set<SettingsListener>();
+
+  subscribe(listener: SettingsListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    this.listeners.forEach(listener => listener());
+  }
+
   private async get<T>(key: string, fallback: T): Promise<T> {
     const value = await AsyncStorage.getItem(key);
     if (value === null) return fallback;
@@ -70,6 +85,7 @@ class SettingsService {
 
   private async set(key: string, value: unknown): Promise<void> {
     await AsyncStorage.setItem(key, String(value));
+    this.notify();
   }
 
   async getCodeWrap(): Promise<boolean> {
@@ -171,6 +187,7 @@ class SettingsService {
 
   async setCustomThemeColors(colors: Record<string, string>): Promise<void> {
     await AsyncStorage.setItem(KEYS.CUSTOM_THEME_COLORS, JSON.stringify(colors));
+    this.notify();
   }
 
   async getBrowserMode(): Promise<BrowserMode> {
@@ -246,6 +263,7 @@ class SettingsService {
 
   async setKeepAliveSettings(settings: KeepAliveSettings): Promise<void> {
     await AsyncStorage.setItem(KEYS.KEEP_ALIVE, JSON.stringify(settings));
+    this.notify();
   }
 }
 

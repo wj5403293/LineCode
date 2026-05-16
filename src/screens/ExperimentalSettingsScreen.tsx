@@ -25,8 +25,8 @@ export default function ExperimentalSettingsScreen({ onBack }: Props) {
   }, []);
 
   const handleMathFormulaRendering = useCallback(async (value: boolean) => {
-    setMathFormulaRenderingEnabled(value);
     await settingsService.setMathFormulaRenderingEnabled(value);
+    setMathFormulaRenderingEnabled(value);
   }, []);
 
   return (

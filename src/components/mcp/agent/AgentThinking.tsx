@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronRight, ChevronDown, Sparkles } from 'lucide-react-native';
 import Markdown from 'react-native-markdown-display';
 import { spacing, fontSizes, radius } from '../../../constants/theme';
 import { useTheme } from '../../../theme';
 import { createThinkingMdStyle } from '../../message/markdownStyles';
+import ContainedScrollView from '../../ContainedScrollView';
 
 interface AgentThinkingProps {
   thinking?: string;
@@ -39,9 +40,9 @@ export function AgentThinking({ thinking, streaming, expanded, onToggle }: Agent
       </TouchableOpacity>
 
       {expanded && (
-        <ScrollView style={[styles.thinkingContent, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
+        <ContainedScrollView style={[styles.thinkingContent, { borderTopColor: colors.borderLight }]}>
           <Markdown style={mdStyle}>{thinking}</Markdown>
-        </ScrollView>
+        </ContainedScrollView>
       )}
     </>
   );

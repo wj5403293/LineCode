@@ -113,8 +113,14 @@ class MCPService {
     const configs = await this.getConfigs();
     const config = configs.find(c => c.id === id);
     if (config) {
+      const previous = config.enabled;
       config.enabled = enabled;
-      await this.save();
+      try {
+        await this.save();
+      } catch (err) {
+        config.enabled = previous;
+        throw err;
+      }
     }
   }
 

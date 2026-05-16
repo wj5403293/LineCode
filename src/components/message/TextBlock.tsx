@@ -22,20 +22,21 @@ export default React.memo(function TextBlock({
 }: Props) {
   const { colors } = useTheme();
   const renderContent = useTypewriterText(content, !!streaming);
+  const shouldRenderMath = !!mathFormulaRenderingEnabled && !streaming;
   const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
   const customRules = useMemo(
     () => createMessageMarkdownRules({ codeWrap }),
     [codeWrap],
   );
   const mathRules = useMemo(
-    () => mathFormulaRenderingEnabled
+    () => shouldRenderMath
       ? createMessageMarkdownRules({ codeWrap, mathFormulaRenderingEnabled: true })
       : undefined,
-    [codeWrap, mathFormulaRenderingEnabled],
+    [codeWrap, shouldRenderMath],
   );
   const mathMarkdownIt = useMemo(
-    () => mathFormulaRenderingEnabled ? require('./latexMarkdown').latexMarkdownIt : undefined,
-    [mathFormulaRenderingEnabled],
+    () => shouldRenderMath ? require('./latexMarkdown').latexMarkdownIt : undefined,
+    [shouldRenderMath],
   );
 
   if (!content && !streaming) return null;
@@ -48,7 +49,7 @@ export default React.memo(function TextBlock({
     );
   }
 
-  const markdown = mathFormulaRenderingEnabled ? (
+  const markdown = shouldRenderMath ? (
     <Markdown style={mdStyle} rules={mathRules} markdownit={mathMarkdownIt}>{renderContent || ''}</Markdown>
   ) : (
     <Markdown style={mdStyle} rules={customRules}>{renderContent || ''}</Markdown>

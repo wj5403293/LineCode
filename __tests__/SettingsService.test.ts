@@ -17,4 +17,16 @@ describe('settingsService math formula rendering', () => {
     await settingsService.setMathFormulaRenderingEnabled(false);
     await expect(settingsService.getMathFormulaRenderingEnabled()).resolves.toBe(false);
   });
+
+  it('notifies subscribers after setting changes', async () => {
+    const listener = jest.fn();
+    const unsubscribe = settingsService.subscribe(listener);
+
+    await settingsService.setMathFormulaRenderingEnabled(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    await settingsService.setMathFormulaRenderingEnabled(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
 });

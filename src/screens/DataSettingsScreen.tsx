@@ -41,8 +41,8 @@ export default function DataSettingsScreen({ onBack }: Props) {
   }, []);
 
   const handleToggleAutoUpdate = useCallback(async (enabled: boolean) => {
-    setAutoUpdateEnabled(enabled);
     await hotUpdateService.setAutoUpdateEnabled(enabled);
+    setAutoUpdateEnabled(enabled);
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
