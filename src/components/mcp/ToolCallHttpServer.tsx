@@ -12,7 +12,7 @@ interface Props {
   isError?: boolean;
 }
 
-export default React.memo(function ToolCallHttpServer({ input, result, isError }: Props) {
+export default React.memo(function ToolCallHttpServer({ input: _input, result, isError }: Props) {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
   const [port, setPort] = useState<number>(0);
@@ -56,6 +56,9 @@ export default React.memo(function ToolCallHttpServer({ input, result, isError }
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     marginVertical: 4,
     padding: spacing.md,
@@ -64,8 +67,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minWidth: 0,
   },
   label: {
+    flexShrink: 0,
     fontSize: fontSizes.sm,
     fontWeight: '600',
   },
@@ -74,8 +79,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginLeft: 'auto',
+    minWidth: 0,
   },
   address: {
+    flexShrink: 1,
     fontSize: fontSizes.sm,
     fontFamily: 'monospace',
   },
@@ -92,5 +99,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: fontSizes.xs,
     flex: 1,
+    minWidth: 0,
   },
 });

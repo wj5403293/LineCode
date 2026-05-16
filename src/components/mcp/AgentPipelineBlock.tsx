@@ -83,6 +83,9 @@ export default React.memo(function AgentPipelineBlock({
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     borderWidth: 1,
     marginVertical: 4,
@@ -127,6 +130,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   agentList: {
+    width: '100%',
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.xs,

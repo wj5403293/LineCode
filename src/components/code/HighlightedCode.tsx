@@ -36,6 +36,7 @@ export default React.memo(function HighlightedCode({ code, language, wordWrap = 
 const styles = StyleSheet.create({
   line: {
     flexDirection: 'row',
+    minHeight: 20,
   },
   nowrapLine: {
     alignSelf: 'flex-start',
@@ -43,6 +44,7 @@ const styles = StyleSheet.create({
   lineNumber: {
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
+    lineHeight: 20,
     width: 28,
     opacity: 0.5,
   },

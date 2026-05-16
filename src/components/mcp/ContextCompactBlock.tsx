@@ -25,6 +25,9 @@ export default React.memo(function ContextCompactBlock({ status = 'running' }: P
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     minHeight: 34,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,

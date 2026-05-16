@@ -71,6 +71,9 @@ export default React.memo(function ToolCallRead({ name, input, result, isError }
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     marginVertical: 2,
@@ -81,6 +84,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     minHeight: 42,
+    minWidth: 0,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
   },
@@ -91,6 +95,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   textBlock: {
     flex: 1,
@@ -109,6 +114,7 @@ const styles = StyleSheet.create({
     width: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   errorRow: {
     flexDirection: 'row',
@@ -121,5 +127,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: fontSizes.xs,
     flex: 1,
+    minWidth: 0,
   },
 });

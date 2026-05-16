@@ -56,7 +56,7 @@ export default React.memo(function AIBubbleCompact({
         <Text style={[styles.avatarText, { color: colors.accent }]}>AI</Text>
       </View>
       <View style={styles.stack}>
-        <View style={[styles.bubble, { backgroundColor: colors.aiBubble }]}>
+        <View style={[styles.bubble, { backgroundColor: colors.aiBubble }, (hasBlocks || hasToolCalls) && styles.richBubble]}>
           {hasContent && !hasBlocks && !hasToolCalls && (
             <TextBlock
               content={content}
@@ -117,8 +117,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderBottomLeftRadius: 4,
   },
+  richBubble: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+  },
   stack: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'flex-start',
   },
   avatar: {

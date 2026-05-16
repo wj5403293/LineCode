@@ -231,6 +231,9 @@ export default React.memo(function ToolCallWrite({
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
@@ -238,6 +241,7 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: spacing.sm,
+    minWidth: 0,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -245,6 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minWidth: 0,
   },
   fileIcon: {
     width: 28,
@@ -253,6 +258,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   fileMeta: {
     flex: 1,
@@ -271,6 +277,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
+    flexShrink: 0,
   },
   langText: {
     fontSize: fontSizes.xs,
@@ -280,6 +287,7 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm,
     fontFamily: 'monospace',
     flex: 1,
+    minWidth: 0,
   },
   filePath: {
     fontSize: fontSizes.xs,
@@ -290,6 +298,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minWidth: 0,
   },
   compactMetaRow: {
     flexDirection: 'row',
@@ -307,6 +316,7 @@ const styles = StyleSheet.create({
   },
   reviewSpacer: {
     flex: 1,
+    minWidth: 0,
   },
   confirmBtn: {
     flexDirection: 'row',
@@ -348,6 +358,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   diffSection: {
+    width: '100%',
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   diffHeader: {
@@ -372,6 +383,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: fontSizes.xs,
     flex: 1,
+    minWidth: 0,
   },
   result: {
     fontSize: fontSizes.xs,

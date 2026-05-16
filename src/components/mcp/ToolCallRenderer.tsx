@@ -101,6 +101,9 @@ export function ToolCallRenderer({
 
 const styles = StyleSheet.create({
   toolCallItem: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: 4,
     paddingVertical: 4,
     paddingHorizontal: 8,

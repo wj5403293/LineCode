@@ -2,7 +2,12 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { ASTNode, RenderRules } from 'react-native-markdown-display';
 import CodeBlock from '../CodeBlock';
-import LatexFormula from './LatexFormula';
+
+type LatexFormulaComponent = React.ComponentType<{
+  math: string;
+  color: string;
+  display?: boolean;
+}>;
 
 interface CreateMessageMarkdownRulesOptions {
   codeWrap?: boolean;
@@ -15,6 +20,7 @@ function hasLatexChild(node: ASTNode): boolean {
 }
 
 function splitChildrenByLatex(children: React.ReactNode[]): React.ReactNode[] {
+  const LatexFormula = getLatexFormula();
   const groups: React.ReactNode[] = [];
   let inlineChildren: React.ReactNode[] = [];
 
@@ -49,6 +55,10 @@ function textColor(styles: any, inheritedStyles = {}): string {
   ]) as { color?: unknown } | undefined;
 
   return typeof flattened?.color === 'string' ? flattened.color : '#FFFFFF';
+}
+
+function getLatexFormula(): LatexFormulaComponent {
+  return require('./LatexFormula').default as LatexFormulaComponent;
 }
 
 export function createMessageMarkdownRules({
@@ -113,6 +123,8 @@ export function createMessageMarkdownRules({
   if (!mathFormulaRenderingEnabled) {
     return rules;
   }
+
+  const LatexFormula = getLatexFormula();
 
   return {
     ...rules,

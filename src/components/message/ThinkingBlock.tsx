@@ -5,7 +5,6 @@ import { ChevronRight, ChevronDown } from 'lucide-react-native';
 import { spacing, fontSizes } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createThinkingMdStyle } from './markdownStyles';
-import { latexMarkdownIt } from './latexMarkdown';
 import { createMessageMarkdownRules } from './markdownRules';
 
 interface Props {
@@ -25,8 +24,14 @@ export default React.memo(function ThinkingBlock({
 }: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
-  const markdownRules = useMemo(
-    () => createMessageMarkdownRules({ mathFormulaRenderingEnabled }),
+  const mathMarkdownRules = useMemo(
+    () => mathFormulaRenderingEnabled
+      ? createMessageMarkdownRules({ mathFormulaRenderingEnabled: true })
+      : undefined,
+    [mathFormulaRenderingEnabled],
+  );
+  const mathMarkdownIt = useMemo(
+    () => mathFormulaRenderingEnabled ? require('./latexMarkdown').latexMarkdownIt : undefined,
     [mathFormulaRenderingEnabled],
   );
   const [expanded, setExpanded] = useState(autoExpand || false);
@@ -56,17 +61,17 @@ export default React.memo(function ThinkingBlock({
         scrollable ? (
           <ScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
             {mathFormulaRenderingEnabled ? (
-              <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+              <Markdown style={mdStyle} rules={mathMarkdownRules} markdownit={mathMarkdownIt}>{content}</Markdown>
             ) : (
-              <Markdown style={mdStyle} rules={markdownRules}>{content}</Markdown>
+              <Markdown style={mdStyle}>{content}</Markdown>
             )}
           </ScrollView>
         ) : (
           <View style={[styles.content, { borderTopColor: colors.borderLight }]}>
             {mathFormulaRenderingEnabled ? (
-              <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+              <Markdown style={mdStyle} rules={mathMarkdownRules} markdownit={mathMarkdownIt}>{content}</Markdown>
             ) : (
-              <Markdown style={mdStyle} rules={markdownRules}>{content}</Markdown>
+              <Markdown style={mdStyle}>{content}</Markdown>
             )}
           </View>
         )
@@ -77,6 +82,8 @@ export default React.memo(function ThinkingBlock({
 
 const styles = StyleSheet.create({
   wrap: {
+    alignSelf: 'stretch',
+    width: '100%',
     marginBottom: spacing.lg,
     marginTop: spacing.sm,
   },
@@ -95,11 +102,13 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
   },
   scroll: {
+    width: '100%',
     maxHeight: 180,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   content: {
+    width: '100%',
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },

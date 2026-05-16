@@ -101,6 +101,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   stack: {
-    alignItems: 'flex-start',
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    width: '100%',
   },
 });

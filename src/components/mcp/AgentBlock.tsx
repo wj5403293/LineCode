@@ -224,12 +224,16 @@ export default React.memo(function AgentBlock({
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
     borderWidth: 1,
   },
   content: {
+    width: '100%',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -237,6 +241,7 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   outputScroll: {
+    width: '100%',
     flexGrow: 0,
   },
   streamingContainer: {
@@ -252,11 +257,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   fileChangesSection: {
+    width: '100%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   toolsSection: {
+    width: '100%',
     marginBottom: spacing.sm,
   },
   sectionHeader: {
@@ -270,6 +277,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   toolsList: {
+    width: '100%',
     gap: 4,
   },
   waitingSection: {

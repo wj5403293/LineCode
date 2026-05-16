@@ -101,6 +101,9 @@ export default React.memo(function ToolCallShell({
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: 6,
@@ -111,6 +114,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minWidth: 0,
   },
   command: {
     flex: 1,
@@ -137,6 +141,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    minWidth: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: spacing.xs,
     marginTop: spacing.xs,
@@ -158,6 +163,7 @@ const styles = StyleSheet.create({
   },
   confirmSpacer: {
     flex: 1,
+    minWidth: 0,
   },
   secondaryButton: {
     minHeight: 30,
@@ -195,6 +201,7 @@ const styles = StyleSheet.create({
   },
   result: {
     flex: 1,
+    minWidth: 0,
     fontSize: fontSizes.xs,
     lineHeight: 17,
     fontFamily: 'monospace',

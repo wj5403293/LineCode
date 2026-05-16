@@ -19,7 +19,6 @@ interface Props {
 function computeDiff(oldText: string, newText: string): DiffLine[] {
   const oldLines = oldText.split('\n');
   const newLines = newText.split('\n');
-  const result: DiffLine[] = [];
 
   const m = oldLines.length;
   const n = newLines.length;
@@ -61,7 +60,12 @@ export default React.memo(function DiffView({ oldContent, newContent, maxLines =
   const truncated = lines.length > maxLines;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={styles.container}>
         {displayLines.map((line, idx) => (
           <View key={idx} style={[
@@ -96,11 +100,21 @@ export default React.memo(function DiffView({ oldContent, newContent, maxLines =
 });
 
 const styles = StyleSheet.create({
+  scroll: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+  },
+  scrollContent: {
+    minWidth: '100%',
+  },
   container: {
+    minWidth: '100%',
     paddingVertical: spacing.xs,
   },
   line: {
     flexDirection: 'row',
+    minWidth: '100%',
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
   },
@@ -120,7 +134,7 @@ const styles = StyleSheet.create({
   lineText: {
     fontSize: fontSizes.xs,
     fontFamily: 'monospace',
-    flex: 1,
+    flexShrink: 0,
   },
   truncated: {
     fontSize: fontSizes.xs,

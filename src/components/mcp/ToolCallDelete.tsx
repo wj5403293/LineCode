@@ -47,6 +47,9 @@ export default React.memo(function ToolCallDelete({ input, result, isError }: Pr
 
 const styles = StyleSheet.create({
   container: {
+    alignSelf: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
     borderRadius: radius.sm,
     marginVertical: 4,
     overflow: 'hidden',
@@ -85,6 +88,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: fontSizes.xs,
     flex: 1,
+    minWidth: 0,
   },
   resultSection: {
     flexDirection: 'row',
@@ -97,5 +101,6 @@ const styles = StyleSheet.create({
   resultText: {
     fontSize: fontSizes.xs,
     flex: 1,
+    minWidth: 0,
   },
 });

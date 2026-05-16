@@ -4,7 +4,6 @@ import Markdown from 'react-native-markdown-display';
 import { spacing } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createMdStyle } from './markdownStyles';
-import { latexMarkdownIt } from './latexMarkdown';
 import { createMessageMarkdownRules } from './markdownRules';
 
 interface Props {
@@ -23,8 +22,18 @@ export default React.memo(function TextBlock({
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
   const customRules = useMemo(
-    () => createMessageMarkdownRules({ codeWrap, mathFormulaRenderingEnabled }),
+    () => createMessageMarkdownRules({ codeWrap }),
+    [codeWrap],
+  );
+  const mathRules = useMemo(
+    () => mathFormulaRenderingEnabled
+      ? createMessageMarkdownRules({ codeWrap, mathFormulaRenderingEnabled: true })
+      : undefined,
     [codeWrap, mathFormulaRenderingEnabled],
+  );
+  const mathMarkdownIt = useMemo(
+    () => mathFormulaRenderingEnabled ? require('./latexMarkdown').latexMarkdownIt : undefined,
+    [mathFormulaRenderingEnabled],
   );
 
   if (!content && !streaming) return null;
@@ -38,7 +47,7 @@ export default React.memo(function TextBlock({
   }
 
   const markdown = mathFormulaRenderingEnabled ? (
-    <Markdown style={mdStyle} rules={customRules} markdownit={latexMarkdownIt}>{content || ''}</Markdown>
+    <Markdown style={mdStyle} rules={mathRules} markdownit={mathMarkdownIt}>{content || ''}</Markdown>
   ) : (
     <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
   );
