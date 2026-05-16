@@ -2,10 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
 import { APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } from '../constants/appInfo';
+import {
+  fetchLanzouTextFile,
+  resolveLanzouDownloadUrl,
+  resolveLanzouHotUpdateFiles,
+} from './LanzouShareResolver';
 import { settingsService } from './settings';
 
-const HOT_UPDATE_DETAIL_URL = 'https://www.freelybase.com/base.zip.txt';
-const HOT_UPDATE_ZIP_URL = 'https://www.freelybase.com/base.zip';
 const UPDATE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/updates`;
 const CURRENT_DIR = `${UPDATE_ROOT}/current`;
 const TEMP_DIR = `${UPDATE_ROOT}/tmp`;
@@ -108,15 +111,8 @@ class HotUpdateService {
   }
 
   async checkForUpdate(): Promise<HotUpdateInfo | null> {
-    const response = await fetch(HOT_UPDATE_DETAIL_URL, {
-      method: 'GET',
-      headers: { Accept: 'text/plain' },
-    });
-    if (!response.ok) {
-      throw new Error(`获取更新详情失败: HTTP ${response.status}`);
-    }
-
-    const text = await response.text();
+    const files = await resolveLanzouHotUpdateFiles();
+    const text = await fetchLanzouTextFile(files.detail.shareUrl);
     const lines = text.replace(/\r\n/g, '\n').split('\n');
     const firstLine = lines[0]?.trim();
     const secondLine = lines[1]?.trim();
@@ -129,7 +125,7 @@ class HotUpdateService {
       versionCode,
       versionName: secondLine || `v${versionCode}`,
       changelog: lines.slice(2).join('\n').trim(),
-      zipUrl: HOT_UPDATE_ZIP_URL,
+      zipUrl: files.zip.shareUrl,
     };
 
     const state = await this.getState();
@@ -146,11 +142,12 @@ class HotUpdateService {
     await RNFS.mkdir(extractDir);
 
     try {
-      if (!info.zipUrl.startsWith('https://')) {
-        throw new Error(`更新包必须使用 HTTPS: ${info.zipUrl}`);
+      const zipUrl = await resolveLanzouDownloadUrl(info.zipUrl);
+      if (!zipUrl.startsWith('https://')) {
+        throw new Error(`更新包必须使用 HTTPS: ${zipUrl}`);
       }
       const download = RNFS.downloadFile({
-        fromUrl: info.zipUrl,
+        fromUrl: zipUrl,
         toFile: zipPath,
         background: false,
         discretionary: false,

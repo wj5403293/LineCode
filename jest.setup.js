@@ -57,6 +57,8 @@ jest.mock('@react-native-clipboard/clipboard', () => ({
 }));
 
 jest.mock('react-native-fs', () => ({
+  TemporaryDirectoryPath: '/tmp/lineai-test',
+  CachesDirectoryPath: '/tmp/lineai-test',
   DocumentDirectoryPath: '/tmp/lineai-test',
   exists: jest.fn(() => Promise.resolve(false)),
   mkdir: jest.fn(() => Promise.resolve()),
@@ -66,6 +68,7 @@ jest.mock('react-native-fs', () => ({
   moveFile: jest.fn(() => Promise.resolve()),
   copyFile: jest.fn(() => Promise.resolve()),
   unlink: jest.fn(() => Promise.resolve()),
+  downloadFile: jest.fn(() => ({ promise: Promise.resolve({ statusCode: 200, bytesWritten: 0, jobId: 1 }) })),
 }));
 
 jest.mock('react-native-saf-x', () => ({

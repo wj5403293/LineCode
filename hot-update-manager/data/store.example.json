@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "settings": {
+    "lanzou": {
+      "cookie": "",
+      "folderId": -1,
+      "lastVerifiedAt": null,
+      "lastError": ""
+    },
+    "artifactDir": "dist/hot-update"
+  },
+  "releases": []
+}
