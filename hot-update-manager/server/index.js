@@ -149,6 +149,11 @@ async function handleApi(req, res, url) {
     let status = 'local';
 
     if (body.uploadToLanzou !== false) {
+      const cleanupErrors = await deletePublishedLanzouReleases(store);
+      if (cleanupErrors.length) {
+        await saveStore(store);
+        throw httpError(502, `删除旧蓝奏云文件失败，已停止上传: ${cleanupErrors.join('; ')}`);
+      }
       cloud = await uploadReleasePair(store.settings.lanzou.cookie, store.settings.lanzou.folderId, {
         zipPath: archived.zipTarget,
         detailPath: archived.detailTarget,
@@ -201,17 +206,7 @@ async function handleApi(req, res, url) {
     const target = store.releases.find(item => item.id === releaseId);
     if (!target) throw httpError(404, 'Release not found.');
     const deleteCloud = body.deleteCloud !== false;
-    const deleteErrors = [];
-    if (deleteCloud && target.cloud?.provider === 'lanzou') {
-      for (const file of [target.cloud.files?.zip, target.cloud.files?.detail]) {
-        if (!file?.fileId) continue;
-        try {
-          await deleteFile(store.settings.lanzou.cookie, file.fileId, target.cloud.folderId);
-        } catch (error) {
-          deleteErrors.push(error instanceof Error ? error.message : String(error));
-        }
-      }
-    }
+    const deleteErrors = deleteCloud ? await deleteReleaseCloudFiles(store, target) : [];
     target.status = 'deleted';
     target.active = false;
     target.deletedAt = new Date().toISOString();
@@ -222,6 +217,34 @@ async function handleApi(req, res, url) {
   }
 
   throw httpError(404, 'API route not found.');
+}
+
+async function deletePublishedLanzouReleases(store) {
+  const cleanupErrors = [];
+  for (const release of store.releases) {
+    if (release.status === 'deleted' || release.cloud?.provider !== 'lanzou') continue;
+    const deleteErrors = await deleteReleaseCloudFiles(store, release);
+    release.status = 'deleted';
+    release.active = false;
+    release.deletedAt = new Date().toISOString();
+    release.deleteErrors = deleteErrors;
+    cleanupErrors.push(...deleteErrors.map(error => `${release.versionName}: ${error}`));
+  }
+  return cleanupErrors;
+}
+
+async function deleteReleaseCloudFiles(store, release) {
+  const deleteErrors = [];
+  if (release.cloud?.provider !== 'lanzou') return deleteErrors;
+  for (const file of [release.cloud.files?.zip, release.cloud.files?.detail]) {
+    if (!file?.fileId) continue;
+    try {
+      await deleteFile(store.settings.lanzou.cookie, file.fileId, release.cloud.folderId);
+    } catch (error) {
+      deleteErrors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return deleteErrors;
 }
 
 async function serveActiveReleaseFile(res, pathname) {

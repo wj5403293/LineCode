@@ -10,31 +10,28 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Archive, Download, RefreshCw, Upload } from 'lucide-react-native';
+import { Archive, RefreshCw, Upload } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
 import { copyFile, createDocument, openDocument } from 'react-native-saf-x';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
 import SwitchRow from '../components/SwitchRow';
-import UpdatePromptModal from '../components/UpdatePromptModal';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { dataArchiveService } from '../services/DataArchiveService';
-import { HotUpdateInfo, hotUpdateService } from '../services/HotUpdateService';
+import { hotUpdateService } from '../services/HotUpdateService';
 import { useTheme } from '../theme';
 
 interface Props {
   onBack: () => void;
 }
 
-type BusyAction = 'checking' | 'updating' | 'exporting' | 'importing' | null;
+type BusyAction = 'exporting' | 'importing' | null;
 
 export default function DataSettingsScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
-  const [updateInfo, setUpdateInfo] = useState<HotUpdateInfo | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     hotUpdateService.isAutoUpdateEnabled().then(setAutoUpdateEnabled).catch(() => {});
@@ -44,39 +41,6 @@ export default function DataSettingsScreen({ onBack }: Props) {
     await hotUpdateService.setAutoUpdateEnabled(enabled);
     setAutoUpdateEnabled(enabled);
   }, []);
-
-  const handleCheckUpdate = useCallback(async () => {
-    if (busyAction) return;
-    setBusyAction('checking');
-    setUpdateError(null);
-    try {
-      const info = await hotUpdateService.checkForUpdate();
-      if (info) {
-        setUpdateInfo(info);
-      } else {
-        Alert.alert('已是最新版本', '当前没有可用的热更新。');
-      }
-    } catch (err: any) {
-      Alert.alert('检查失败', err?.message || String(err));
-    } finally {
-      setBusyAction(null);
-    }
-  }, [busyAction]);
-
-  const handleInstallUpdate = useCallback(async () => {
-    if (!updateInfo || busyAction) return;
-    setBusyAction('updating');
-    setUpdateError(null);
-    try {
-      await hotUpdateService.install(updateInfo);
-      setUpdateInfo(null);
-      Alert.alert('更新完成', '热更新包已安装，重启应用后生效。');
-    } catch (err: any) {
-      setUpdateError(err?.message || String(err));
-    } finally {
-      setBusyAction(null);
-    }
-  }, [busyAction, updateInfo]);
 
   const handleExport = useCallback(async () => {
     if (busyAction) return;
@@ -149,13 +113,6 @@ export default function DataSettingsScreen({ onBack }: Props) {
               value={autoUpdateEnabled}
               onValueChange={handleToggleAutoUpdate}
             />
-            <ActionRow
-              icon={<Download size={20} color={colors.accent} />}
-              label="检查热更新"
-              desc="获取版本详情并下载安装包"
-              busy={busyAction === 'checking'}
-              onPress={handleCheckUpdate}
-            />
           </View>
         </View>
 
@@ -180,21 +137,6 @@ export default function DataSettingsScreen({ onBack }: Props) {
         </View>
       </ScrollView>
 
-      <UpdatePromptModal
-        visible={!!updateInfo}
-        update={updateInfo}
-        autoUpdateEnabled={autoUpdateEnabled}
-        installing={busyAction === 'updating'}
-        error={updateError}
-        onToggleAutoUpdate={handleToggleAutoUpdate}
-        onUpdate={handleInstallUpdate}
-        onCancel={() => {
-          if (busyAction !== 'updating') {
-            setUpdateInfo(null);
-            setUpdateError(null);
-          }
-        }}
-      />
     </View>
   );
 }

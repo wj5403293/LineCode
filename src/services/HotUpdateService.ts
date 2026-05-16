@@ -13,6 +13,7 @@ const UPDATE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/updates`;
 const CURRENT_DIR = `${UPDATE_ROOT}/current`;
 const TEMP_DIR = `${UPDATE_ROOT}/tmp`;
 const STATE_KEY = '@linecode_hot_update_state';
+const HERMES_BYTECODE_MAGIC_BASE64 = 'xh+8A8EDGR8=';
 
 export interface HotUpdateInfo {
   versionCode: number;
@@ -111,6 +112,12 @@ class HotUpdateService {
   }
 
   async checkForUpdate(): Promise<HotUpdateInfo | null> {
+    const state = await this.getState();
+    const hasValidInstalledBundle = state ? await this.hasUsableInstalledBundle() : false;
+    if (state && !hasValidInstalledBundle) {
+      await AsyncStorage.removeItem(STATE_KEY);
+    }
+
     const files = await resolveLanzouHotUpdateFiles();
     const text = await fetchLanzouTextFile(files.detail.shareUrl);
     const lines = text.replace(/\r\n/g, '\n').split('\n');
@@ -128,8 +135,9 @@ class HotUpdateService {
       zipUrl: files.zip.shareUrl,
     };
 
-    const state = await this.getState();
-    const localVersionCode = state?.installedVersionCode ?? APP_HOT_UPDATE_VERSION_CODE;
+    const localVersionCode = hasValidInstalledBundle && state
+      ? state.installedVersionCode
+      : APP_HOT_UPDATE_VERSION_CODE;
     return info.versionCode > localVersionCode ? info : null;
   }
 
@@ -189,6 +197,9 @@ class HotUpdateService {
       const extractedBundle = `${extractDir}/${bundlePath}`;
       if (!(await RNFS.exists(extractedBundle))) {
         throw new Error(`更新包缺少 bundle: ${bundlePath}`);
+      }
+      if (!(await isHermesBytecodeBundle(extractedBundle))) {
+        throw new Error('更新包 bundle 必须是 Hermes bytecode，请重新构建热更新包');
       }
 
       await ensureCleanDir(CURRENT_DIR);
@@ -261,6 +272,10 @@ class HotUpdateService {
     }
   }
 
+  private async hasUsableInstalledBundle(): Promise<boolean> {
+    return isHermesBytecodeBundle(this.currentBundlePath);
+  }
+
   private async markFailed(info: HotUpdateInfo, err: unknown): Promise<void> {
     const previous = await this.getState();
     await AsyncStorage.setItem(STATE_KEY, JSON.stringify({
@@ -271,6 +286,16 @@ class HotUpdateService {
       failedAt: Date.now(),
       failedReason: err instanceof Error ? err.message : String(err),
     } satisfies HotUpdateState));
+  }
+}
+
+async function isHermesBytecodeBundle(bundlePath: string): Promise<boolean> {
+  try {
+    if (!(await RNFS.exists(bundlePath))) return false;
+    const header = await RNFS.read(bundlePath, 8, 0, 'base64');
+    return header === HERMES_BYTECODE_MAGIC_BASE64;
+  } catch {
+    return false;
   }
 }
 

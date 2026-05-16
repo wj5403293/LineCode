@@ -3,7 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateRawSync } from 'node:zlib';
@@ -21,6 +21,7 @@ function parseArgs(argv) {
     sourcemap: false,
     clean: true,
     buildPrompt: true,
+    hermesBytecode: 'auto',
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -42,6 +43,8 @@ function parseArgs(argv) {
     else if (arg === '--changelog-file') args.changelog = readFileSync(path.resolve(ROOT, readValue()), 'utf8').trim();
     else if (arg === '--dev') args.dev = true;
     else if (arg === '--sourcemap') args.sourcemap = true;
+    else if (arg === '--hermes-bytecode') args.hermesBytecode = true;
+    else if (arg === '--no-hermes-bytecode') args.hermesBytecode = false;
     else if (arg === '--no-clean') args.clean = false;
     else if (arg === '--skip-build-prompt') args.buildPrompt = false;
     else if (arg === '--help' || arg === '-h') {
@@ -81,6 +84,8 @@ Options:
   --entry-file <path>          React Native entry file. Default: index.js
   --dev                        Build a dev bundle.
   --sourcemap                  Emit index.android.bundle.map and include it in manifest.
+  --hermes-bytecode            Force compile index.android.bundle to Hermes bytecode.
+  --no-hermes-bytecode         Keep index.android.bundle as plain JavaScript.
   --skip-build-prompt          Skip scripts/build-prompt.js.
   --no-clean                   Do not remove the output directory before building.
 `);
@@ -105,6 +110,45 @@ function run(command, args) {
 function reactNativeBin() {
   const bin = path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? 'react-native.cmd' : 'react-native');
   return existsSync(bin) ? bin : 'react-native';
+}
+
+function osBin() {
+  if (process.platform === 'win32') return 'win64-bin';
+  if (process.platform === 'darwin') return 'osx-bin';
+  if (process.platform === 'linux' && process.arch === 'x64') return 'linux64-bin';
+  return null;
+}
+
+function hermesCBin() {
+  return process.platform === 'win32' ? 'hermesc.exe' : 'hermesc';
+}
+
+function detectHermesc() {
+  const override = process.env.REACT_NATIVE_OVERRIDE_HERMES_DIR;
+  const candidates = [];
+  if (override) {
+    candidates.push(path.join(override, 'build', 'bin', hermesCBin()));
+  }
+  candidates.push(path.join(ROOT, 'node_modules', 'react-native', 'ReactAndroid', 'hermes-engine', 'build', 'hermes', 'bin', hermesCBin()));
+  const bin = osBin();
+  if (bin) {
+    candidates.push(path.join(ROOT, 'node_modules', 'hermes-compiler', 'hermesc', bin, hermesCBin()));
+  }
+  return candidates.find(candidate => existsSync(candidate)) ?? null;
+}
+
+function isAndroidHermesEnabled() {
+  const gradlePropertiesPath = path.join(ROOT, 'android', 'gradle.properties');
+  if (!existsSync(gradlePropertiesPath)) return false;
+  const gradleProperties = readFileSync(gradlePropertiesPath, 'utf8');
+  const match = gradleProperties.match(/^\s*hermesEnabled\s*=\s*(.+?)\s*$/m);
+  return match ? match[1].trim().toLowerCase() === 'true' : false;
+}
+
+function shouldBuildHermesBytecode(args) {
+  if (args.hermesBytecode === true) return true;
+  if (args.hermesBytecode === false) return false;
+  return args.platform === 'android' && !args.dev && isAndroidHermesEnabled();
 }
 
 async function collectFiles(root, current = '') {
@@ -245,6 +289,7 @@ async function writeZip(sourceDir, zipPath) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const payloadDir = path.join(args.outDir, 'payload');
+  const intermediateDir = path.join(args.outDir, '.intermediate');
   const bundlePath = path.join(payloadDir, 'index.android.bundle');
   const sourcemapPath = `${bundlePath}.map`;
   const zipPath = path.join(args.outDir, 'base.zip');
@@ -253,24 +298,67 @@ async function main() {
   if (args.clean) {
     rmSync(args.outDir, { recursive: true, force: true });
   }
+  rmSync(intermediateDir, { recursive: true, force: true });
   await mkdir(payloadDir, { recursive: true });
+  await mkdir(intermediateDir, { recursive: true });
 
   if (args.buildPrompt) {
     run(process.execPath, [path.join('scripts', 'build-prompt.js')]);
   }
+
+  const useHermesBytecode = shouldBuildHermesBytecode(args);
+  const metroBundlePath = useHermesBytecode
+    ? path.join(intermediateDir, 'index.android.bundle.js')
+    : bundlePath;
+  const metroSourcemapPath = useHermesBytecode
+    ? path.join(intermediateDir, 'index.android.bundle.packager.map')
+    : sourcemapPath;
 
   const bundleArgs = [
     'bundle',
     '--platform', 'android',
     '--dev', String(Boolean(args.dev)),
     '--entry-file', args.entryFile,
-    '--bundle-output', bundlePath,
+    '--bundle-output', metroBundlePath,
     '--assets-dest', payloadDir,
   ];
   if (args.sourcemap) {
-    bundleArgs.push('--sourcemap-output', sourcemapPath);
+    bundleArgs.push('--sourcemap-output', metroSourcemapPath);
   }
   run(reactNativeBin(), bundleArgs);
+
+  if (useHermesBytecode) {
+    const hermesc = detectHermesc();
+    if (!hermesc) {
+      throw new Error('Hermes is enabled, but hermesc was not found. Run npm install or pass --no-hermes-bytecode to build a plain JS hot update.');
+    }
+
+    const bytecodePath = path.join(intermediateDir, 'index.android.bundle.hbc');
+    const hermesArgs = [
+      '-w',
+      '-emit-binary',
+      '-max-diagnostic-width=80',
+      '-out',
+      bytecodePath,
+      metroBundlePath,
+      '-O',
+    ];
+    if (args.sourcemap) {
+      hermesArgs.push('-output-source-map');
+    }
+    run(hermesc, hermesArgs);
+    await copyFile(bytecodePath, bundlePath);
+
+    if (args.sourcemap) {
+      run(process.execPath, [
+        path.join('node_modules', 'react-native', 'scripts', 'compose-source-maps.js'),
+        metroSourcemapPath,
+        `${bytecodePath}.map`,
+        '-o',
+        sourcemapPath,
+      ]);
+    }
+  }
 
   const filesBeforeManifest = (await collectFiles(payloadDir))
     .filter(file => file.path !== 'manifest.json');
@@ -283,6 +371,7 @@ async function main() {
   const manifest = {
     versionCode: args.versionCode,
     versionName: args.versionName,
+    bundleFormat: useHermesBytecode ? 'hermes-bytecode' : 'js',
     bundle,
     files: manifestFiles,
   };
@@ -297,6 +386,7 @@ async function main() {
   console.log(`  ${path.relative(ROOT, detailPath)}`);
   console.log(`  versionCode=${args.versionCode}`);
   console.log(`  versionName=${args.versionName}`);
+  console.log(`  bundleFormat=${manifest.bundleFormat}`);
   console.log('');
   console.log('Upload these files to the update host:');
   console.log('  base.zip');

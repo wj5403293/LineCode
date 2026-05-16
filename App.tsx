@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, StatusBar, StyleSheet } from 'react-native';
+import { Alert, InteractionManager, Linking, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
@@ -15,6 +15,7 @@ import { HotUpdateInfo, hotUpdateService } from './src/services/HotUpdateService
 import { settingsService } from './src/services/settings';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
+const AUTO_UPDATE_CHECK_DELAY_MS = 4_000;
 
 function AppContent() {
   const { isDark, colors } = useTheme();
@@ -32,21 +33,30 @@ function AppContent() {
 
   useEffect(() => {
     let mounted = true;
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
+    let interactionTask: { cancel?: () => void } | null = null;
     hotUpdateService.isAutoUpdateEnabled()
       .then(enabled => {
         if (!mounted) return;
         setAutoUpdateEnabled(enabled);
         if (!enabled) return null;
-        return hotUpdateService.checkForUpdate();
+        interactionTask = InteractionManager.runAfterInteractions(() => {
+          delayTimer = setTimeout(() => {
+            hotUpdateService.checkForUpdate()
+              .then(info => {
+                if (mounted && info) setPendingUpdate(info);
+              })
+              .catch(err => {
+                console.warn('[LineCode] hot update check failed:', err);
+              });
+          }, AUTO_UPDATE_CHECK_DELAY_MS);
+        });
       })
-      .then(info => {
-        if (mounted && info) setPendingUpdate(info);
-      })
-      .catch(err => {
-        console.warn('[LineCode] hot update check failed:', err);
-      });
+      .catch(() => {});
     return () => {
       mounted = false;
+      if (delayTimer) clearTimeout(delayTimer);
+      interactionTask?.cancel?.();
     };
   }, []);
 

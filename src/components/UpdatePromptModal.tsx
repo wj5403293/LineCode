@@ -17,10 +17,10 @@ import SettingsSwitch from './SettingsSwitch';
 interface Props {
   visible: boolean;
   update: HotUpdateInfo | null;
-  autoUpdateEnabled: boolean;
+  autoUpdateEnabled?: boolean;
   installing: boolean;
   error?: string | null;
-  onToggleAutoUpdate: (enabled: boolean) => void | Promise<void>;
+  onToggleAutoUpdate?: (enabled: boolean) => void | Promise<void>;
   onUpdate: () => void;
   onCancel: () => void;
 }
@@ -67,17 +67,19 @@ export default function UpdatePromptModal({
             </View>
           )}
 
-          <View style={[styles.switchRow, { borderColor: colors.borderLight }]}>
-            <View style={styles.switchText}>
-              <Text style={[styles.switchLabel, { color: colors.text }]}>自动检查更新</Text>
-              <Text style={[styles.switchDesc, { color: colors.textTertiary }]}>启动时检查 base.zip 详情</Text>
+          {typeof autoUpdateEnabled === 'boolean' && onToggleAutoUpdate && (
+            <View style={[styles.switchRow, { borderColor: colors.borderLight }]}>
+              <View style={styles.switchText}>
+                <Text style={[styles.switchLabel, { color: colors.text }]}>自动检查更新</Text>
+                <Text style={[styles.switchDesc, { color: colors.textTertiary }]}>启动时检查 base.zip 详情</Text>
+              </View>
+              <SettingsSwitch
+                value={autoUpdateEnabled}
+                onValueChange={onToggleAutoUpdate}
+                disabled={installing}
+              />
             </View>
-            <SettingsSwitch
-              value={autoUpdateEnabled}
-              onValueChange={onToggleAutoUpdate}
-              disabled={installing}
-            />
-          </View>
+          )}
 
           <View style={styles.actions}>
             <TouchableOpacity
