@@ -11,12 +11,21 @@ interface Props {
   content: string;
   streaming?: boolean;
   codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
 }
 
-export default React.memo(function TextBlock({ content, streaming, codeWrap }: Props) {
+export default React.memo(function TextBlock({
+  content,
+  streaming,
+  codeWrap,
+  mathFormulaRenderingEnabled,
+}: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
-  const customRules = useMemo(() => createMessageMarkdownRules({ codeWrap }), [codeWrap]);
+  const customRules = useMemo(
+    () => createMessageMarkdownRules({ codeWrap, mathFormulaRenderingEnabled }),
+    [codeWrap, mathFormulaRenderingEnabled],
+  );
 
   if (!content && !streaming) return null;
 
@@ -28,8 +37,10 @@ export default React.memo(function TextBlock({ content, streaming, codeWrap }: P
     );
   }
 
-  const markdown = (
+  const markdown = mathFormulaRenderingEnabled ? (
     <Markdown style={mdStyle} rules={customRules} markdownit={latexMarkdownIt}>{content || ''}</Markdown>
+  ) : (
+    <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
   );
 
   return markdown;

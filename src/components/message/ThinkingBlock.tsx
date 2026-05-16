@@ -13,12 +13,22 @@ interface Props {
   streaming?: boolean;
   autoExpand?: boolean;
   scrollable?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
 }
 
-export default React.memo(function ThinkingBlock({ content, streaming, autoExpand, scrollable }: Props) {
+export default React.memo(function ThinkingBlock({
+  content,
+  streaming,
+  autoExpand,
+  scrollable,
+  mathFormulaRenderingEnabled,
+}: Props) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
-  const markdownRules = useMemo(() => createMessageMarkdownRules(), []);
+  const markdownRules = useMemo(
+    () => createMessageMarkdownRules({ mathFormulaRenderingEnabled }),
+    [mathFormulaRenderingEnabled],
+  );
   const [expanded, setExpanded] = useState(autoExpand || false);
 
   useEffect(() => {
@@ -45,11 +55,19 @@ export default React.memo(function ThinkingBlock({ content, streaming, autoExpan
       {expanded && (
         scrollable ? (
           <ScrollView style={[styles.scroll, { borderTopColor: colors.borderLight }]} nestedScrollEnabled>
-            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+            {mathFormulaRenderingEnabled ? (
+              <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+            ) : (
+              <Markdown style={mdStyle} rules={markdownRules}>{content}</Markdown>
+            )}
           </ScrollView>
         ) : (
           <View style={[styles.content, { borderTopColor: colors.borderLight }]}>
-            <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+            {mathFormulaRenderingEnabled ? (
+              <Markdown style={mdStyle} rules={markdownRules} markdownit={latexMarkdownIt}>{content}</Markdown>
+            ) : (
+              <Markdown style={mdStyle} rules={markdownRules}>{content}</Markdown>
+            )}
           </View>
         )
       )}

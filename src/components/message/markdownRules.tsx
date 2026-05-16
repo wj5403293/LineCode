@@ -6,6 +6,7 @@ import LatexFormula from './LatexFormula';
 
 interface CreateMessageMarkdownRulesOptions {
   codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
 }
 
 function hasLatexChild(node: ASTNode): boolean {
@@ -52,15 +53,16 @@ function textColor(styles: any, inheritedStyles = {}): string {
 
 export function createMessageMarkdownRules({
   codeWrap,
+  mathFormulaRenderingEnabled,
 }: CreateMessageMarkdownRulesOptions = {}): RenderRules {
-  return {
+  const rules: RenderRules = {
     text: (node, _children, _parent, styles, inheritedStyles = {}) => (
       <Text key={node.key} selectable style={[inheritedStyles, styles.text]}>
         {node.content}
       </Text>
     ),
     textgroup: (node, children, _parent, styles) => (
-      hasLatexChild(node) ? (
+      mathFormulaRenderingEnabled && hasLatexChild(node) ? (
         <View key={node.key} style={styles.latex_textgroup}>
           {splitChildrenByLatex(children)}
         </View>
@@ -71,7 +73,7 @@ export function createMessageMarkdownRules({
       )
     ),
     strong: (node, children, _parent, styles) => (
-      hasLatexChild(node) ? (
+      mathFormulaRenderingEnabled && hasLatexChild(node) ? (
         <View key={node.key} style={styles.latex_textgroup}>
           {splitChildrenByLatex(children)}
         </View>
@@ -82,7 +84,7 @@ export function createMessageMarkdownRules({
       )
     ),
     em: (node, children, _parent, styles) => (
-      hasLatexChild(node) ? (
+      mathFormulaRenderingEnabled && hasLatexChild(node) ? (
         <View key={node.key} style={styles.latex_textgroup}>
           {splitChildrenByLatex(children)}
         </View>
@@ -106,6 +108,14 @@ export function createMessageMarkdownRules({
       const code = node.content || '';
       return <CodeBlock key={node.key} code={code} wordWrap={codeWrap} />;
     },
+  };
+
+  if (!mathFormulaRenderingEnabled) {
+    return rules;
+  }
+
+  return {
+    ...rules,
     latex_inline: (node, _children, _parent, styles, inheritedStyles = {}) => (
       <LatexFormula
         key={node.key}

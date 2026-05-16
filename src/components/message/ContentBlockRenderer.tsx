@@ -12,6 +12,7 @@ interface ContentBlockRendererProps {
   toolResults?: ToolResult[];
   streaming?: boolean;
   codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
@@ -29,6 +30,7 @@ export function ContentBlockRenderer({
   toolResults,
   streaming,
   codeWrap,
+  mathFormulaRenderingEnabled,
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
@@ -51,6 +53,7 @@ export function ContentBlockRenderer({
                   streaming={streaming && i === blocks.length - 1}
                   autoExpand={thinkingAutoExpand}
                   scrollable={thinkingScrollable}
+                  mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
                 />
               </RenderErrorBoundary>
             );
@@ -102,6 +105,7 @@ export function ContentBlockRenderer({
                 content={block.content}
                 streaming={streaming && i === blocks.length - 1}
                 codeWrap={codeWrap}
+                mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
               />
             </RenderErrorBoundary>
           );
@@ -151,6 +155,7 @@ interface ContentWithTextProps {
   toolResults?: ToolResult[];
   streaming?: boolean;
   codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
@@ -169,6 +174,7 @@ export function ContentWithText({
   toolResults,
   streaming,
   codeWrap,
+  mathFormulaRenderingEnabled,
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
@@ -187,7 +193,12 @@ export function ContentWithText({
     <>
       {hasContent && !hasBlocks && !hasToolCalls && (
         <RenderErrorBoundary label="消息内容" resetKey={content}>
-          <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+          <TextBlock
+            content={content}
+            streaming={streaming}
+            codeWrap={codeWrap}
+            mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+          />
         </RenderErrorBoundary>
       )}
       <ContentBlockRenderer
@@ -196,6 +207,7 @@ export function ContentWithText({
         toolResults={toolResults}
         streaming={streaming}
         codeWrap={codeWrap}
+        mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}

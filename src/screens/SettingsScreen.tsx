@@ -1,7 +1,19 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Box, Monitor, Cpu, Brain, Wrench, Palette, Archive, Database, BatteryCharging } from 'lucide-react-native';
+import {
+  ChevronRight,
+  Box,
+  Monitor,
+  Cpu,
+  Brain,
+  Wrench,
+  Palette,
+  Archive,
+  Database,
+  BatteryCharging,
+  FlaskConical,
+} from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -17,6 +29,7 @@ interface Props {
   onData: () => void;
   onStorage: () => void;
   onKeepAlive: () => void;
+  onExperimental: () => void;
 }
 
 const SETTINGS_ITEMS = [
@@ -27,11 +40,24 @@ const SETTINGS_ITEMS = [
   { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
   { id: 'storage', label: '存储管理', desc: '查看 diff、聊天、配置和当前工作区大小', icon: Database },
   { id: 'keepAlive', label: '保活设置', desc: '前台服务、静音播放和电池白名单', icon: BatteryCharging },
+  { id: 'experimental', label: '实验性功能', desc: '数学公式渲染', icon: FlaskConical },
   { id: 'data', label: '数据与更新', desc: '热更新、导出和导入 .linecode', icon: Archive },
   { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },
 ];
 
-export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMCP, onAbout, onTheme, onData, onStorage, onKeepAlive }: Props) {
+export default function SettingsScreen({
+  onBack,
+  onModels,
+  onOutput,
+  onLLM,
+  onMCP,
+  onAbout,
+  onTheme,
+  onData,
+  onStorage,
+  onKeepAlive,
+  onExperimental,
+}: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -44,6 +70,7 @@ export default function SettingsScreen({ onBack, onModels, onOutput, onLLM, onMC
     if (id === 'data') onData();
     if (id === 'storage') onStorage();
     if (id === 'keepAlive') onKeepAlive();
+    if (id === 'experimental') onExperimental();
     if (id === 'about') onAbout();
   };
 

@@ -13,6 +13,7 @@ interface Props {
   toolResults?: ToolResult[];
   streaming?: boolean;
   codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
@@ -31,6 +32,7 @@ export default React.memo(function AIBubbleFullscreen({
   toolResults,
   streaming,
   codeWrap,
+  mathFormulaRenderingEnabled,
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
@@ -50,10 +52,20 @@ export default React.memo(function AIBubbleFullscreen({
     <View style={styles.row}>
       <View style={styles.stack}>
         {hasContent && !hasBlocks && !hasToolCalls && (
-          <TextBlock content={content} streaming={streaming} codeWrap={codeWrap} />
+          <TextBlock
+            content={content}
+            streaming={streaming}
+            codeWrap={codeWrap}
+            mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+          />
         )}
         {showStreamingPlaceholder && (
-          <TextBlock content="" streaming codeWrap={codeWrap} />
+          <TextBlock
+            content=""
+            streaming
+            codeWrap={codeWrap}
+            mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+          />
         )}
         {(hasBlocks || hasToolCalls) && (
           <ContentWithText
@@ -63,6 +75,7 @@ export default React.memo(function AIBubbleFullscreen({
             toolResults={toolResults}
             streaming={streaming}
             codeWrap={codeWrap}
+            mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
             thinkingAutoExpand={thinkingAutoExpand}
             thinkingScrollable={thinkingScrollable}
             homePath={homePath}

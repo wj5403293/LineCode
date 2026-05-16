@@ -39,10 +39,12 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     thinkingAutoExpand,
     reasoningEffort,
     preserveReasoning,
+    mathFormulaRenderingEnabled,
     permissionMode,
     mcpExecutionMode,
     keepAliveSettings,
     updatePermissionMode,
+    reloadSettings,
   } = useSettings();
   const chat = useChatState(toneMode, reasoningEffort, preserveReasoning);
   const {
@@ -98,7 +100,8 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   useFocusEffect(
     useCallback(() => {
       reloadModel();
-    }, [reloadModel])
+      reloadSettings();
+    }, [reloadModel, reloadSettings])
   );
 
   const containerStyle = useMemo(() => [styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }], [insets.top, colors.bg]);
@@ -144,6 +147,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
       message={item}
       codeWrap={codeWrap}
       displayMode={displayMode}
+      mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
       thinkingAutoExpand={thinkingAutoExpand}
       thinkingScrollable={thinkingScrollable}
       homePath={homePath}
@@ -161,6 +165,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   ), [
     codeWrap,
     displayMode,
+    mathFormulaRenderingEnabled,
     thinkingAutoExpand,
     thinkingScrollable,
     homePath,

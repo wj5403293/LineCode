@@ -49,6 +49,7 @@ const KEYS = {
   THINKING_AUTO_EXPAND: '@lineai_thinking_auto_expand',
   REASONING_EFFORT: '@lineai_reasoning_effort',
   PRESERVE_REASONING: '@lineai_preserve_reasoning',
+  MATH_FORMULA_RENDERING: '@lineai_math_formula_rendering',
   PERMISSION_MODE: '@lineai_permission_mode',
   THEME_MODE: '@lineai_theme_mode',
   CUSTOM_THEME_COLORS: '@lineai_custom_theme_colors',
@@ -72,7 +73,8 @@ class SettingsService {
   }
 
   async getCodeWrap(): Promise<boolean> {
-    return this.get(KEYS.CODE_WRAP, false);
+    const value = await AsyncStorage.getItem(KEYS.CODE_WRAP);
+    return value === 'true';
   }
 
   async setCodeWrap(enabled: boolean): Promise<void> {
@@ -105,7 +107,8 @@ class SettingsService {
   }
 
   async getThinkingAutoExpand(): Promise<boolean> {
-    return this.get(KEYS.THINKING_AUTO_EXPAND, false);
+    const value = await AsyncStorage.getItem(KEYS.THINKING_AUTO_EXPAND);
+    return value === 'true';
   }
 
   async setThinkingAutoExpand(enabled: boolean): Promise<void> {
@@ -127,6 +130,15 @@ class SettingsService {
 
   async setPreserveReasoning(enabled: boolean): Promise<void> {
     await this.set(KEYS.PRESERVE_REASONING, enabled);
+  }
+
+  async getMathFormulaRenderingEnabled(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.MATH_FORMULA_RENDERING);
+    return value === 'true';
+  }
+
+  async setMathFormulaRenderingEnabled(enabled: boolean): Promise<void> {
+    await this.set(KEYS.MATH_FORMULA_RENDERING, enabled);
   }
 
   async getPermissionMode(): Promise<PermissionMode> {

@@ -9,6 +9,7 @@ interface Props {
   message: Message;
   codeWrap?: boolean;
   displayMode?: DisplayMode;
+  mathFormulaRenderingEnabled?: boolean;
   thinkingAutoExpand?: boolean;
   thinkingScrollable?: boolean;
   homePath?: string;
@@ -29,6 +30,7 @@ function MessageBubble({
   message,
   codeWrap,
   displayMode = 'fullscreen',
+  mathFormulaRenderingEnabled,
   thinkingAutoExpand,
   thinkingScrollable,
   homePath,
@@ -66,6 +68,7 @@ function MessageBubble({
         toolResults={message.toolResults}
         streaming={message.streaming}
         codeWrap={codeWrap}
+        mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}
@@ -83,6 +86,7 @@ function MessageBubble({
         toolResults={message.toolResults}
         streaming={message.streaming}
         codeWrap={codeWrap}
+        mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
         thinkingAutoExpand={thinkingAutoExpand}
         thinkingScrollable={thinkingScrollable}
         homePath={homePath}

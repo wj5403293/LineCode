@@ -17,6 +17,7 @@ import DataSettingsScreen from '../screens/DataSettingsScreen';
 import StorageManagementScreen from '../screens/StorageManagementScreen';
 import KeepAliveSettingsScreen from '../screens/KeepAliveSettingsScreen';
 import DebugSettingsScreen from '../screens/DebugSettingsScreen';
+import ExperimentalSettingsScreen from '../screens/ExperimentalSettingsScreen';
 
 export type RootStackParamList = {
   Chat: undefined;
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   DataSettings: undefined;
   StorageManagement: undefined;
   KeepAliveSettings: undefined;
+  ExperimentalSettings: undefined;
   DebugSettings: undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
@@ -69,7 +71,13 @@ export default function RootNavigator() {
             onData={() => navigation.navigate('DataSettings')}
             onStorage={() => navigation.navigate('StorageManagement')}
             onKeepAlive={() => navigation.navigate('KeepAliveSettings')}
+            onExperimental={() => navigation.navigate('ExperimentalSettings')}
           />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="ExperimentalSettings">
+        {({ navigation }) => (
+          <ExperimentalSettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="DebugSettings">

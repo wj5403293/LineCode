@@ -9,6 +9,7 @@ export function useSettings() {
   const [thinkingAutoExpand, setThinkingAutoExpand] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('medium');
   const [preserveReasoning, setPreserveReasoning] = useState(false);
+  const [mathFormulaRenderingEnabled, setMathFormulaRenderingEnabled] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('auto');
   const [mcpExecutionMode, setMcpExecutionMode] = useState<MCPExecutionMode>('local');
   const [keepAliveSettings, setKeepAliveSettings] = useState<KeepAliveSettings>({
@@ -19,8 +20,20 @@ export function useSettings() {
   });
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
+  const reloadSettings = useCallback(async () => {
+    const [
+      wrap,
+      display,
+      tone,
+      scroll,
+      autoExpand,
+      effort,
+      preserve,
+      mathRendering,
+      perm,
+      executionMode,
+      keepAlive,
+    ] = await Promise.all([
       settingsService.getCodeWrap(),
       settingsService.getDisplayMode(),
       settingsService.getToneMode(),
@@ -28,23 +41,29 @@ export function useSettings() {
       settingsService.getThinkingAutoExpand(),
       settingsService.getReasoningEffort(),
       settingsService.getPreserveReasoning(),
+      settingsService.getMathFormulaRenderingEnabled(),
       settingsService.getPermissionMode(),
       settingsService.getMCPExecutionMode(),
       settingsService.getKeepAliveSettings(),
-    ]).then(([wrap, display, tone, scroll, autoExpand, effort, preserve, perm, executionMode, keepAlive]) => {
-      setCodeWrap(wrap);
-      setDisplayMode(display);
-      setToneMode(tone);
-      setThinkingScrollable(scroll);
-      setThinkingAutoExpand(autoExpand);
-      setReasoningEffort(effort);
-      setPreserveReasoning(preserve);
-      setPermissionMode(perm);
-      setMcpExecutionMode(executionMode);
-      setKeepAliveSettings(keepAlive);
-      setLoaded(true);
-    });
+    ]);
+
+    setCodeWrap(wrap);
+    setDisplayMode(display);
+    setToneMode(tone);
+    setThinkingScrollable(scroll);
+    setThinkingAutoExpand(autoExpand);
+    setReasoningEffort(effort);
+    setPreserveReasoning(preserve);
+    setMathFormulaRenderingEnabled(mathRendering);
+    setPermissionMode(perm);
+    setMcpExecutionMode(executionMode);
+    setKeepAliveSettings(keepAlive);
+    setLoaded(true);
   }, []);
+
+  useEffect(() => {
+    reloadSettings();
+  }, [reloadSettings]);
 
   const updatePermissionMode = useCallback(async (mode: PermissionMode) => {
     await settingsService.setPermissionMode(mode);
@@ -69,12 +88,14 @@ export function useSettings() {
     thinkingAutoExpand,
     reasoningEffort,
     preserveReasoning,
+    mathFormulaRenderingEnabled,
     permissionMode,
     mcpExecutionMode,
     keepAliveSettings,
     updatePermissionMode,
     updateMCPExecutionMode,
     updateKeepAliveSettings,
+    reloadSettings,
     loaded,
   };
 }
