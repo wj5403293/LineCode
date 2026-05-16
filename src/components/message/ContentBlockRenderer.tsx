@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ContentBlock, ToolCall, ToolResult } from '../../types';
 import ThinkingBlock from './ThinkingBlock';
 import TextBlock from './TextBlock';
@@ -41,13 +41,19 @@ export function ContentBlockRenderer({
   onViewShellCommand,
   onToolReview,
 }: ContentBlockRendererProps) {
+  const toolResultById = useMemo(() => {
+    if (!toolResults?.length) return new Map<string, ToolResult>();
+    return new Map(toolResults.map(result => [result.toolCallId, result]));
+  }, [toolResults]);
+
   if (blocks && blocks.length > 0) {
     return (
       <>
         {blocks.map((block, i) => {
+          const key = blockKey(block, i);
           if (block.type === 'thinking') {
             return (
-              <RenderErrorBoundary key={i} label="思考内容" resetKey={block.content}>
+              <RenderErrorBoundary key={key} label="思考内容" resetKey={block.content}>
                 <ThinkingBlock
                   content={block.content}
                   streaming={streaming && i === blocks.length - 1}
@@ -64,10 +70,10 @@ export function ContentBlockRenderer({
               name: block.name,
               arguments: block.content || JSON.stringify(block.input || {}),
             };
-            const tr = toolResults?.find(r => r.toolCallId === block.id);
+            const tr = toolResultById.get(block.id);
             return (
               <RenderErrorBoundary
-                key={i}
+                key={key}
                 label="工具调用"
                 resetKey={toolResetKey(block.id, shellConfirmToolCallId, tr)}
               >
@@ -94,13 +100,13 @@ export function ContentBlockRenderer({
           if (block.type === 'compact') {
             return (
               <ContextCompactBlock
-                key={i}
+                key={key}
                 status={block.compactStatus}
               />
             );
           }
           return (
-            <RenderErrorBoundary key={i} label="消息内容" resetKey={block.content}>
+            <RenderErrorBoundary key={key} label="消息内容" resetKey={block.content}>
               <TextBlock
                 content={block.content}
                 streaming={streaming && i === blocks.length - 1}
@@ -118,10 +124,10 @@ export function ContentBlockRenderer({
     return (
       <>
         {toolCalls.map((tc, i) => {
-          const tr = toolResults?.find(r => r.toolCallId === tc.id);
+          const tr = toolResultById.get(tc.id);
           return (
             <RenderErrorBoundary
-              key={i}
+              key={tc.id || i}
               label="工具调用"
               resetKey={toolResetKey(tc.id, shellConfirmToolCallId, tr)}
             >
@@ -146,6 +152,12 @@ export function ContentBlockRenderer({
   }
 
   return null;
+}
+
+function blockKey(block: ContentBlock, index: number): string {
+  if (block.id) return block.id;
+  if (block.toolCallId) return block.toolCallId;
+  return `${block.type}:${index}`;
 }
 
 interface ContentWithTextProps {

@@ -132,6 +132,40 @@ describe('conversationStore persistence migration', () => {
     expect(files.has(`/tmp/lineai-test/.linecode/conversations/${id}.json`)).toBe(true);
   });
 
+  it('migrates v1 file manifests to v2 manifests', async () => {
+    const id = 'legacy-file-manifest';
+    const conv = {
+      id,
+      title: '旧文件格式',
+      createdAt: 1,
+      updatedAt: 2,
+      messages: [{
+        id: 'message',
+        role: 'assistant' as const,
+        content: 'legacy file content',
+        timestamp: 1,
+      }],
+    };
+    files.set(`/tmp/lineai-test/.linecode/conversations/${id}.json`, JSON.stringify(conv));
+    await AsyncStorage.setItem('@lineai_conversation_list', JSON.stringify([{ id, title: conv.title, createdAt: 1, updatedAt: 2 }]));
+    await AsyncStorage.setItem(`@lineai_conv_${id}`, JSON.stringify({
+      storage: 'file',
+      version: 1,
+      id,
+      fileName: `${id}.json`,
+      size: JSON.stringify(conv).length,
+      updatedAt: 2,
+    }));
+
+    const restored = await conversationStore.getConversation(id);
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    expect(restored?.messages[0]?.content).toBe('legacy file content');
+    const manifest = await AsyncStorage.getItem(`@lineai_conv_${id}`);
+    expect(manifest).toContain('"schemaVersion":2');
+    expect(manifest).toContain('"messageCount":1');
+  });
+
   it('keeps legacy chunks readable when migration write fails', async () => {
     const RNFS = require('react-native-fs');
     const id = 'legacy-write-fails';

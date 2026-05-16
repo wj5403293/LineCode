@@ -27,6 +27,16 @@ interface ConversationFileManifest {
   updatedAt: number;
 }
 
+interface ConversationFileManifestV2 {
+  storage: 'file';
+  schemaVersion: 2;
+  id: string;
+  fileName: string;
+  size: number;
+  updatedAt: number;
+  messageCount: number;
+}
+
 export interface ConversationMeta {
   id: string;
   title: string;
@@ -58,7 +68,7 @@ class ConversationStore {
     try {
       const json = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + id);
       if (json) {
-        const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest;
+        const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2;
         const conv = await this.readConversationFromStoredValue(id, parsed, json);
         this.cache.set(id, conv);
         return conv;
@@ -121,7 +131,7 @@ class ConversationStore {
     return AsyncStorage.getItem(KEYS.CURRENT);
   }
 
-  async setCurrentConversationId(id: string): Promise<void> {
+  async setCurrentConversationId(id: string | null): Promise<void> {
     if (id) {
       await AsyncStorage.setItem(KEYS.CURRENT, id);
     } else {
@@ -179,12 +189,16 @@ class ConversationStore {
     this.cache.clear();
   }
 
-  private isChunkManifest(value: Conversation | ConversationChunkManifest | ConversationFileManifest): value is ConversationChunkManifest {
+  private isChunkManifest(value: Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2): value is ConversationChunkManifest {
     return !!value && (value as ConversationChunkManifest).chunked === true;
   }
 
-  private isFileManifest(value: Conversation | ConversationChunkManifest | ConversationFileManifest): value is ConversationFileManifest {
+  private isFileManifest(value: Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2): value is ConversationFileManifest | ConversationFileManifestV2 {
     return !!value && (value as ConversationFileManifest).storage === 'file';
+  }
+
+  private isV2FileManifest(value: ConversationFileManifest | ConversationFileManifestV2): value is ConversationFileManifestV2 {
+    return (value as ConversationFileManifestV2).schemaVersion === 2;
   }
 
   private chunkKey(id: string, index: number): string {
@@ -207,13 +221,14 @@ class ConversationStore {
   private async writeConversationData(conv: Conversation): Promise<void> {
     const json = JSON.stringify(conv);
     await this.writeConversationFile(conv.id, json);
-    const manifest: ConversationFileManifest = {
+    const manifest: ConversationFileManifestV2 = {
       storage: 'file',
-      version: 1,
+      schemaVersion: 2,
       id: conv.id,
       fileName: this.fileName(conv.id),
       size: json.length,
       updatedAt: conv.updatedAt,
+      messageCount: conv.messages.length,
     };
     await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, JSON.stringify(manifest));
   }
@@ -243,11 +258,17 @@ class ConversationStore {
 
   private async readConversationFromStoredValue(
     id: string,
-    parsed: Conversation | ConversationChunkManifest | ConversationFileManifest,
+    parsed: Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2,
     storedJson: string,
   ): Promise<Conversation> {
     if (this.isFileManifest(parsed)) {
-      return this.readFileConversation(parsed);
+      const conv = await this.readFileConversation(parsed);
+      if (!this.isV2FileManifest(parsed)) {
+        this.migrateLegacyConversation(conv, 'file-v1', storedJson).catch(err => {
+          console.error('[LineCode] Failed to migrate file conversation:', id, err);
+        });
+      }
+      return conv;
     }
 
     if (this.isChunkManifest(parsed)) {
@@ -265,7 +286,7 @@ class ConversationStore {
     return conv;
   }
 
-  private async readFileConversation(manifest: ConversationFileManifest): Promise<Conversation> {
+  private async readFileConversation(manifest: ConversationFileManifest | ConversationFileManifestV2): Promise<Conversation> {
     const target = `${CONVERSATION_FILES_DIR}/${manifest.fileName || this.fileName(manifest.id)}`;
     try {
       return JSON.parse(await RNFS.readFile(target, 'utf8')) as Conversation;
@@ -278,7 +299,7 @@ class ConversationStore {
     }
   }
 
-  private async migrateLegacyConversation(conv: Conversation, source: 'inline' | 'chunked', legacyJson: string): Promise<void> {
+  private async migrateLegacyConversation(conv: Conversation, source: 'inline' | 'chunked' | 'file-v1', legacyJson: string): Promise<void> {
     if (!conv?.id) return;
     await this.enqueueConversationWrite(conv.id, async () => {
       const currentJson = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + conv.id);
@@ -320,7 +341,7 @@ class ConversationStore {
     if (!json) return [];
 
     try {
-      const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest;
+      const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2;
       if (!this.isChunkManifest(parsed)) return [];
       return Array.from({ length: parsed.chunks }, (_, index) => this.chunkKey(id, index));
     } catch {
@@ -333,7 +354,7 @@ class ConversationStore {
     const json = await AsyncStorage.getItem(KEYS.CONVERSATION_PREFIX + id);
     if (json) {
       try {
-        const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest;
+        const parsed = JSON.parse(json) as Conversation | ConversationChunkManifest | ConversationFileManifest | ConversationFileManifestV2;
         if (this.isFileManifest(parsed)) {
           await this.unlinkIfExists(`${CONVERSATION_FILES_DIR}/${parsed.fileName}`);
           await this.unlinkIfExists(`${CONVERSATION_FILES_DIR}/${parsed.fileName}.bak`);

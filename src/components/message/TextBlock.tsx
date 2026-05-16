@@ -5,6 +5,7 @@ import { spacing } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import { createMdStyle } from './markdownStyles';
 import { createMessageMarkdownRules } from './markdownRules';
+import { useTypewriterText } from '../../hooks/useTypewriterText';
 
 interface Props {
   content: string;
@@ -20,6 +21,7 @@ export default React.memo(function TextBlock({
   mathFormulaRenderingEnabled,
 }: Props) {
   const { colors } = useTheme();
+  const renderContent = useTypewriterText(content, !!streaming);
   const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
   const customRules = useMemo(
     () => createMessageMarkdownRules({ codeWrap }),
@@ -47,9 +49,9 @@ export default React.memo(function TextBlock({
   }
 
   const markdown = mathFormulaRenderingEnabled ? (
-    <Markdown style={mdStyle} rules={mathRules} markdownit={mathMarkdownIt}>{content || ''}</Markdown>
+    <Markdown style={mdStyle} rules={mathRules} markdownit={mathMarkdownIt}>{renderContent || ''}</Markdown>
   ) : (
-    <Markdown style={mdStyle} rules={customRules}>{content || ''}</Markdown>
+    <Markdown style={mdStyle} rules={customRules}>{renderContent || ''}</Markdown>
   );
 
   return markdown;

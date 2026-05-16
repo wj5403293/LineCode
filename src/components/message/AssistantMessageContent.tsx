@@ -1,9 +1,7 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
 import { ContentBlock, ToolCall, ToolResult } from '../../types';
-import { spacing } from '../../constants/theme';
-import AssistantMessageContent from './AssistantMessageContent';
-import MessageActionBar from './MessageActionBar';
+import { ContentWithText } from './ContentBlockRenderer';
+import TextBlock from './TextBlock';
 
 interface Props {
   content: string;
@@ -24,7 +22,7 @@ interface Props {
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
-export default React.memo(function AIBubbleFullscreen({
+function AssistantMessageContent({
   content,
   blocks,
   toolCalls,
@@ -42,10 +40,31 @@ export default React.memo(function AIBubbleFullscreen({
   onViewShellCommand,
   onToolReview,
 }: Props) {
+  const hasBlocks = blocks && blocks.length > 0;
+  const hasToolCalls = toolCalls && toolCalls.length > 0;
+  const hasContent = content && content.trim().length > 0;
+  const showStreamingPlaceholder = streaming && !hasContent && !hasBlocks && !hasToolCalls;
+
   return (
-    <View style={styles.row}>
-      <View style={styles.stack}>
-        <AssistantMessageContent
+    <>
+      {hasContent && !hasBlocks && !hasToolCalls && (
+        <TextBlock
+          content={content}
+          streaming={streaming}
+          codeWrap={codeWrap}
+          mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+        />
+      )}
+      {showStreamingPlaceholder && (
+        <TextBlock
+          content=""
+          streaming
+          codeWrap={codeWrap}
+          mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+        />
+      )}
+      {(hasBlocks || hasToolCalls) && (
+        <ContentWithText
           content={content}
           blocks={blocks}
           toolCalls={toolCalls}
@@ -63,22 +82,9 @@ export default React.memo(function AIBubbleFullscreen({
           onViewShellCommand={onViewShellCommand}
           onToolReview={onToolReview}
         />
-        {!streaming && !!content.trim() && (
-          <MessageActionBar copyText={content} align="left" />
-        )}
-      </View>
-    </View>
+      )}
+    </>
   );
-});
+}
 
-const styles = StyleSheet.create({
-  row: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  stack: {
-    alignSelf: 'stretch',
-    alignItems: 'stretch',
-    width: '100%',
-  },
-});
+export default React.memo(AssistantMessageContent);

@@ -3,8 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { ContentBlock, ToolCall, ToolResult } from '../../types';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
-import { ContentWithText } from './ContentBlockRenderer';
-import TextBlock from './TextBlock';
+import AssistantMessageContent from './AssistantMessageContent';
 import MessageActionBar from './MessageActionBar';
 
 interface Props {
@@ -47,8 +46,6 @@ export default React.memo(function AIBubbleCompact({
   const { colors } = useTheme();
   const hasBlocks = blocks && blocks.length > 0;
   const hasToolCalls = toolCalls && toolCalls.length > 0;
-  const hasContent = content && content.trim().length > 0;
-  const showStreamingPlaceholder = streaming && !hasContent && !hasBlocks && !hasToolCalls;
 
   return (
     <View style={styles.row}>
@@ -57,42 +54,24 @@ export default React.memo(function AIBubbleCompact({
       </View>
       <View style={styles.stack}>
         <View style={[styles.bubble, { backgroundColor: colors.aiBubble }, (hasBlocks || hasToolCalls) && styles.richBubble]}>
-          {hasContent && !hasBlocks && !hasToolCalls && (
-            <TextBlock
-              content={content}
-              streaming={streaming}
-              codeWrap={codeWrap}
-              mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-            />
-          )}
-          {showStreamingPlaceholder && (
-            <TextBlock
-              content=""
-              streaming
-              codeWrap={codeWrap}
-              mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-            />
-          )}
-          {(hasBlocks || hasToolCalls) && (
-            <ContentWithText
-              content={content}
-              blocks={blocks}
-              toolCalls={toolCalls}
-              toolResults={toolResults}
-              streaming={streaming}
-              codeWrap={codeWrap}
-              mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-              thinkingAutoExpand={thinkingAutoExpand}
-              thinkingScrollable={thinkingScrollable}
-              homePath={homePath}
-              shellConfirmToolCallId={shellConfirmToolCallId}
-              onShellCancel={onShellCancel}
-              onShellConfirm={onShellConfirm}
-              onShellDefaultExecute={onShellDefaultExecute}
-              onViewShellCommand={onViewShellCommand}
-              onToolReview={onToolReview}
-            />
-          )}
+          <AssistantMessageContent
+            content={content}
+            blocks={blocks}
+            toolCalls={toolCalls}
+            toolResults={toolResults}
+            streaming={streaming}
+            codeWrap={codeWrap}
+            mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+            thinkingAutoExpand={thinkingAutoExpand}
+            thinkingScrollable={thinkingScrollable}
+            homePath={homePath}
+            shellConfirmToolCallId={shellConfirmToolCallId}
+            onShellCancel={onShellCancel}
+            onShellConfirm={onShellConfirm}
+            onShellDefaultExecute={onShellDefaultExecute}
+            onViewShellCommand={onViewShellCommand}
+            onToolReview={onToolReview}
+          />
         </View>
         {!streaming && !!content.trim() && (
           <MessageActionBar copyText={content} align="left" />

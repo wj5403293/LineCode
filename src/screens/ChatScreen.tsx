@@ -1,16 +1,13 @@
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
-import { Alert, View, FlatList, StyleSheet, Modal, Text, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
-import MessageBubble from '../components/MessageBubble';
 import InputBar from '../components/InputBar';
 import Dialog from '../components/Dialog';
 import EmptyState from '../components/EmptyState';
 import Sidebar from '../components/Sidebar';
 import BatchDeleteConfirm from '../components/BatchDeleteConfirm';
-import { Message } from '../types';
-import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { PERMISSIONS, MORE_OPTIONS } from '../constants/options';
 import { useChatState } from '../hooks/useChatState';
@@ -22,6 +19,8 @@ import { PermissionMode } from '../services/settings';
 import { permissionService } from '../services/PermissionService';
 import { setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '../utils/keepAwake';
 import { projectService } from '../services/ProjectService';
+import ChatMessageList from '../components/ChatMessageList';
+import CreateProjectModal from '../components/CreateProjectModal';
 
 interface Props {
   onGoSettings: () => void;
@@ -142,42 +141,10 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     );
   }, [handleToolConfirm]);
 
-  const renderItem = useCallback(({ item }: { item: Message }) => (
-      <MessageBubble
-      message={item}
-      codeWrap={codeWrap}
-      displayMode={displayMode}
-      mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-      thinkingAutoExpand={thinkingAutoExpand}
-      thinkingScrollable={thinkingScrollable}
-      homePath={homePath}
-      shellConfirmToolCallId={shellConfirmToolCallId}
-      onShellCancel={() => handleToolConfirm(false)}
-      onShellConfirm={() => handleToolConfirm(true)}
-      onShellDefaultExecute={handleShellAutoExecute}
-      onViewShellCommand={onViewShellCommand}
-      onToolReview={handleToolReview}
-      onRecallUserMessage={(message) => {
-        const draft = recallUserMessage(message.id);
-        setRecalledDraft(draft);
-      }}
-    />
-  ), [
-    codeWrap,
-    displayMode,
-    mathFormulaRenderingEnabled,
-    thinkingAutoExpand,
-    thinkingScrollable,
-    homePath,
-    shellConfirmToolCallId,
-    handleToolConfirm,
-    handleShellAutoExecute,
-    onViewShellCommand,
-    handleToolReview,
-    recallUserMessage,
-  ]);
-
-  const keyExtractor = useCallback((item: Message) => item.id, []);
+  const handleRecallUserMessage = useCallback((messageId: string) => {
+    const draft = recallUserMessage(messageId);
+    setRecalledDraft(draft);
+  }, [recallUserMessage]);
 
   const handleMoreSelect = useCallback((id: string) => {
     closeDialog();
@@ -310,22 +277,25 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           onPressMore={() => openDialog('more')}
         />
 
-        <FlatList
-          ref={flatListRef}
-          data={messages.filter(message => !message.hidden)}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          onContentSizeChange={() => scrollToBottom(false)}
+        <ChatMessageList
+          listRef={flatListRef}
+          messages={messages}
+          codeWrap={codeWrap}
+          displayMode={displayMode}
+          mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+          thinkingAutoExpand={thinkingAutoExpand}
+          thinkingScrollable={thinkingScrollable}
+          homePath={homePath}
+          shellConfirmToolCallId={shellConfirmToolCallId}
+          onShellCancel={() => handleToolConfirm(false)}
+          onShellConfirm={() => handleToolConfirm(true)}
+          onShellDefaultExecute={handleShellAutoExecute}
+          onViewShellCommand={onViewShellCommand}
+          onToolReview={handleToolReview}
+          onRecallUserMessage={(message) => handleRecallUserMessage(message.id)}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScroll={handleScroll}
-          onScrollEndDrag={handleScroll}
-          onMomentumScrollEnd={handleScroll}
-          scrollEventThrottle={16}
-          removeClippedSubviews
-          maxToRenderPerBatch={10}
-          windowSize={10}
+          onScrollToBottom={scrollToBottom}
         />
 
         <InputBar
@@ -386,92 +356,6 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   );
 }
 
-function CreateProjectModal({
-  visible,
-  value,
-  onChangeText,
-  onCancel,
-  onConfirm,
-}: {
-  visible: boolean;
-  value: string;
-  onChangeText: (value: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated }]}>
-          <Text style={[styles.modalTitle, { color: colors.text }]}>创建项目</Text>
-          <TextInput
-            style={[styles.modalInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderLight }]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder="项目名称"
-            placeholderTextColor={colors.textTertiary}
-            autoFocus
-            autoCapitalize="none"
-          />
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.modalBtn} onPress={onCancel}>
-              <Text style={[styles.modalBtnText, { color: colors.textSecondary }]}>取消</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.accent }]} onPress={onConfirm}>
-              <Text style={[styles.modalBtnText, { color: colors.textOnColor }]}>创建</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { flex: 1 },
-  listContent: { paddingVertical: spacing.sm },
-  modalOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 320,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-  },
-  modalTitle: {
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  modalInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.sm,
-    minHeight: 42,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSizes.md,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  modalBtn: {
-    minHeight: 38,
-    minWidth: 72,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  modalBtnText: {
-    fontSize: fontSizes.sm,
-    fontWeight: '700',
-  },
 });

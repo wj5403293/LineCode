@@ -12,12 +12,16 @@ import { isDangerousShellCommand } from '../utils/shellSafety';
 import { parseModelContext, formatContextSize } from '../utils/modelContext';
 import {
   COMPACT_PROMPT,
+  COMPACT_TRIGGER_RATIO,
   createCompactSummaryContent,
-  estimateMessageTokens,
-  shouldCompactContext,
   toCompactTranscript,
 } from '../services/contextCompaction';
 import { getUserMessageRecallText } from '../utils/messageText';
+import { MessageListStore, MessageUpdater } from '../chat/MessageListStore';
+import { ContextMetricsService } from '../chat/ContextMetricsService';
+import { ConversationPersistenceScheduler } from '../chat/persistence/ConversationPersistenceScheduler';
+import { StreamBufferedUpdate, StreamUpdateBuffer } from '../chat/StreamUpdateBuffer';
+import { ToolExecutionCoordinator } from '../chat/ToolExecutionCoordinator';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -25,21 +29,6 @@ interface PendingToolCall {
   text: string;
   type?: 'delete' | 'shell';
   confirmResolve?: (confirmed: boolean) => void;
-}
-
-function isConcurrencySafe(tc: ToolCall): boolean {
-  if (tc.name === 'file_read' || tc.name === 'glob' || tc.name === 'web_search' || tc.name === 'web_fetch') {
-    return true;
-  }
-  if (tc.name === 'agent') {
-    try {
-      const input = JSON.parse(tc.arguments);
-      return input.type === 'explore';
-    } catch {
-      return false;
-    }
-  }
-  return false;
 }
 
 const TERMINATED_RESULT = '已终止';
@@ -245,11 +234,14 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const atBottomRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const localMessagesRef = useRef<Message[]>([]);
-  const messagesRef = useRef<Message[]>([]);
   const conversationIdRef = useRef<string | null>(null);
-  const lastPersistedJsonRef = useRef('');
   const shellAutoApproveRef = useRef(false);
   const compactingRef = useRef(false);
+  const messageStoreRef = useRef(new MessageListStore());
+  const persistenceRef = useRef(new ConversationPersistenceScheduler());
+  const contextMetricsRef = useRef(new ContextMetricsService());
+  const streamBufferRef = useRef<StreamUpdateBuffer | null>(null);
+  const toolExecutionCoordinatorRef = useRef(new ToolExecutionCoordinator());
 
   useEffect(() => {
     getHomePath().then(setHomePath);
@@ -259,12 +251,11 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, []);
 
   const updateConversationId = useCallback((id: string | null) => {
+    persistenceRef.current.flush(conversationIdRef.current).catch(() => {});
     conversationIdRef.current = id;
-    lastPersistedJsonRef.current = '';
+    persistenceRef.current.setConversationId(id);
     setConversationId(id);
-    if (id) {
-      conversationStore.setCurrentConversationId(id).catch(() => {});
-    }
+    conversationStore.setCurrentConversationId(id).catch(() => {});
   }, []);
 
   const loadInitialData = useCallback(async () => {
@@ -281,8 +272,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       const conv = await conversationStore.getConversation(convId);
       if (conv) {
         updateConversationId(conv.id);
-        messagesRef.current = conv.messages;
-        lastPersistedJsonRef.current = JSON.stringify(conv.messages);
+        messageStoreRef.current.setMessages(conv.messages);
+        persistenceRef.current.markPersisted(conv.messages);
         setMessages(conv.messages);
       }
     }
@@ -309,41 +300,78 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     });
   }, [reloadModel]);
 
-  const persistMessages = useCallback(async (
+  const syncMessages = useCallback((
+    updater: MessageUpdater,
     convId: string | null = conversationIdRef.current,
-    nextMessages: Message[] = messagesRef.current,
-  ) => {
-    if (!convId || nextMessages.length === 0) return;
-    const json = JSON.stringify(nextMessages);
-    if (lastPersistedJsonRef.current === json) return;
-    await conversationStore.updateConversation(convId, { messages: nextMessages });
-    lastPersistedJsonRef.current = json;
+    persist: 'schedule' | 'flush' | 'none' = 'schedule',
+  ): Message[] => {
+    const next = messageStoreRef.current.update(updater);
+    setMessages(next);
+    if (persist === 'flush') {
+      persistenceRef.current.schedule(next, convId);
+      persistenceRef.current.flush(convId).catch(() => {});
+    } else if (persist === 'schedule') {
+      persistenceRef.current.schedule(next, convId);
+    }
+    return next;
   }, []);
 
-  const syncMessages = useCallback((
-    updater: Message[] | ((prev: Message[]) => Message[]),
-    convId: string | null = conversationIdRef.current,
-  ): Message[] => {
-    const prev = messagesRef.current;
-    const next = typeof updater === 'function' ? updater(prev) : updater;
-    messagesRef.current = next;
-    setMessages(next);
-    persistMessages(convId, next).catch(() => {});
-    return next;
-  }, [persistMessages]);
+  useEffect(() => {
+    messageStoreRef.current.setMessages(messages);
+  }, [messages]);
 
   useEffect(() => {
-    messagesRef.current = messages;
-    if (conversationId && messages.length > 0) {
-      persistMessages(conversationId, messages).catch(() => {});
-    }
-  }, [conversationId, messages, persistMessages]);
+    const persistence = persistenceRef.current;
+    return () => {
+      persistence.flush().catch(() => {});
+    };
+  }, []);
 
   const scrollToBottom = useCallback((animated = true) => {
     if (atBottomRef.current) {
       flatListRef.current?.scrollToEnd({ animated });
     }
   }, []);
+
+  const applyStreamUpdates = useCallback((aiId: string, updates: StreamBufferedUpdate[], convId: string | null) => {
+    if (updates.length === 0) return;
+    syncMessages(prev => prev.map(message => {
+      if (message.id !== aiId) return message;
+
+      let nextMessage = message;
+      for (const update of updates) {
+        if (update.type === 'status') {
+          if (!nextMessage.blocks?.length) {
+            nextMessage = { ...nextMessage, content: update.status };
+          }
+          continue;
+        }
+
+        if (update.type === 'blocks') {
+          nextMessage = {
+            ...nextMessage,
+            blocks: update.blocks,
+            content: update.blocks.filter(block => block.type === 'text').map(block => block.content).join(''),
+          };
+          continue;
+        }
+
+        const existingBlocks = nextMessage.blocks || [];
+        if (existingBlocks.some(block => block.type === 'tool_use' && block.id === update.toolCall.id)) {
+          continue;
+        }
+        const newBlock: ContentBlock = {
+          type: 'tool_use',
+          id: update.toolCall.id,
+          name: update.toolCall.name,
+          content: '',
+        };
+        nextMessage = { ...nextMessage, blocks: [...existingBlocks, newBlock] };
+      }
+      return nextMessage;
+    }), convId, 'none');
+    scrollToBottom(false);
+  }, [scrollToBottom, syncMessages]);
 
   const handleScrollBeginDrag = useCallback(() => {
     atBottomRef.current = false;
@@ -435,7 +463,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       isError: toolResult.isError,
     };
 
-    syncMessages([...messagesRef.current, toolMsg]);
+    syncMessages(prev => [...prev, toolMsg]);
     return { toolMsg, toolResult };
   }, [syncMessages]);
 
@@ -455,16 +483,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     localMessages: Message[],
     abortSignal: AbortSignal,
   ): Promise<boolean> => {
-    const concurrentTasks: ToolCall[] = [];
-    const sequentialTasks: ToolCall[] = [];
-
-    for (const tc of toolCalls) {
-      if (isConcurrencySafe(tc)) {
-        concurrentTasks.push(tc);
-      } else {
-        sequentialTasks.push(tc);
-      }
-    }
+    const { concurrentTasks, sequentialTasks } = toolExecutionCoordinatorRef.current.createPlan(toolCalls);
 
     if (concurrentTasks.length > 0) {
       const results = await Promise.all(
@@ -521,12 +540,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [executeToolCall, syncMessages]);
 
   const persistTerminatedMessages = useCallback(() => {
-    const terminated = markMessagesTerminated(messagesRef.current);
-    syncMessages(terminated);
-    if (conversationIdRef.current && terminated.length > 0) {
-      persistMessages(conversationIdRef.current, terminated).catch(() => {});
-    }
-  }, [persistMessages, syncMessages]);
+    const terminated = markMessagesTerminated(messageStoreRef.current.getSnapshot());
+    syncMessages(terminated, conversationIdRef.current, 'flush');
+  }, [syncMessages]);
 
   const runContextCompaction = useCallback(async (baseMessages: Message[], preservedTail: Message[] = []): Promise<Message[]> => {
     if (!model) return baseMessages;
@@ -623,7 +639,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [persistTerminatedMessages]);
 
   const recallUserMessage = useCallback((messageId: string): string => {
-    const current = messagesRef.current;
+    const current = messageStoreRef.current.getSnapshot();
     const index = current.findIndex(m => m.id === messageId && m.role === 'user');
     if (index < 0) return '';
 
@@ -647,7 +663,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     const recalledText = getUserMessageRecallText(target.content);
     const next = current.slice(0, index);
     localMessagesRef.current = next.filter(m => !m.excludeFromContext);
-    syncMessages(next);
+    syncMessages(next, conversationIdRef.current, 'flush');
     return recalledText;
   }, [syncMessages]);
 
@@ -655,7 +671,8 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     if (!model || streamingRef.current || compactingRef.current) return;
     const sentContent = composeUserContent(text, attachments);
     if (!sentContent.trim()) return;
-    const wasNewConversation = messagesRef.current.length === 0;
+    const currentMessages = messageStoreRef.current.getSnapshot();
+    const wasNewConversation = currentMessages.length === 0;
 
     let convId = conversationId;
     if (!convId) {
@@ -675,11 +692,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
     atBottomRef.current = true;
 
-    const initialMessages = [...messagesRef.current, userMsg];
+    const initialMessages = [...currentMessages, userMsg];
     syncMessages(initialMessages, convId);
     if (wasNewConversation) {
       const fallbackTitle = sentContent.trim().replace(/\s+/g, ' ').slice(0, 20) || '新对话';
-      conversationStore.updateConversation(convId, { title: fallbackTitle, messages: initialMessages }).catch(() => {});
+      conversationStore.updateConversation(convId, { title: fallbackTitle, messages: initialMessages })
+        .then(() => persistenceRef.current.markPersisted(initialMessages))
+        .catch(() => {});
     }
     streamingRef.current = true;
     setStreaming(true);
@@ -690,11 +709,13 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
     try {
       const contextInfo = parseModelContext(model.modelId);
-      const canCompactExistingContext = messagesRef.current.filter(m => !m.excludeFromContext).length >= 4;
-      if (canCompactExistingContext && shouldCompactContext(localMessages, contextInfo.contextTokens)) {
+      const latestMessages = messageStoreRef.current.getSnapshot();
+      const existingContextMessages = latestMessages.filter(m => !m.excludeFromContext);
+      const canCompactExistingContext = existingContextMessages.length >= 4;
+      if (canCompactExistingContext && contextMetricsRef.current.shouldCompact(localMessages, contextInfo.contextTokens, COMPACT_TRIGGER_RATIO)) {
         compactingRef.current = true;
         setCompacting(true);
-        const compactedMessages = await runContextCompaction(messagesRef.current.filter(m => m.id !== userMsg.id), [userMsg]);
+        const compactedMessages = await runContextCompaction(latestMessages.filter(m => m.id !== userMsg.id), [userMsg]);
         localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
         localMessagesRef.current = localMessages;
         compactingRef.current = false;
@@ -720,42 +741,31 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
         const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
 
+        streamBufferRef.current?.cancel();
+        const streamBuffer = new StreamUpdateBuffer(80, updates => {
+          if (activeAbortSignal.aborted) return;
+          applyStreamUpdates(aiId, updates, convId);
+        });
+        streamBufferRef.current = streamBuffer;
+
         const result = await aiService.sendMessage(model, chatMessages, {
           onStatus: (status) => {
             if (activeAbortSignal.aborted) return;
-            syncMessages(prev => prev.map(m =>
-              m.id === aiId && !m.blocks?.length ? { ...m, content: status } : m,
-            ), convId);
-            scrollToBottom(false);
+            streamBuffer.pushStatus(status);
           },
           onBlocks: (blocks) => {
             if (activeAbortSignal.aborted) return;
-            syncMessages(prev => prev.map(m =>
-              m.id === aiId ? { ...m, blocks, content: blocks.filter(b => b.type === 'text').map(b => b.content).join('') } : m,
-            ), convId);
-            scrollToBottom(false);
+            streamBuffer.pushBlocks(blocks);
           },
           onToolCallDetected: (toolCall) => {
             if (activeAbortSignal.aborted) return;
-            syncMessages(prev => prev.map(m => {
-              if (m.id === aiId) {
-                const existingBlocks = m.blocks || [];
-                const hasToolBlock = existingBlocks.some(b => b.type === 'tool_use' && b.id === toolCall.id);
-                if (!hasToolBlock) {
-                  const newBlock: ContentBlock = {
-                    type: 'tool_use',
-                    id: toolCall.id,
-                    name: toolCall.name,
-                    content: '',
-                  };
-                  return { ...m, blocks: [...existingBlocks, newBlock] };
-                }
-              }
-              return m;
-            }), convId);
-            scrollToBottom(false);
+            streamBuffer.pushToolCall(toolCall);
           },
         }, reasoningEffort, undefined, activeAbortSignal, preserveReasoning);
+        streamBuffer.flush();
+        if (streamBufferRef.current === streamBuffer) {
+          streamBufferRef.current = null;
+        }
 
         if (activeAbortSignal.aborted) {
           persistTerminatedMessages();
@@ -774,7 +784,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           reasoningDetails: result.reasoningDetails,
         };
 
-        syncMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m), convId);
+        syncMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m), convId, 'flush');
         localMessages.push(assistantMsg);
         localMessagesRef.current = localMessages;
 
@@ -878,10 +888,12 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
             timestamp: Date.now(),
             isError: true,
           }];
-        }, convId);
+        }, convId, 'flush');
         scrollToBottom(false);
       }
     } finally {
+      streamBufferRef.current?.cancel();
+      streamBufferRef.current = null;
       if (abortSignal?.aborted) {
         persistTerminatedMessages();
       }
@@ -890,8 +902,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       streamingRef.current = false;
       setStreaming(false);
       abortControllerRef.current = null;
+      persistenceRef.current.flush(convId).catch(() => {});
     }
-  }, [model, conversationId, scrollToBottom, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, syncMessages, updateConversationId]);
+  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, scrollToBottom, syncMessages, updateConversationId]);
 
   const resetShellAutoApprove = useCallback(() => {
     shellAutoApproveRef.current = false;
@@ -899,12 +912,12 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
   const clearMessages = useCallback(() => {
     shellAutoApproveRef.current = false;
-    syncMessages([]);
+    syncMessages([], conversationIdRef.current, 'flush');
   }, [syncMessages]);
 
   const handleCompactContext = useCallback(async () => {
     if (streamingRef.current || compactingRef.current) return;
-    const currentMessages = messagesRef.current;
+    const currentMessages = messageStoreRef.current.getSnapshot();
     if (currentMessages.filter(m => !m.excludeFromContext).length < 4) return;
 
     compactingRef.current = true;
@@ -921,7 +934,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
   const contextInfo = model ? parseModelContext(model.modelId) : null;
   const contextTokens = contextInfo?.contextTokens || 250_000;
-  const contextUsedTokens = estimateMessageTokens(messages.filter(m => !m.excludeFromContext));
+  const contextUsedTokens = contextMetricsRef.current.estimateContextTokens(messages);
   const contextPercent = Math.min(100, Math.round((contextUsedTokens / contextTokens) * 100));
   const contextSizeLabel = formatContextSize(contextTokens);
 
