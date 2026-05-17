@@ -24,7 +24,9 @@ export interface LanzouSharedFile {
 }
 
 export interface LanzouHotUpdateFiles {
-  detail: LanzouSharedFile;
+  index?: LanzouSharedFile;
+  detail?: LanzouSharedFile;
+  history: LanzouSharedFile[];
   zip: LanzouSharedFile;
 }
 
@@ -65,13 +67,16 @@ export async function resolveLanzouHotUpdateFiles(
   fetcher: FetchLike = fetch,
 ): Promise<LanzouHotUpdateFiles> {
   const files = await listLanzouFolderFiles(folderUrl, password, fetcher);
+  const index = files.find(file => file.name === 'base.txt')
+    || files.find(file => file.name === 'base.json');
   const detail = files.find(file => file.name === 'base.zip.txt');
+  const history = files.filter(file => /^base-\d+\.(?:txt|json)$/.test(file.name));
   const zip = files.find(file => file.name === 'base.zip');
-  if (!detail || !zip) {
+  if ((!index && !detail) || !zip) {
     const names = files.map(file => file.name).join(', ') || '空目录';
-    throw new Error(`蓝奏云目录缺少 base.zip 或 base.zip.txt，当前文件: ${names}`);
+    throw new Error(`蓝奏云目录缺少 base.zip 或 base.txt，当前文件: ${names}`);
   }
-  return { detail, zip };
+  return { index, detail, history, zip };
 }
 
 export async function fetchLanzouTextFile(fileUrl: string, fetcher: FetchLike = fetch): Promise<string> {

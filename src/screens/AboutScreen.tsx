@@ -1,7 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Share,
   View,
@@ -10,14 +11,14 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { Code2, User, MessageCircle, FileText, ChevronRight, Bug, Download, RefreshCw } from 'lucide-react-native';
+import { Code2, User, MessageCircle, FileText, ChevronRight, Bug, Download, RefreshCw, Package } from 'lucide-react-native';
 import { copyFile, createDocument } from 'react-native-saf-x';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
-import { APP_VERSION } from '../constants/appInfo';
+import { APP_ANDROID_VERSION_CODE, APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } from '../constants/appInfo';
 import { errorReporter } from '../services/ErrorReporter';
 import UpdatePromptModal from '../components/UpdatePromptModal';
-import { HotUpdateInfo, hotUpdateService } from '../services/HotUpdateService';
+import { HotUpdateInfo, HotUpdateState, hotUpdateService } from '../services/HotUpdateService';
 
 interface AboutItemProps {
   icon: React.ReactNode;
@@ -64,7 +65,21 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<HotUpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [installedHotUpdate, setInstalledHotUpdate] = useState<HotUpdateState | null>(null);
   const debugUnlocked = authorTaps === AUTHOR_UNLOCK_TAPS && qqTaps === QQ_UNLOCK_TAPS;
+  const apkVersionLabel = useMemo(() => `${APP_VERSION} (${APP_ANDROID_VERSION_CODE})`, []);
+  const hotUpdateVersionLabel = installedHotUpdate
+    ? `${installedHotUpdate.installedVersionName} (${installedHotUpdate.installedVersionCode})`
+    : `内置 (${APP_HOT_UPDATE_VERSION_CODE})`;
+
+  const refreshInstalledHotUpdate = useCallback(async () => {
+    const state = await hotUpdateService.getInstalledState();
+    setInstalledHotUpdate(state);
+  }, []);
+
+  useEffect(() => {
+    refreshInstalledHotUpdate().catch(() => {});
+  }, [refreshInstalledHotUpdate]);
 
   const handleAuthorPress = useCallback(() => {
     setAuthorTaps(count => (count >= AUTHOR_UNLOCK_TAPS ? 0 : count + 1));
@@ -123,10 +138,19 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
 
   const handleInstallUpdate = useCallback(async () => {
     if (!updateInfo || installingUpdate) return;
+    if (updateInfo.requiresApk) {
+      if (updateInfo.apkUrl) {
+        Linking.openURL(updateInfo.apkUrl).catch(err => setUpdateError(err?.message || String(err)));
+      } else {
+        setUpdateError('此更新需要安装新版 APK，但更新信息没有提供 APK 下载链接。');
+      }
+      return;
+    }
     setInstallingUpdate(true);
     setUpdateError(null);
     try {
       await hotUpdateService.install(updateInfo);
+      await refreshInstalledHotUpdate();
       setUpdateInfo(null);
       Alert.alert('更新完成', '热更新包已安装，重启应用后生效。');
     } catch (err: any) {
@@ -134,7 +158,7 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
     } finally {
       setInstallingUpdate(false);
     }
-  }, [installingUpdate, updateInfo]);
+  }, [installingUpdate, refreshInstalledHotUpdate, updateInfo]);
 
   return (
     <>
@@ -144,11 +168,22 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
             <Code2 size={48} color={colors.accent} />
           </View>
           <Text style={[styles.appName, { color: colors.text }]}>LineCode</Text>
-          <Text style={[styles.version, { color: colors.textSecondary }]}>v{APP_VERSION}</Text>
+          <Text style={[styles.version, { color: colors.textSecondary }]}>APK {apkVersionLabel}</Text>
+          <Text style={[styles.versionSub, { color: colors.textTertiary }]}>热补丁 {hotUpdateVersionLabel}</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>版本</Text>
+          <AboutItem
+            icon={<Package size={20} color={colors.accent} />}
+            label="APK 版本"
+            value={apkVersionLabel}
+          />
+          <AboutItem
+            icon={<Download size={20} color={colors.accent} />}
+            label="热补丁版本"
+            value={hotUpdateVersionLabel}
+          />
           <AboutItem
             icon={checkingUpdate
               ? <ActivityIndicator size="small" color={colors.accent} />
@@ -258,6 +293,10 @@ const styles = StyleSheet.create({
   },
   version: {
     fontSize: fontSizes.md,
+  },
+  versionSub: {
+    fontSize: fontSizes.sm,
+    marginTop: 3,
   },
   section: {
     marginTop: spacing.lg,

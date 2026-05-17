@@ -1,7 +1,24 @@
-import { AgentProgressItem, AgentToolCall, ContentBlock, Message, ToolCall } from '../types';
+import { AgentProgressItem, AgentToolCall, ContentBlock, Message, ToolCall, ToolResult } from '../types';
 
 const LARGE_TOOL_FIELD_LIMIT = 64 * 1024;
 const TOOL_CONTENT_PREVIEW_LIMIT = 2 * 1024;
+const LARGE_RESULT_FIELD_LIMIT = 128 * 1024;
+const RESULT_PREVIEW_HEAD_LIMIT = 8 * 1024;
+const RESULT_PREVIEW_TAIL_LIMIT = 8 * 1024;
+
+function createLargeTextPlaceholder(value: string, label: string): string {
+  if (value.length <= LARGE_RESULT_FIELD_LIMIT) return value;
+  const head = value.slice(0, RESULT_PREVIEW_HEAD_LIMIT);
+  const tail = value.slice(value.length - RESULT_PREVIEW_TAIL_LIMIT);
+  const omitted = Math.max(0, value.length - head.length - tail.length);
+  return [
+    head,
+    '',
+    `[LineCode 已省略 ${omitted} 个字符的${label}，完整内容未写入会话存储。]`,
+    '',
+    tail,
+  ].join('\n');
+}
 
 function createLargeContentPlaceholder(value: string): string {
   const preview = value.slice(0, TOOL_CONTENT_PREVIEW_LIMIT);
@@ -58,15 +75,38 @@ export function sanitizeToolCallForStorage(toolCall: ToolCall): ToolCall {
 
 function sanitizeAgentToolCall(toolCall: AgentToolCall): AgentToolCall {
   const input = sanitizeToolInput(toolCall.name, toolCall.input || {});
-  return input === toolCall.input ? toolCall : { ...toolCall, input };
+  let nextToolCall = input === toolCall.input ? toolCall : { ...toolCall, input };
+  if (typeof nextToolCall.result === 'string') {
+    const result = createLargeTextPlaceholder(nextToolCall.result, `${nextToolCall.name} 结果`);
+    if (result !== nextToolCall.result) {
+      nextToolCall = { ...nextToolCall, result };
+    }
+  }
+  return nextToolCall;
 }
 
 function sanitizeAgentItem(item: AgentProgressItem): AgentProgressItem {
-  if (!item.toolCalls?.length) return item;
-  return {
-    ...item,
-    toolCalls: item.toolCalls.map(sanitizeAgentToolCall),
-  };
+  let nextItem = item;
+  if (typeof item.output === 'string') {
+    const output = createLargeTextPlaceholder(item.output, 'Agent 输出');
+    if (output !== item.output) nextItem = { ...nextItem, output };
+  }
+  if (typeof nextItem.thinking === 'string') {
+    const thinking = createLargeTextPlaceholder(nextItem.thinking, 'Agent 思考');
+    if (thinking !== nextItem.thinking) nextItem = { ...nextItem, thinking };
+  }
+  if (nextItem.toolCalls?.length) {
+    const toolCalls = nextItem.toolCalls.map(sanitizeAgentToolCall);
+    if (toolCalls.some((toolCall, index) => toolCall !== nextItem.toolCalls?.[index])) {
+      nextItem = { ...nextItem, toolCalls };
+    }
+  }
+  return nextItem;
+}
+
+function sanitizeToolResult(result: ToolResult): ToolResult {
+  const content = createLargeTextPlaceholder(result.content, '工具结果');
+  return content === result.content ? result : { ...result, content };
 }
 
 function sanitizeBlock(block: ContentBlock): ContentBlock {
@@ -92,6 +132,27 @@ function sanitizeBlock(block: ContentBlock): ContentBlock {
           content: createLargeContentPlaceholder(block.content),
         };
       }
+    }
+  }
+
+  if (typeof nextBlock.shellOutput === 'string') {
+    const shellOutput = createLargeTextPlaceholder(nextBlock.shellOutput, 'shell 输出');
+    if (shellOutput !== nextBlock.shellOutput) {
+      nextBlock = { ...nextBlock, shellOutput };
+    }
+  }
+
+  if (typeof nextBlock.agentOutput === 'string') {
+    const agentOutput = createLargeTextPlaceholder(nextBlock.agentOutput, 'Agent 输出');
+    if (agentOutput !== nextBlock.agentOutput) {
+      nextBlock = { ...nextBlock, agentOutput };
+    }
+  }
+
+  if (typeof nextBlock.agentThinking === 'string') {
+    const agentThinking = createLargeTextPlaceholder(nextBlock.agentThinking, 'Agent 思考');
+    if (agentThinking !== nextBlock.agentThinking) {
+      nextBlock = { ...nextBlock, agentThinking };
     }
   }
 
@@ -127,6 +188,20 @@ export function sanitizeMessagesForStorage(messages: Message[]): Message[] {
       const blocks = message.blocks.map(sanitizeBlock);
       if (blocks.some((block, index) => block !== message.blocks?.[index])) {
         nextMessage = { ...nextMessage, blocks };
+      }
+    }
+
+    if (message.toolResults?.length) {
+      const toolResults = message.toolResults.map(sanitizeToolResult);
+      if (toolResults.some((toolResult, index) => toolResult !== message.toolResults?.[index])) {
+        nextMessage = { ...nextMessage, toolResults };
+      }
+    }
+
+    if (message.role === 'tool' && typeof message.content === 'string') {
+      const content = createLargeTextPlaceholder(message.content, '工具消息');
+      if (content !== message.content) {
+        nextMessage = { ...nextMessage, content };
       }
     }
 

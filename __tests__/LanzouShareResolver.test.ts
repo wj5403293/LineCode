@@ -1,6 +1,7 @@
 import {
   computeAcwScV2,
   parseLanzouFolderParams,
+  resolveLanzouHotUpdateFiles,
   resolveLanzouDownloadUrl,
 } from '../src/services/LanzouShareResolver';
 import RNFS from 'react-native-fs';
@@ -82,6 +83,45 @@ describe('LanzouShareResolver', () => {
     expect(parseLanzouFolderParams(html, 'https://wwbpm.lanzoue.com/b00tci5mxg').folderId).toBe('13497726');
   });
 
+  it('resolves txt hot update metadata from a Lanzou folder', async () => {
+    const folderUrl = 'https://wwbpm.lanzoue.com/b00tci5mxg';
+    const fetcher = jest.fn(async (url: string) => {
+      if (url === folderUrl) {
+        return response(`
+          <script>
+            var ib8uf3 = '1778928581';
+            var _h76gw = '8a2c4392833294dd580c78148d7e776a';
+            $.ajax({
+              url : '/filemoreajax.php?file=13497726',
+              data : {
+                'uid':'4057781',
+                't':ib8uf3,
+                'k':_h76gw
+              }
+            });
+          </script>
+        `);
+      }
+      if (url === 'https://wwbpm.lanzoue.com/filemoreajax.php?file=13497726') {
+        return response(JSON.stringify({
+          zt: 1,
+          text: [
+            { id: 'zip', name_all: 'base.zip', size: '2 M', t: 0 },
+            { id: 'index', name_all: 'base.txt', size: '1 K', t: 0 },
+            { id: 'detail', name_all: 'base-1600014.txt', size: '1 K', t: 0 },
+          ],
+        }), { contentType: 'application/json' });
+      }
+      throw new Error(`unexpected url: ${url}`);
+    });
+
+    await expect(resolveLanzouHotUpdateFiles(folderUrl, 'dfaj', fetcher as any)).resolves.toEqual({
+      index: expect.objectContaining({ name: 'base.txt' }),
+      history: [expect.objectContaining({ name: 'base-1600014.txt' })],
+      zip: expect.objectContaining({ name: 'base.zip' }),
+    });
+  });
+
   it('uses desktop pages for file download resolution', async () => {
     const fileUrl = 'https://wwbpm.lanzoue.com/ili9h3plioda';
     const fetcher = jest.fn(async (url: string) => {
@@ -105,20 +145,20 @@ describe('LanzouShareResolver', () => {
         return response(JSON.stringify({
           zt: 1,
           dom: 'https://developer2.lanrar.com',
-          url: 'download/base.zip.txt',
+          url: 'download/base.txt',
         }), { contentType: 'application/json' });
       }
-      if (url === 'https://developer2.lanrar.com/file/download/base.zip.txt') {
+      if (url === 'https://developer2.lanrar.com/file/download/base.txt') {
         return response('', {
           contentType: 'application/octet-stream',
-          url: 'https://developer2.lanrar.com/file/download/base.zip.txt',
+          url: 'https://developer2.lanrar.com/file/download/base.txt',
         });
       }
       throw new Error(`unexpected url: ${url}`);
     });
 
     await expect(resolveLanzouDownloadUrl(fileUrl, fetcher as any)).resolves.toBe(
-      'https://developer2.lanrar.com/file/download/base.zip.txt',
+      'https://developer2.lanrar.com/file/download/base.txt',
     );
 
     expect(fetcher).toHaveBeenCalledWith(
@@ -162,20 +202,20 @@ describe('LanzouShareResolver', () => {
         return response(JSON.stringify({
           zt: 1,
           dom: 'https://developer2.lanrar.com',
-          url: 'download/base.zip.txt',
+          url: 'download/base.txt',
         }), { contentType: 'application/json' });
       }
-      if (url === 'https://developer2.lanrar.com/file/download/base.zip.txt') {
+      if (url === 'https://developer2.lanrar.com/file/download/base.txt') {
         return response('', {
           contentType: 'application/octet-stream',
-          url: 'https://developer2.lanrar.com/file/download/base.zip.txt',
+          url: 'https://developer2.lanrar.com/file/download/base.txt',
         });
       }
       throw new Error(`unexpected url: ${url}`);
     }) as any;
 
     await expect(resolveLanzouDownloadUrl(fileUrl)).resolves.toBe(
-      'https://developer2.lanrar.com/file/download/base.zip.txt',
+      'https://developer2.lanrar.com/file/download/base.txt',
     );
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { Message } from '../types';
+import { sanitizeMessagesForStorage } from '../utils/toolPayload';
 
 const KEYS = {
   CONVERSATION_LIST: '@lineai_conversation_list',
@@ -219,18 +220,20 @@ class ConversationStore {
   }
 
   private async writeConversationData(conv: Conversation): Promise<void> {
-    const json = JSON.stringify(conv);
+    const sanitizedMessages = sanitizeMessagesForStorage(conv.messages);
+    const nextConversation = { ...conv, messages: sanitizedMessages };
+    const json = JSON.stringify(nextConversation);
     await this.writeConversationFile(conv.id, json);
     const manifest: ConversationFileManifestV2 = {
       storage: 'file',
       schemaVersion: 2,
-      id: conv.id,
-      fileName: this.fileName(conv.id),
+      id: nextConversation.id,
+      fileName: this.fileName(nextConversation.id),
       size: json.length,
-      updatedAt: conv.updatedAt,
-      messageCount: conv.messages.length,
+      updatedAt: nextConversation.updatedAt,
+      messageCount: nextConversation.messages.length,
     };
-    await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + conv.id, JSON.stringify(manifest));
+    await AsyncStorage.setItem(KEYS.CONVERSATION_PREFIX + nextConversation.id, JSON.stringify(manifest));
   }
 
   private async writeConversationFile(id: string, json: string): Promise<void> {

@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertCircle, Check, ChevronDown, ChevronRight, ExternalLink, Play, Terminal, X, Zap } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
+
+const COLLAPSED_LINE_COUNT = 4;
+const EXPANDED_OUTPUT_LIMIT = 64 * 1024;
+const EXPANDED_HEAD_LIMIT = 24 * 1024;
+const EXPANDED_TAIL_LIMIT = 36 * 1024;
 
 interface Props {
   input: Record<string, unknown>;
@@ -31,21 +36,39 @@ export default React.memo(function ToolCallShell({
 }: Props) {
   const { colors } = useTheme();
   const command = String(input.command || '');
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(streaming));
+  const autoExpandedRef = useRef(Boolean(streaming));
   const displayResult = streaming ? (streamingOutput || '正在执行...') : (result || '');
   const outputLines = useMemo(() => {
     if (!displayResult) return [];
     return displayResult.split(/\r?\n/);
   }, [displayResult]);
   const hasOutput = outputLines.length > 0;
-  const canExpand = hasOutput && (outputLines.length > 4 || displayResult.length > 240 || !!streaming);
-  const preview = useMemo(() => {
+  const canExpand = hasOutput && (outputLines.length > COLLAPSED_LINE_COUNT || displayResult.length > 240 || !!streaming);
+  const collapsedPreview = useMemo(() => {
     if (!displayResult) return '';
-    if (expanded) return displayResult;
-    const tail = outputLines.slice(-4).join('\n');
+    const tail = outputLines.slice(-COLLAPSED_LINE_COUNT).join('\n');
     return tail.length > 320 ? `${tail.slice(tail.length - 320)}` : tail;
-  }, [displayResult, expanded, outputLines]);
+  }, [displayResult, outputLines]);
+  const expandedPreview = useMemo(() => {
+    if (displayResult.length <= EXPANDED_OUTPUT_LIMIT) return displayResult;
+    const head = displayResult.slice(0, EXPANDED_HEAD_LIMIT);
+    const tail = displayResult.slice(displayResult.length - EXPANDED_TAIL_LIMIT);
+    return [
+      head,
+      '',
+      `[LineCode 已折叠 ${displayResult.length - head.length - tail.length} 个字符的 shell 输出]`,
+      '',
+      tail,
+    ].join('\n');
+  }, [displayResult]);
   const statusColor = isError ? colors.danger : streaming ? colors.accent : colors.success;
+
+  useEffect(() => {
+    if (!streaming || autoExpandedRef.current) return;
+    autoExpandedRef.current = true;
+    setExpanded(true);
+  }, [streaming]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.codeBg }]}>
@@ -132,19 +155,20 @@ export default React.memo(function ToolCallShell({
           {expanded ? (
             <ScrollView
               style={[styles.expandedOutput, { backgroundColor: colors.surface, borderColor: colors.codeBorder }]}
+              contentContainerStyle={styles.expandedOutputContent}
               nestedScrollEnabled
             >
               <Text selectable style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}>
-                {preview}
+                {expandedPreview}
               </Text>
             </ScrollView>
           ) : (
             <Text
               selectable
               style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}
-              numberOfLines={4}
+              numberOfLines={COLLAPSED_LINE_COUNT}
             >
-              {preview}
+              {collapsedPreview}
             </Text>
           )}
         </View>
@@ -274,9 +298,11 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   expandedOutput: {
-    maxHeight: 220,
+    maxHeight: 280,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.sm,
+  },
+  expandedOutputContent: {
     padding: spacing.sm,
   },
 });

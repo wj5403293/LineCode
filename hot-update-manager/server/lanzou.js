@@ -128,14 +128,18 @@ export async function uploadAndShareFile(cookie, folderId, filePath) {
   };
 }
 
-export async function uploadReleasePair(cookie, folderId, releaseFiles) {
+export async function uploadReleasePair(cookie, folderId, releaseFiles, options = {}) {
   const zip = await uploadAndShareFile(cookie, folderId, releaseFiles.zipPath);
   const detail = await uploadAndShareFile(cookie, folderId, releaseFiles.detailPath);
+  if (options.beforeIndexUpload) {
+    await options.beforeIndexUpload({ zip, detail });
+  }
+  const index = await uploadAndShareFile(cookie, folderId, releaseFiles.indexPath);
   return {
     provider: 'lanzou',
     folderId,
     uploadedAt: new Date().toISOString(),
-    files: { zip, detail },
+    files: { zip, index, detail },
   };
 }
 

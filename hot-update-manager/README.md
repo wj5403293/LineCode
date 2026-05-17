@@ -1,6 +1,6 @@
 # LineCode Hot Update Manager
 
-React + Node 子项目，用于管理 `scripts/build-hot-update.mjs` 生成的热更新产物，并通过蓝奏云上传/删除 `base.zip` 与 `base.zip.txt`。
+React + Node 子项目，用于管理 `scripts/build-hot-update.mjs` 生成的热更新产物，并通过蓝奏云上传/删除 `base.zip` 与 `base.txt`，同时保留历史 `base-{versionCode}.txt` 更新日志。`.txt` 文件内容仍然是 JSON，用来兼容蓝奏云不允许上传 `.json` 后缀的限制。
 
 ## 运行
 
@@ -35,7 +35,8 @@ ADMIN_PASSWORD='change-me' npm run start
 
 管理器读取仓库根目录下的 `dist/hot-update`：
 
-- `base.zip.txt`: 第一行 `versionCode`，第二行 `versionName`，剩余内容为 changelog。
+- `base.txt`: 当前可用更新索引，包含完整更新链路，内容为 JSON。
+- `base-{versionCode}.txt`: 单个历史版本详情，包含 changelog 与 `requiresApk`，内容为 JSON。
 - `base.zip`: 热更新包。
 - `payload/manifest.json`: 必须包含 `versionCode/versionName`、`bundle`、`files`，并且 bundle 文件需要 SHA-256 校验。
 

@@ -18,7 +18,7 @@ export interface SummaryData {
   };
   updateHost: {
     zipPath: string;
-    detailPath: string;
+    indexPath: string;
   };
 }
 
@@ -28,6 +28,8 @@ export interface ArtifactInspection {
   versionCode: number;
   versionName: string;
   changelog: string;
+  requiresApk: boolean;
+  apkUrl: string;
   manifest: {
     versionCode: number;
     versionName: string;
@@ -37,9 +39,12 @@ export interface ArtifactInspection {
   };
   localFiles: {
     zipPath: string;
+    indexPath: string;
     detailPath: string;
+    detailFile: string;
     zipSha256: string;
     zipSize: number;
+    indexSize: number;
     detailSize: number;
   };
 }
@@ -55,26 +60,47 @@ export interface ReleaseRecord {
   versionCode: number;
   versionName: string;
   changelog: string;
-  status: 'local' | 'published' | 'deleted';
+  requiresApk: boolean;
+  apkUrl: string;
+  zipSha256?: string;
+  zipSize?: number;
+  status: 'local' | 'published' | 'archived' | 'deleted';
   active: boolean;
   createdAt: string;
+  archivedAt?: string;
   deletedAt?: string;
   artifactDir: string;
   manifest: ArtifactInspection['manifest'];
   local: {
     zipPath: string;
+    indexPath: string;
     detailPath: string;
+  };
+  updateIndex?: {
+    releases: ReleaseChainItem[];
   };
   cloud: null | {
     provider: 'lanzou';
     folderId: number;
     uploadedAt: string;
     files: {
-      zip: CloudFile;
+      zip: CloudFile | null;
+      index: CloudFile | null;
       detail: CloudFile;
     };
   };
   deleteErrors?: string[];
+}
+
+export interface ReleaseChainItem {
+  versionCode: number;
+  versionName: string;
+  changelog: string;
+  requiresApk: boolean;
+  apkUrl?: string;
+  createdAt?: string;
+  detailFile?: string;
+  zipFile?: string;
 }
 
 export interface CloudFile {
@@ -85,4 +111,3 @@ export interface CloudFile {
   shareUrl: string;
   password: string;
 }
-

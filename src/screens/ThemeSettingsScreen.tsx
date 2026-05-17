@@ -176,7 +176,7 @@ export default function ThemeSettingsScreen({ onBack }: Props) {
       <ScreenHeader title="主题设置" onBack={onBack} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
-          <SectionHeader title="外观" />
+          <SectionHeader title="主题" />
           <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
             {THEMES.map(({ mode, label, desc, icon: Icon }) => (
               <OptionRow

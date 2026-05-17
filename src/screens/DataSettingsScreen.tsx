@@ -109,7 +109,7 @@ export default function DataSettingsScreen({ onBack }: Props) {
             <SwitchRow
               icon={<RefreshCw size={20} color={colors.textSecondary} />}
               label="自动检查更新"
-              desc="启动时读取 base.zip 详情"
+              desc="启动时读取 base.txt 更新链路"
               value={autoUpdateEnabled}
               onValueChange={handleToggleAutoUpdate}
             />

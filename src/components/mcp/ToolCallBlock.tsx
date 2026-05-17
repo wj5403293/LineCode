@@ -136,12 +136,13 @@ export default React.memo(function ToolCallBlock({
   }
 
   if (isShellTool(toolCall.name)) {
+    const shellStreaming = block?.shellStatus === 'running' || (pending && !result);
     return (
       <ToolCallShell
         input={input}
         result={result}
         isError={isError}
-        streaming={block?.shellStatus === 'running' && !result}
+        streaming={shellStreaming}
         streamingOutput={block?.shellOutput}
         pending={pending}
         onCancel={onShellCancel}

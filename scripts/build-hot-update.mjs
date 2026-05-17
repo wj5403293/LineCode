@@ -22,6 +22,8 @@ function parseArgs(argv) {
     clean: true,
     buildPrompt: true,
     hermesBytecode: 'auto',
+    requiresApk: false,
+    apkUrl: '',
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -41,6 +43,8 @@ function parseArgs(argv) {
     else if (arg === '--version-name') args.versionName = readValue();
     else if (arg === '--changelog') args.changelog = readValue();
     else if (arg === '--changelog-file') args.changelog = readFileSync(path.resolve(ROOT, readValue()), 'utf8').trim();
+    else if (arg === '--requires-apk') args.requiresApk = true;
+    else if (arg === '--apk-url') args.apkUrl = readValue();
     else if (arg === '--dev') args.dev = true;
     else if (arg === '--sourcemap') args.sourcemap = true;
     else if (arg === '--hermes-bytecode') args.hermesBytecode = true;
@@ -78,8 +82,10 @@ function printHelp() {
 Options:
   --version-code <number>      Update versionCode. Defaults to version.json hotUpdateVersionCode.
   --version-name <name>        Update versionName. Defaults to version.json version.
-  --changelog <text>           Changelog text written after the first two lines of base.zip.txt.
+  --changelog <text>           Changelog text written as JSON to base-{versionCode}.txt.
   --changelog-file <path>      Read changelog text from a file.
+  --requires-apk               Mark this update as requiring a new APK install.
+  --apk-url <url>              Optional APK download URL shown to users when --requires-apk is set.
   --out-dir <path>             Output directory. Default: dist/hot-update
   --entry-file <path>          React Native entry file. Default: index.js
   --dev                        Build a dev bundle.
@@ -293,7 +299,10 @@ async function main() {
   const bundlePath = path.join(payloadDir, 'index.android.bundle');
   const sourcemapPath = `${bundlePath}.map`;
   const zipPath = path.join(args.outDir, 'base.zip');
-  const detailPath = path.join(args.outDir, 'base.zip.txt');
+  const indexPath = path.join(args.outDir, 'base.txt');
+  const detailFileName = `base-${args.versionCode}.txt`;
+  const detailPath = path.join(args.outDir, detailFileName);
+  const generatedAt = new Date().toISOString();
 
   if (args.clean) {
     rmSync(args.outDir, { recursive: true, force: true });
@@ -371,26 +380,83 @@ async function main() {
   const manifest = {
     versionCode: args.versionCode,
     versionName: args.versionName,
+    requiresApk: args.requiresApk,
     bundleFormat: useHermesBytecode ? 'hermes-bytecode' : 'js',
     bundle,
     files: manifestFiles,
   };
   await writeFile(path.join(payloadDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   await writeZip(payloadDir, zipPath);
-  await writeFile(detailPath, `${args.versionCode}\n${args.versionName}\n${args.changelog.trim()}\n`, 'utf8');
 
   const zipSize = statSync(zipPath).size;
+  const zipSha256 = createHash('sha256').update(await readFile(zipPath)).digest('hex');
+  const release = {
+    schemaVersion: 2,
+    type: 'hot-update-release',
+    versionCode: args.versionCode,
+    versionName: args.versionName,
+    createdAt: generatedAt,
+    requiresApk: args.requiresApk,
+    apkUrl: args.apkUrl,
+    changelog: args.changelog.trim(),
+    artifact: {
+      zipFile: 'base.zip',
+      zipSha256,
+      zipSize,
+      detailFile: detailFileName,
+    },
+    manifest: {
+      bundleFormat: manifest.bundleFormat,
+      bundlePath: bundle.path,
+      fileCount: manifestFiles.length,
+      files: manifestFiles,
+    },
+  };
+  const index = {
+    schemaVersion: 2,
+    type: 'hot-update-index',
+    generatedAt,
+    current: {
+      versionCode: release.versionCode,
+      versionName: release.versionName,
+      requiresApk: release.requiresApk,
+      apkUrl: release.apkUrl,
+      changelog: release.changelog,
+      zipFile: 'base.zip',
+      zipSha256,
+      zipSize,
+      detailFile: detailFileName,
+    },
+    releases: [{
+      versionCode: release.versionCode,
+      versionName: release.versionName,
+      createdAt: release.createdAt,
+      requiresApk: release.requiresApk,
+      apkUrl: release.apkUrl,
+      changelog: release.changelog,
+      detailFile: detailFileName,
+      zipFile: 'base.zip',
+      zipSha256,
+      zipSize,
+    }],
+  };
+  await writeFile(detailPath, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
+  await writeFile(indexPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
+
   console.log('');
   console.log('Hot update generated:');
   console.log(`  ${path.relative(ROOT, zipPath)} (${zipSize} bytes)`);
+  console.log(`  ${path.relative(ROOT, indexPath)}`);
   console.log(`  ${path.relative(ROOT, detailPath)}`);
   console.log(`  versionCode=${args.versionCode}`);
   console.log(`  versionName=${args.versionName}`);
+  console.log(`  requiresApk=${args.requiresApk}`);
   console.log(`  bundleFormat=${manifest.bundleFormat}`);
   console.log('');
   console.log('Upload these files to the update host:');
   console.log('  base.zip');
-  console.log('  base.zip.txt');
+  console.log('  base.txt');
+  console.log(`  ${detailFileName}`);
 }
 
 main().catch(error => {

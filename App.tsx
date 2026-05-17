@@ -91,6 +91,15 @@ function AppContent() {
 
   const handleInstallUpdate = useCallback(async () => {
     if (!pendingUpdate || installingUpdate) return;
+    if (pendingUpdate.requiresApk) {
+      const targetUrl = pendingUpdate.apkUrl;
+      if (targetUrl) {
+        Linking.openURL(targetUrl).catch(err => setUpdateError(err?.message || String(err)));
+      } else {
+        setUpdateError('此更新需要安装新版 APK，但更新信息没有提供 APK 下载链接。');
+      }
+      return;
+    }
     setInstallingUpdate(true);
     setUpdateError(null);
     try {

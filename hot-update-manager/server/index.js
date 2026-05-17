@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import {
@@ -35,7 +35,10 @@ const server = createServer(async (req, res) => {
       await handleApi(req, res, url);
       return;
     }
-    if (url.pathname === '/base.zip' || url.pathname === '/base.zip.txt') {
+    if (url.pathname === '/base.zip'
+      || url.pathname === '/base.txt'
+      || url.pathname === '/base.json'
+      || /^\/base-\d+\.(?:txt|json)$/.test(url.pathname)) {
       await serveActiveReleaseFile(res, url.pathname);
       return;
     }
@@ -90,7 +93,7 @@ async function handleApi(req, res, url) {
         },
         updateHost: {
           zipPath: '/base.zip',
-          detailPath: '/base.zip.txt',
+          indexPath: '/base.txt',
         },
       },
     });
@@ -144,7 +147,7 @@ async function handleApi(req, res, url) {
     const body = await readJsonBody(req);
     const store = await loadStore();
     const inspection = await inspectArtifactDir(body.artifactDir || store.settings.artifactDir);
-    const archived = await archiveArtifact(inspection);
+    const archived = await archiveArtifact(inspection, store.releases);
     let cloud = null;
     let status = 'local';
 
@@ -156,7 +159,13 @@ async function handleApi(req, res, url) {
       }
       cloud = await uploadReleasePair(store.settings.lanzou.cookie, store.settings.lanzou.folderId, {
         zipPath: archived.zipTarget,
+        indexPath: archived.indexTarget,
         detailPath: archived.detailTarget,
+      }, {
+        beforeIndexUpload: async ({ zip, detail }) => {
+          archived.updateIndex = applyCloudUrlsToIndex(archived.updateIndex, { files: { zip, detail } });
+          await writeFile(archived.indexTarget, `${JSON.stringify(archived.updateIndex, null, 2)}\n`, 'utf8');
+        },
       });
       status = 'published';
     }
@@ -166,12 +175,17 @@ async function handleApi(req, res, url) {
       versionCode: inspection.versionCode,
       versionName: inspection.versionName,
       changelog: inspection.changelog,
+      requiresApk: inspection.requiresApk,
+      apkUrl: inspection.apkUrl,
+      zipSha256: inspection.localFiles.zipSha256,
+      zipSize: inspection.localFiles.zipSize,
       status,
       active: Boolean(body.makeActive),
       createdAt: new Date().toISOString(),
       artifactDir: inspection.artifactDirLabel,
       manifest: inspection.manifest,
       local: archived.local,
+      updateIndex: archived.updateIndex,
       cloud,
     };
 
@@ -222,12 +236,18 @@ async function handleApi(req, res, url) {
 async function deletePublishedLanzouReleases(store) {
   const cleanupErrors = [];
   for (const release of store.releases) {
-    if (release.status === 'deleted' || release.cloud?.provider !== 'lanzou') continue;
+    if (release.status === 'deleted' || release.status === 'archived' || release.cloud?.provider !== 'lanzou') continue;
     const deleteErrors = await deleteReleaseCloudFiles(store, release);
-    release.status = 'deleted';
-    release.active = false;
-    release.deletedAt = new Date().toISOString();
     release.deleteErrors = deleteErrors;
+    if (deleteErrors.length === 0) {
+      release.status = 'archived';
+      release.active = false;
+      release.archivedAt = new Date().toISOString();
+      if (release.cloud?.files) {
+        release.cloud.files.zip = null;
+        release.cloud.files.index = null;
+      }
+    }
     cleanupErrors.push(...deleteErrors.map(error => `${release.versionName}: ${error}`));
   }
   return cleanupErrors;
@@ -236,7 +256,7 @@ async function deletePublishedLanzouReleases(store) {
 async function deleteReleaseCloudFiles(store, release) {
   const deleteErrors = [];
   if (release.cloud?.provider !== 'lanzou') return deleteErrors;
-  for (const file of [release.cloud.files?.zip, release.cloud.files?.detail]) {
+  for (const file of [release.cloud.files?.zip, release.cloud.files?.index]) {
     if (!file?.fileId) continue;
     try {
       await deleteFile(store.settings.lanzou.cookie, file.fileId, release.cloud.folderId);
@@ -251,11 +271,44 @@ async function serveActiveReleaseFile(res, pathname) {
   const store = await loadStore();
   const active = store.releases.find(item => item.active && item.status !== 'deleted');
   if (!active) throw httpError(404, 'No active release.');
-  const relative = pathname === '/base.zip' ? active.local?.zipPath : active.local?.detailPath;
+  let relative = active.local?.indexPath;
+  if (pathname === '/base.zip') {
+    relative = active.local?.zipPath;
+  } else if (/^\/base-\d+\.(?:txt|json)$/.test(pathname)) {
+    const versionCode = Number(pathname.match(/^\/base-(\d+)\.(?:txt|json)$/)?.[1]);
+    const matchingRelease = store.releases.find(item =>
+      item.versionCode === versionCode &&
+      item.status !== 'deleted' &&
+      item.local?.detailPath
+    );
+    if (!matchingRelease?.local?.detailPath) {
+      throw httpError(404, `Release detail not found: ${pathname}`);
+    }
+    relative = matchingRelease.local.detailPath;
+  }
   if (!relative) throw httpError(404, 'Active release file is missing.');
   const absolute = path.resolve(MANAGER_ROOT, relative);
   if (!isPathInside(MANAGER_ROOT, absolute)) throw httpError(403, 'Invalid release path.');
   await streamFile(res, absolute);
+}
+
+function applyCloudUrlsToIndex(index, cloud) {
+  if (!index || !cloud?.files) return index;
+  const detailUrl = cloud.files.detail?.shareUrl || '';
+  const zipUrl = cloud.files.zip?.shareUrl || '';
+  return {
+    ...index,
+    current: index.current ? {
+      ...index.current,
+      detailUrl,
+      zipUrl,
+    } : index.current,
+    releases: (index.releases || []).map(release => (
+      release.versionCode === index.current?.versionCode
+        ? { ...release, detailUrl, zipUrl }
+        : release
+    )),
+  };
 }
 
 async function serveClient(res, url) {

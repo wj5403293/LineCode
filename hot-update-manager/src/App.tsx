@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Trash2,
   UploadCloud,
+  PackageOpen,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
@@ -76,7 +77,7 @@ function App() {
 
   const activeRelease = useMemo(() => summary?.releases.find(release => release.active) || null, [summary]);
   const publishedCount = useMemo(
-    () => summary?.releases.filter(release => release.status === 'published').length || 0,
+    () => summary?.releases.filter(release => release.status === 'published' || release.status === 'archived').length || 0,
     [summary],
   );
 
@@ -158,7 +159,7 @@ function App() {
   }, [refreshSummary, runAction]);
 
   const handleDelete = useCallback(async (release: ReleaseRecord) => {
-    if (!window.confirm(`删除 ${release.versionName} 的云端文件并归档该记录？`)) return;
+    if (!window.confirm(`删除 ${release.versionName} 的云端入口并从后续更新链路移除？`)) return;
     await runAction(`delete-${release.id}`, async () => {
       await api.deleteRelease(release.id, true);
       await refreshSummary();
@@ -186,7 +187,7 @@ function App() {
         </div>
 
         <Metric label="当前版本" value={activeRelease?.versionName || '未激活'} sub={activeRelease ? String(activeRelease.versionCode) : 'base.zip'} />
-        <Metric label="发布记录" value={String(summary?.releases.length || 0)} sub={`${publishedCount} 个云端版本`} />
+        <Metric label="发布记录" value={String(summary?.releases.length || 0)} sub={`${publishedCount} 个链路版本`} />
 
         <nav className="rail-nav" aria-label="管理器导航">
           <a href="#publish"><UploadCloud size={17} />发布</a>
@@ -255,7 +256,7 @@ function App() {
           </section>
 
           <section className="panel records-panel" id="records">
-            <PanelTitle icon={<FileArchive size={19} />} title="版本记录" action={summary?.updateHost.detailPath || '/base.zip.txt'} />
+            <PanelTitle icon={<FileArchive size={19} />} title="版本记录" action={summary?.updateHost.indexPath || '/base.txt'} />
             <ReleaseList
               releases={summary?.releases || []}
               busy={busy}
@@ -313,7 +314,7 @@ function TopBar({ summary, notice, error, busy }: { summary: SummaryData | null;
     <header className="top-bar">
       <div>
         <p className="eyebrow">发布面板</p>
-        <h2>base.zip / base.zip.txt</h2>
+        <h2>base.zip / base.txt</h2>
       </div>
       <div className="status-strip">
         <StatusPill tone={summary?.settings.lanzou.hasCookie ? 'good' : 'neutral'} label={summary?.settings.lanzou.hasCookie ? '云端已配置' : '云端未配置'} />
@@ -378,6 +379,8 @@ function InspectionView({ inspection }: { inspection: ArtifactInspection | null 
         <div><dt>Bundle</dt><dd>{inspection.manifest.bundlePath}</dd></div>
         <div><dt>文件</dt><dd>{inspection.manifest.fileCount}</dd></div>
         <div><dt>ZIP</dt><dd>{formatBytes(inspection.localFiles.zipSize)}</dd></div>
+        <div><dt>安装</dt><dd>{inspection.requiresApk ? '需要新版 APK' : '热更新'}</dd></div>
+        <div><dt>详情</dt><dd>{inspection.localFiles.detailFile}</dd></div>
       </dl>
       <pre className="changelog">{inspection.changelog || '暂无更新日志'}</pre>
       <div className="manifest-list">
@@ -431,8 +434,9 @@ function ReleaseList({
             <div>
               <div className="release-title">
                 <strong>{release.versionName}</strong>
-                <StatusPill tone={release.status === 'published' ? 'good' : release.status === 'deleted' ? 'danger' : 'neutral'} label={release.status} />
+                <StatusPill tone={statusTone(release.status)} label={statusLabel(release.status)} />
                 {release.active ? <StatusPill tone="warn" label="当前" /> : null}
+                {release.requiresApk ? <StatusPill tone="warn" label="需要 APK" /> : null}
               </div>
               <p>{release.changelog || '暂无更新日志'}</p>
             </div>
@@ -446,7 +450,9 @@ function ReleaseList({
             <div><dt>云端</dt><dd>{release.cloud ? `folder ${release.cloud.folderId}` : '未上传'}</dd></div>
           </dl>
 
-          {release.cloud ? <CloudLinks zip={release.cloud.files.zip} detail={release.cloud.files.detail} /> : null}
+          <ReleaseChain release={release} />
+
+          {release.cloud ? <CloudLinks zip={release.cloud.files.zip} index={release.cloud.files.index} detail={release.cloud.files.detail} /> : null}
 
           <div className="release-actions">
             <button className="secondary-button" type="button" onClick={() => onActivate(release)} disabled={Boolean(busy) || release.active || release.status === 'deleted'}>
@@ -464,29 +470,51 @@ function ReleaseList({
   );
 }
 
-function CloudLinks({ zip, detail }: { zip: CloudFile; detail: CloudFile }) {
+function ReleaseChain({ release }: { release: ReleaseRecord }) {
+  const chain = release.updateIndex?.releases || [{
+    versionCode: release.versionCode,
+    versionName: release.versionName,
+    changelog: release.changelog,
+    requiresApk: release.requiresApk,
+  }];
   return (
-    <div className="cloud-links">
-      <CloudLink label="base.zip" file={zip} />
-      <CloudLink label="base.zip.txt" file={detail} />
+    <div className="chain-list">
+      {chain.map(item => (
+        <div className="chain-row" key={item.versionCode}>
+          {item.requiresApk ? <PackageOpen size={15} /> : <FileArchive size={15} />}
+          <strong>{item.versionName}</strong>
+          <span>{item.requiresApk ? 'APK' : '热更新'}</span>
+          <p>{item.changelog || '暂无更新日志'}</p>
+        </div>
+      ))}
     </div>
   );
 }
 
-function CloudLink({ label, file }: { label: string; file: CloudFile }) {
+function CloudLinks({ zip, index, detail }: { zip: CloudFile | null; index: CloudFile | null; detail: CloudFile }) {
+  return (
+    <div className="cloud-links">
+      <CloudLink label="base.zip" file={zip} />
+      <CloudLink label="base.txt" file={index} />
+      <CloudLink label={detail.name || 'base-{version}.txt'} file={detail} />
+    </div>
+  );
+}
+
+function CloudLink({ label, file }: { label: string; file: CloudFile | null }) {
   const copy = useCallback(() => {
-    if (file.shareUrl) void navigator.clipboard?.writeText(file.shareUrl);
-  }, [file.shareUrl]);
+    if (file?.shareUrl) void navigator.clipboard?.writeText(file.shareUrl);
+  }, [file?.shareUrl]);
 
   return (
     <div className="cloud-link">
       <span>{label}</span>
-      <code>{file.fileId}</code>
+      <code>{file?.fileId || '已清理'}</code>
       <div className="cloud-link-actions">
-        <button className="icon-button" type="button" onClick={copy} title="复制链接" disabled={!file.shareUrl}>
+        <button className="icon-button" type="button" onClick={copy} title="复制链接" disabled={!file?.shareUrl}>
           <Copy size={15} />
         </button>
-        <a className="icon-button" href={file.shareUrl || '#'} target="_blank" rel="noreferrer" title="打开链接" aria-disabled={!file.shareUrl}>
+        <a className="icon-button" href={file?.shareUrl || '#'} target="_blank" rel="noreferrer" title="打开链接" aria-disabled={!file?.shareUrl}>
           <ExternalLink size={15} />
         </a>
       </div>
@@ -496,6 +524,20 @@ function CloudLink({ label, file }: { label: string; file: CloudFile }) {
 
 function StatusPill({ tone, label }: { tone: 'good' | 'warn' | 'danger' | 'neutral'; label: string }) {
   return <span className={`status-pill ${tone}`}>{label}</span>;
+}
+
+function statusTone(status: ReleaseRecord['status']): 'good' | 'warn' | 'danger' | 'neutral' {
+  if (status === 'published') return 'good';
+  if (status === 'archived') return 'warn';
+  if (status === 'deleted') return 'danger';
+  return 'neutral';
+}
+
+function statusLabel(status: ReleaseRecord['status']) {
+  if (status === 'published') return '已发布';
+  if (status === 'archived') return '链路保留';
+  if (status === 'deleted') return '已删除';
+  return '本地';
 }
 
 function formatDate(value: string) {
