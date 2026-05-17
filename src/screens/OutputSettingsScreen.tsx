@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScrollText, Globe, ExternalLink } from 'lucide-react-native';
-import { settingsService, BrowserMode } from '../services/settings';
+import { ScrollText, Globe, ExternalLink, Monitor, MessageCircle } from 'lucide-react-native';
+import { settingsService, BrowserMode, DisplayMode } from '../services/settings';
 import { spacing, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -16,18 +16,26 @@ interface Props {
 
 export default function OutputSettingsScreen({ onBack }: Props) {
   const insets = useSafeAreaInsets();
+  const [displayMode, setCurrentDisplayMode] = useState<DisplayMode>('fullscreen');
   const [codeWrapEnabled, setCodeWrapEnabled] = useState(false);
   const [browserMode, setBrowserMode] = useState<BrowserMode>('builtin');
   const { colors } = useTheme();
 
   useEffect(() => {
     Promise.all([
+      settingsService.getDisplayMode(),
       settingsService.getCodeWrap(),
       settingsService.getBrowserMode(),
-    ]).then(([wrap, browser]) => {
+    ]).then(([display, wrap, browser]) => {
+      setCurrentDisplayMode(display);
       setCodeWrapEnabled(wrap);
       setBrowserMode(browser);
     });
+  }, []);
+
+  const handleDisplayMode = useCallback(async (mode: DisplayMode) => {
+    await settingsService.setDisplayMode(mode);
+    setCurrentDisplayMode(mode);
   }, []);
 
   const handleToggleCodeWrap = useCallback(async (value: boolean) => {
@@ -42,9 +50,29 @@ export default function OutputSettingsScreen({ onBack }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <ScreenHeader title="输出设置" onBack={onBack} />
+      <ScreenHeader title="输出与浏览" onBack={onBack} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.section}>
+          <SectionHeader title="回复布局" />
+          <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>
+            <OptionRow
+              icon={<Monitor size={20} color={displayMode === 'fullscreen' ? colors.accent : colors.textSecondary} />}
+              label="全屏模式"
+              desc="AI 回复占满宽度，适合阅读代码"
+              active={displayMode === 'fullscreen'}
+              onPress={() => handleDisplayMode('fullscreen')}
+            />
+            <OptionRow
+              icon={<MessageCircle size={20} color={displayMode === 'bubble' ? colors.accent : colors.textSecondary} />}
+              label="气泡模式"
+              desc="传统聊天气泡样式"
+              active={displayMode === 'bubble'}
+              onPress={() => handleDisplayMode('bubble')}
+            />
+          </View>
+        </View>
+
         <View style={styles.section}>
           <SectionHeader title="代码显示" />
           <View style={[styles.optionGroup, { backgroundColor: colors.surfaceElevated }]}>

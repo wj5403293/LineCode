@@ -12,13 +12,15 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.JSch
-import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.util.Properties
 import kotlin.concurrent.thread
 
@@ -47,6 +49,7 @@ class SshModule(reactContext: ReactApplicationContext) :
         private const val TERMUX_RESULT_ERRMSG = "errmsg"
         private const val TERMUX_HOME = "/data/data/com.termux/files/home"
         private const val TERMUX_SH = "/data/data/com.termux/files/usr/bin/sh"
+        private const val SSH_OUTPUT_EVENT = "LineAISshOutput"
 
         private val TERMUX_SETUP_SCRIPT = """
             set -eu
@@ -127,6 +130,16 @@ class SshModule(reactContext: ReactApplicationContext) :
     override fun getName() = "SshModule"
 
     @ReactMethod
+    fun addListener(eventName: String) {
+        // Required by React Native event emitters.
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // Required by React Native event emitters.
+    }
+
+    @ReactMethod
     fun execute(
         host: String,
         port: Int,
@@ -136,6 +149,37 @@ class SshModule(reactContext: ReactApplicationContext) :
         passphrase: String,
         command: String,
         timeoutMs: Int,
+        promise: Promise
+    ) {
+        executeInternal(host, port, username, password, privateKey, passphrase, command, timeoutMs, null, promise)
+    }
+
+    @ReactMethod
+    fun executeStreaming(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        privateKey: String,
+        passphrase: String,
+        command: String,
+        timeoutMs: Int,
+        executionId: String,
+        promise: Promise
+    ) {
+        executeInternal(host, port, username, password, privateKey, passphrase, command, timeoutMs, executionId, promise)
+    }
+
+    private fun executeInternal(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        privateKey: String,
+        passphrase: String,
+        command: String,
+        timeoutMs: Int,
+        executionId: String?,
         promise: Promise
     ) {
         thread {
@@ -170,22 +214,24 @@ class SshModule(reactContext: ReactApplicationContext) :
                 channel = session.openChannel("exec") as ChannelExec
                 channel.setCommand(command)
 
-                val stdout = ByteArrayOutputStream()
-                val stderr = ByteArrayOutputStream()
-                channel.outputStream = stdout
-                channel.setErrStream(stderr)
+                val stdout = channel.inputStream
+                val stderr = channel.errStream
                 channel.connect(timeoutMs)
 
                 val startedAt = System.currentTimeMillis()
+                val output = StringBuilder()
+                val error = StringBuilder()
                 while (!channel.isClosed) {
                     if (System.currentTimeMillis() - startedAt > timeoutMs) {
                         throw RuntimeException("命令执行超时")
                     }
+                    drainAvailable(stdout, "stdout", executionId, output)
+                    drainAvailable(stderr, "stderr", executionId, error)
                     Thread.sleep(100)
                 }
+                drainAvailable(stdout, "stdout", executionId, output)
+                drainAvailable(stderr, "stderr", executionId, error)
 
-                val output = stdout.toString("UTF-8")
-                val error = stderr.toString("UTF-8")
                 val exitStatus = channel.exitStatus
                 val combined = buildString {
                     if (output.isNotBlank()) append(output)
@@ -195,6 +241,13 @@ class SshModule(reactContext: ReactApplicationContext) :
                     }
                     if (isBlank()) append("exit status: $exitStatus")
                 }
+                emitSshOutput(
+                    executionId,
+                    "system",
+                    "",
+                    done = true,
+                    exitStatus = exitStatus
+                )
 
                 if (exitStatus == 0) {
                     promise.resolve(combined)
@@ -207,6 +260,50 @@ class SshModule(reactContext: ReactApplicationContext) :
                 try { channel?.disconnect() } catch (_: Exception) {}
                 try { session?.disconnect() } catch (_: Exception) {}
             }
+        }
+    }
+
+    private fun drainAvailable(
+        stream: InputStream,
+        streamName: String,
+        executionId: String?,
+        target: StringBuilder
+    ): Boolean {
+        var emitted = false
+        val buffer = ByteArray(4096)
+        while (stream.available() > 0) {
+            val read = stream.read(buffer, 0, minOf(buffer.size, stream.available()))
+            if (read <= 0) break
+            val chunk = String(buffer, 0, read, Charsets.UTF_8)
+            target.append(chunk)
+            emitSshOutput(executionId, streamName, chunk)
+            emitted = true
+        }
+        return emitted
+    }
+
+    private fun emitSshOutput(
+        executionId: String?,
+        stream: String,
+        data: String,
+        done: Boolean = false,
+        exitStatus: Int? = null
+    ) {
+        if (executionId.isNullOrBlank()) return
+
+        try {
+            val params = Arguments.createMap()
+            params.putString("executionId", executionId)
+            params.putString("stream", stream)
+            params.putString("data", data)
+            params.putBoolean("done", done)
+            if (exitStatus != null) {
+                params.putInt("exitStatus", exitStatus)
+            }
+            reactApplicationContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(SSH_OUTPUT_EVENT, params)
+        } catch (_: Exception) {
         }
     }
 

@@ -10,10 +10,13 @@ LineCode is a React Native TypeScript app. App entry points live in `index.js` a
 - `npm run android`: builds the prompt and runs the Android app.
 - `npm run ios`: builds the prompt and runs the iOS app.
 - `npm run build-prompt`: regenerates `src/constants/prompt.ts` from prompt assets.
+- `npm run build-hot-update -- --changelog "<summary>"`: syncs versions, builds the prompt, and generates `dist/hot-update/base.zip` plus `base.zip.txt`.
 - `npm test`: runs Jest with the React Native preset.
 - `npm run lint`: runs ESLint across the repository.
 
 Use Node `>=22.11.0`, as declared in `package.json`.
+
+Manage app, native, and hot update versions only through `version.json`; run `npm run sync-version` or a build command after changing it. When generating a hot update, increment `hotUpdateVersionCode` and provide a meaningful changelog with `--changelog` or `--changelog-file` that describes the actual change. Do not leave the default `Hot update <version>` text, because it is shown to users and is not useful for testing or release notes.
 
 ## Coding Style & Naming Conventions
 

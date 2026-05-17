@@ -45,6 +45,8 @@ export interface ContentBlock {
     lockedBy: string;
   };
   compactStatus?: 'running' | 'done' | 'error';
+  shellStatus?: 'running' | 'done' | 'error';
+  shellOutput?: string;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';

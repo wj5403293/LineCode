@@ -141,6 +141,8 @@ export default React.memo(function ToolCallBlock({
         input={input}
         result={result}
         isError={isError}
+        streaming={block?.shellStatus === 'running' && !result}
+        streamingOutput={block?.shellOutput}
         pending={pending}
         onCancel={onShellCancel}
         onConfirm={onShellConfirm}

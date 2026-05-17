@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules, Platform } from 'react-native';
+import { DeviceEventEmitter, EmitterSubscription, NativeModules, Platform } from 'react-native';
 
 export interface SSHConfig {
   host: string;
@@ -29,12 +29,42 @@ interface SshNativeModule {
     command: string,
     timeoutMs: number,
   ): Promise<string>;
+  executeStreaming?(
+    host: string,
+    port: number,
+    username: string,
+    password: string,
+    privateKey: string,
+    passphrase: string,
+    command: string,
+    timeoutMs: number,
+    executionId: string,
+  ): Promise<string>;
   setupTermuxSshd(timeoutMs: number): Promise<string>;
   openLineAiAppSettings(): Promise<boolean>;
   openTermux(): Promise<boolean>;
 }
 
 const Ssh = NativeModules.SshModule as SshNativeModule | undefined;
+const SSH_OUTPUT_EVENT = 'LineAISshOutput';
+
+interface SshOutputEvent {
+  executionId?: string;
+  stream?: 'stdout' | 'stderr' | 'system';
+  data?: string;
+  done?: boolean;
+  exitStatus?: number;
+}
+
+export interface SSHExecuteOptions {
+  executionId?: string;
+  onOutput?: (event: {
+    stream: 'stdout' | 'stderr' | 'system';
+    data: string;
+    done?: boolean;
+    exitStatus?: number;
+  }) => void;
+}
 
 const DEFAULT_CONFIG: SSHConfig = {
   host: '127.0.0.1',
@@ -85,7 +115,12 @@ class SSHService {
     return this.hasRequiredFields(config);
   }
 
-  async executeCommand(command: string, timeoutMs = 30000, configOverride?: SSHConfig): Promise<string> {
+  async executeCommand(
+    command: string,
+    timeoutMs = 30000,
+    configOverride?: SSHConfig,
+    options: SSHExecuteOptions = {},
+  ): Promise<string> {
     if (!command.trim()) {
       throw new Error('命令不能为空');
     }
@@ -99,16 +134,51 @@ class SSHService {
     }
 
     const boundedTimeout = Math.max(1000, Math.min(Number(timeoutMs || 30000), 300000));
-    return Ssh.execute(
-      config.host,
-      config.port,
-      config.username,
-      config.password,
-      config.privateKey,
-      config.passphrase,
-      command,
-      boundedTimeout,
-    );
+    const executionId = options.executionId || `ssh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const canStream = !!options.onOutput && !!Ssh.executeStreaming;
+    let subscription: EmitterSubscription | null = null;
+
+    if (canStream) {
+      subscription = DeviceEventEmitter.addListener(SSH_OUTPUT_EVENT, (event: SshOutputEvent) => {
+        if (event.executionId !== executionId) return;
+        const stream = event.stream === 'stderr' || event.stream === 'system' ? event.stream : 'stdout';
+        options.onOutput?.({
+          stream,
+          data: String(event.data || ''),
+          done: event.done,
+          exitStatus: event.exitStatus,
+        });
+      });
+    }
+
+    try {
+      if (canStream && Ssh.executeStreaming) {
+        return await Ssh.executeStreaming(
+          config.host,
+          config.port,
+          config.username,
+          config.password,
+          config.privateKey,
+          config.passphrase,
+          command,
+          boundedTimeout,
+          executionId,
+        );
+      }
+
+      return await Ssh.execute(
+        config.host,
+        config.port,
+        config.username,
+        config.password,
+        config.privateKey,
+        config.passphrase,
+        command,
+        boundedTimeout,
+      );
+    } finally {
+      subscription?.remove();
+    }
   }
 
   async testConnection(config: SSHConfig): Promise<string> {

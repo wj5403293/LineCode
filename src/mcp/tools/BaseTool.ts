@@ -2,6 +2,7 @@ import { ToolCategory, ToolResult, ContentBlock, ToolCall } from '../../types';
 
 export interface ToolContext {
   homePath: string;
+  toolCallId?: string;
   onProgress?: (update: Partial<ContentBlock>) => void;
   onConfirm?: (toolCall: ToolCall) => Promise<boolean>;
 }

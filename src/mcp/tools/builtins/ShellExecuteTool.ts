@@ -17,7 +17,7 @@ export class ShellExecuteTool extends BaseTool {
     required: ['command'],
   };
 
-  async execute(input: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
+  async execute(input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const inputCommand = String(input.command || '');
     const inputCwd = typeof input.cwd === 'string' ? input.cwd : '';
     if (!inputCommand.trim()) {
@@ -28,12 +28,39 @@ export class ShellExecuteTool extends BaseTool {
     const command = inputCwd.trim()
       ? `cd ${this.shellQuote(inputCwd.trim())} && ${inputCommand}`
       : inputCommand;
+    let streamedOutput = '';
 
     try {
-      const output = await sshService.executeCommand(command, timeoutMs);
+      const executionId = `${context.toolCallId || 'shell'}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      context.onProgress?.({
+        shellStatus: 'running',
+        shellOutput: '',
+      });
+
+      const output = await sshService.executeCommand(command, timeoutMs, undefined, {
+        executionId,
+        onOutput: (event) => {
+          if (event.done) return;
+          if (!event.data) return;
+          streamedOutput += event.data;
+          context.onProgress?.({
+            shellStatus: 'running',
+            shellOutput: streamedOutput,
+          });
+        },
+      });
+      context.onProgress?.({
+        shellStatus: 'done',
+        shellOutput: output || streamedOutput || '命令执行完成，无输出',
+      });
       return { toolCallId: '', content: output || '命令执行完成，无输出' };
     } catch (err: any) {
-      return { toolCallId: '', content: `命令执行失败: ${err.message || String(err)}`, isError: true };
+      const message = `命令执行失败: ${err.message || String(err)}`;
+      context.onProgress?.({
+        shellStatus: 'error',
+        shellOutput: streamedOutput ? `${streamedOutput}\n${message}` : message,
+      });
+      return { toolCallId: '', content: message, isError: true };
     }
   }
 

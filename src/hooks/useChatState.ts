@@ -22,6 +22,7 @@ import { ContextMetricsService } from '../chat/ContextMetricsService';
 import { ConversationPersistenceScheduler } from '../chat/persistence/ConversationPersistenceScheduler';
 import { StreamBufferedUpdate, StreamUpdateBuffer } from '../chat/StreamUpdateBuffer';
 import { ToolExecutionCoordinator } from '../chat/ToolExecutionCoordinator';
+import { sanitizeToolCallForStorage } from '../utils/toolPayload';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -415,7 +416,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   ): Promise<{ toolMsg: Message; toolResult: ToolResult }> => {
     const toolResult = await executeTool(tc, {
       onProgress: (update: Partial<ContentBlock>) => {
-        if (tc.name === 'agent' || tc.name === 'agent_pipeline') {
+        if (tc.name === 'agent' || tc.name === 'agent_pipeline' || tc.name === 'shell_execute') {
           syncMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.blocks) {
               const updatedBlocks = m.blocks.map(b => {
@@ -777,7 +778,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
           role: 'assistant',
           content: result.text,
           blocks: result.blocks,
-          toolCalls: result.toolCalls,
+          toolCalls: result.toolCalls?.map(sanitizeToolCallForStorage),
           timestamp: Date.now(),
           streaming: false,
           reasoningContent: result.reasoningContent,

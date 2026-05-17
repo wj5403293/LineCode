@@ -348,7 +348,7 @@ export class AgentPipelineTool extends BaseTool {
             continue;
           }
 
-          const context: ToolContext = { homePath, onProgress, onConfirm };
+          const context: ToolContext = { homePath, toolCallId: tc.id, onProgress, onConfirm };
           let toolResult: ToolResult;
 
           try {

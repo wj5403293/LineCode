@@ -18,6 +18,7 @@ interface ToolCallRendererProps {
   reviewState?: 'accepted' | 'rejected';
   homePath?: string;
   streaming?: boolean;
+  streamingOutput?: string;
   onReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
@@ -31,6 +32,7 @@ export function ToolCallRenderer({
   reviewState,
   homePath,
   streaming,
+  streamingOutput,
   onReview,
 }: ToolCallRendererProps) {
   const { colors } = useTheme();
@@ -84,7 +86,15 @@ export function ToolCallRenderer({
   }
 
   if (isShellTool(name)) {
-    return <ToolCallShell input={input} result={result} isError={isError} />;
+    return (
+      <ToolCallShell
+        input={input}
+        result={result}
+        isError={isError}
+        streaming={streaming}
+        streamingOutput={streamingOutput}
+      />
+    );
   }
 
   return (

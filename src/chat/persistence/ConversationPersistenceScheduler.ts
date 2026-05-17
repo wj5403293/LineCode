@@ -1,5 +1,6 @@
 import { Message } from '../../types';
 import { conversationStore } from '../../services/conversation';
+import { sanitizeMessagesForStorage } from '../../utils/toolPayload';
 
 const DEFAULT_DEBOUNCE_MS = 1200;
 
@@ -22,7 +23,7 @@ export class ConversationPersistenceScheduler {
   markPersisted(messages: Message[], conversationId = this.conversationId) {
     if (!conversationId) return;
     this.pendingMessages = null;
-    this.lastPersistedJsonByConversation.set(conversationId, JSON.stringify(messages));
+    this.lastPersistedJsonByConversation.set(conversationId, JSON.stringify(sanitizeMessagesForStorage(messages)));
   }
 
   schedule(messages: Message[], conversationId = this.conversationId) {
@@ -44,9 +45,10 @@ export class ConversationPersistenceScheduler {
     this.flushPromise = this.flushPromise
       .catch(() => {})
       .then(async () => {
-        const json = JSON.stringify(messages);
+        const sanitizedMessages = sanitizeMessagesForStorage(messages);
+        const json = JSON.stringify(sanitizedMessages);
         if (this.lastPersistedJsonByConversation.get(conversationId) === json) return;
-        await conversationStore.updateConversation(conversationId, { messages });
+        await conversationStore.updateConversation(conversationId, { messages: sanitizedMessages });
         this.lastPersistedJsonByConversation.set(conversationId, json);
       });
 

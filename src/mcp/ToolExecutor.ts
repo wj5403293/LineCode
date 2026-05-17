@@ -51,7 +51,8 @@ export async function executeTool(
 
   const homePath = await getHomePath();
   const context: ToolContext = { 
-    homePath, 
+    homePath,
+    toolCallId: toolCall.id,
     onProgress: options?.onProgress,
     onConfirm: options?.onConfirm,
   };

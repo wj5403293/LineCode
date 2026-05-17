@@ -262,7 +262,7 @@ export class AgentTool extends BaseTool {
       }
     }
 
-    const context: ToolContext = { homePath };
+    const context: ToolContext = { homePath, toolCallId: toolCall.id };
 
     try {
       if (isWriteTool(toolCall.name)) {

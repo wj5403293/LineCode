@@ -17,6 +17,7 @@ import {
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
+import SectionHeader from '../components/SectionHeader';
 
 interface Props {
   onBack: () => void;
@@ -32,17 +33,66 @@ interface Props {
   onExperimental: () => void;
 }
 
-const SETTINGS_ITEMS = [
-  { id: 'models', label: '模型管理', desc: '添加、删除和切换模型', icon: Box },
-  { id: 'llm', label: 'LLM 设置', desc: '显示模式和交流语气', icon: Brain },
-  { id: 'mcp', label: 'MCP 工具', desc: '文件操作和 HTTP 服务器', icon: Wrench },
-  { id: 'theme', label: '主题设置', desc: '亮色/暗色/跟随系统', icon: Palette },
-  { id: 'output', label: '输出设置', desc: '代码显示和格式化选项', icon: Monitor },
-  { id: 'storage', label: '存储管理', desc: '查看 diff、聊天、配置和当前工作区大小', icon: Database },
-  { id: 'keepAlive', label: '保活设置', desc: '前台服务、静音播放和电池白名单', icon: BatteryCharging },
-  { id: 'experimental', label: '实验性功能', desc: '数学公式渲染', icon: FlaskConical },
-  { id: 'data', label: '数据与更新', desc: '热更新、导出和导入 .linecode', icon: Archive },
-  { id: 'about', label: '关于', desc: '版本信息和开源许可', icon: Cpu },
+type SettingsItemId =
+  | 'models'
+  | 'llm'
+  | 'mcp'
+  | 'theme'
+  | 'output'
+  | 'storage'
+  | 'keepAlive'
+  | 'experimental'
+  | 'data'
+  | 'about';
+
+type SettingsItem = {
+  id: SettingsItemId;
+  label: string;
+  desc: string;
+  icon: typeof Box;
+};
+
+type SettingsSection = {
+  title: string;
+  items: SettingsItem[];
+};
+
+const SETTINGS_SECTIONS: SettingsSection[] = [
+  {
+    title: 'AI 与模型',
+    items: [
+      { id: 'models', label: '模型管理', desc: '供应商、密钥、模型 ID 和默认模型', icon: Box },
+      { id: 'llm', label: 'AI 行为', desc: '思考强度、交流语气和 reasoning 保留', icon: Brain },
+    ],
+  },
+  {
+    title: '工具与执行',
+    items: [
+      { id: 'mcp', label: '工具与执行', desc: 'MCP 工具开关、SSH 执行和网页搜索', icon: Wrench },
+    ],
+  },
+  {
+    title: '界面与输出',
+    items: [
+      { id: 'theme', label: '主题与外观', desc: '主题模式、自定义颜色和高对比外观', icon: Palette },
+      { id: 'output', label: '输出与浏览', desc: '回复布局、代码换行和网页打开方式', icon: Monitor },
+      { id: 'experimental', label: '实验性渲染', desc: '仍在验证的消息渲染能力', icon: FlaskConical },
+    ],
+  },
+  {
+    title: '数据与系统',
+    items: [
+      { id: 'storage', label: '存储管理', desc: '聊天、配置、diff 和工作区占用', icon: Database },
+      { id: 'data', label: '数据与更新', desc: '热更新、完整导出和 .linecode 导入', icon: Archive },
+      { id: 'keepAlive', label: '后台保活', desc: 'Wake Lock、前台服务和电池白名单', icon: BatteryCharging },
+    ],
+  },
+  {
+    title: '信息',
+    items: [
+      { id: 'about', label: '关于 LineCode', desc: '版本、诊断、开源许可和调试入口', icon: Cpu },
+    ],
+  },
 ];
 
 export default function SettingsScreen({
@@ -61,17 +111,39 @@ export default function SettingsScreen({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const handlePress = (id: string) => {
-    if (id === 'models') onModels();
-    if (id === 'output') onOutput();
-    if (id === 'llm') onLLM();
-    if (id === 'mcp') onMCP();
-    if (id === 'theme') onTheme();
-    if (id === 'data') onData();
-    if (id === 'storage') onStorage();
-    if (id === 'keepAlive') onKeepAlive();
-    if (id === 'experimental') onExperimental();
-    if (id === 'about') onAbout();
+  const handlePress = (id: SettingsItemId) => {
+    switch (id) {
+      case 'models':
+        onModels();
+        break;
+      case 'output':
+        onOutput();
+        break;
+      case 'llm':
+        onLLM();
+        break;
+      case 'mcp':
+        onMCP();
+        break;
+      case 'theme':
+        onTheme();
+        break;
+      case 'data':
+        onData();
+        break;
+      case 'storage':
+        onStorage();
+        break;
+      case 'keepAlive':
+        onKeepAlive();
+        break;
+      case 'experimental':
+        onExperimental();
+        break;
+      case 'about':
+        onAbout();
+        break;
+    }
   };
 
   return (
@@ -79,26 +151,37 @@ export default function SettingsScreen({
       <ScreenHeader title="设置" onBack={onBack} />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {SETTINGS_ITEMS.map(item => {
-          const Icon = item.icon;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.item, { backgroundColor: colors.surfaceElevated }]}
-              onPress={() => handlePress(item.id)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.itemIcon, { backgroundColor: colors.accentMuted }]}>
-                <Icon size={20} color={colors.accent} />
-              </View>
-              <View style={styles.itemContent}>
-                <Text style={[styles.itemLabel, { color: colors.text }]}>{item.label}</Text>
-                <Text style={[styles.itemDesc, { color: colors.textTertiary }]}>{item.desc}</Text>
-              </View>
-              <ChevronRight size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-          );
-        })}
+        {SETTINGS_SECTIONS.map(section => (
+          <View key={section.title} style={styles.section}>
+            <SectionHeader title={section.title} />
+            <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
+              {section.items.map((item, index) => {
+                const Icon = item.icon;
+                const showDivider = index < section.items.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.item,
+                      showDivider && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
+                    ]}
+                    onPress={() => handlePress(item.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.itemIcon, { backgroundColor: colors.accentMuted }]}>
+                      <Icon size={20} color={colors.accent} />
+                    </View>
+                    <View style={styles.itemContent}>
+                      <Text style={[styles.itemLabel, { color: colors.text }]}>{item.label}</Text>
+                      <Text style={[styles.itemDesc, { color: colors.textTertiary }]}>{item.desc}</Text>
+                    </View>
+                    <ChevronRight size={16} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -107,12 +190,17 @@ export default function SettingsScreen({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1 },
-  scrollContent: { paddingTop: spacing.lg, paddingBottom: 100 },
+  scrollContent: { paddingBottom: 100 },
+  section: { paddingTop: spacing.xl },
+  group: {
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
   item: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-    marginHorizontal: spacing.lg, marginBottom: spacing.sm,
-    borderRadius: radius.md, gap: spacing.md,
+    gap: spacing.md,
   },
   itemIcon: {
     width: 36, height: 36, borderRadius: 18,

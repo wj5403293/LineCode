@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { AlertCircle, Check, ExternalLink, Play, Terminal, X, Zap } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { AlertCircle, Check, ChevronDown, ChevronRight, ExternalLink, Play, Terminal, X, Zap } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 
@@ -8,6 +8,8 @@ interface Props {
   input: Record<string, unknown>;
   result?: string;
   isError?: boolean;
+  streaming?: boolean;
+  streamingOutput?: string;
   pending?: boolean;
   onCancel?: () => void;
   onConfirm?: () => void;
@@ -19,6 +21,8 @@ export default React.memo(function ToolCallShell({
   input,
   result,
   isError,
+  streaming,
+  streamingOutput,
   pending,
   onCancel,
   onConfirm,
@@ -27,18 +31,34 @@ export default React.memo(function ToolCallShell({
 }: Props) {
   const { colors } = useTheme();
   const command = String(input.command || '');
+  const [expanded, setExpanded] = useState(false);
+  const displayResult = streaming ? (streamingOutput || '正在执行...') : (result || '');
+  const outputLines = useMemo(() => {
+    if (!displayResult) return [];
+    return displayResult.split(/\r?\n/);
+  }, [displayResult]);
+  const hasOutput = outputLines.length > 0;
+  const canExpand = hasOutput && (outputLines.length > 4 || displayResult.length > 240 || !!streaming);
+  const preview = useMemo(() => {
+    if (!displayResult) return '';
+    if (expanded) return displayResult;
+    const tail = outputLines.slice(-4).join('\n');
+    return tail.length > 320 ? `${tail.slice(tail.length - 320)}` : tail;
+  }, [displayResult, expanded, outputLines]);
+  const statusColor = isError ? colors.danger : streaming ? colors.accent : colors.success;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.codeBg }]}>
       <View style={styles.header}>
-        <Terminal size={14} color={isError ? colors.danger : colors.textTertiary} />
+        <Terminal size={14} color={isError ? colors.danger : streaming ? colors.accent : colors.textTertiary} />
         <Text
-          style={[styles.command, { color: isError ? colors.danger : colors.textTertiary }]}
+          style={[styles.command, { color: isError ? colors.danger : streaming ? colors.accent : colors.textTertiary }]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
           {command || 'shell_execute'}
         </Text>
+        {streaming && <ActivityIndicator size="small" color={colors.accent} />}
         {onViewCommand && (
           <TouchableOpacity
             style={[styles.viewButton, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
@@ -82,17 +102,51 @@ export default React.memo(function ToolCallShell({
           </TouchableOpacity>
         </View>
       )}
-      {!!result && (
-        <View style={styles.resultRow}>
-          {isError
-            ? <AlertCircle size={12} color={colors.danger} />
-            : <Check size={12} color={colors.success} />}
-          <Text
-            style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}
-            numberOfLines={4}
+      {!!displayResult && (
+        <View style={[styles.outputSection, { borderTopColor: colors.codeBorder }]}>
+          <TouchableOpacity
+            style={styles.outputHeader}
+            onPress={() => canExpand && setExpanded(prev => !prev)}
+            activeOpacity={canExpand ? 0.72 : 1}
+            disabled={!canExpand}
           >
-            {result}
-          </Text>
+            {streaming ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : isError ? (
+              <AlertCircle size={12} color={colors.danger} />
+            ) : (
+              <Check size={12} color={colors.success} />
+            )}
+            <Text style={[styles.outputTitle, { color: statusColor }]}>
+              {streaming ? '执行中' : isError ? '执行失败' : '执行完成'}
+            </Text>
+            <Text style={[styles.outputMeta, { color: colors.textTertiary }]}>
+              {outputLines.length} 行
+            </Text>
+            {canExpand && (
+              expanded
+                ? <ChevronDown size={13} color={colors.textTertiary} />
+                : <ChevronRight size={13} color={colors.textTertiary} />
+            )}
+          </TouchableOpacity>
+          {expanded ? (
+            <ScrollView
+              style={[styles.expandedOutput, { backgroundColor: colors.surface, borderColor: colors.codeBorder }]}
+              nestedScrollEnabled
+            >
+              <Text selectable style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}>
+                {preview}
+              </Text>
+            </ScrollView>
+          ) : (
+            <Text
+              selectable
+              style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}
+              numberOfLines={4}
+            >
+              {preview}
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -193,17 +247,36 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     fontWeight: '600',
   },
-  resultRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  outputSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.xs,
     gap: 4,
-    marginTop: 2,
   },
-  result: {
+  outputHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    minHeight: 22,
+  },
+  outputTitle: {
+    fontSize: fontSizes.xs,
+    fontWeight: '700',
+  },
+  outputMeta: {
     flex: 1,
     minWidth: 0,
     fontSize: fontSizes.xs,
+    textAlign: 'right',
+  },
+  result: {
+    fontSize: fontSizes.xs,
     lineHeight: 17,
     fontFamily: 'monospace',
+  },
+  expandedOutput: {
+    maxHeight: 220,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
   },
 });
