@@ -1,62 +1,75 @@
+import { safTreeUriToFileSystemPath } from '../src/services/AndroidExternalStorage';
 import {
   basename,
   joinWorkspacePath,
   parentPath,
-  safUriToFileSystemPath,
+  relativeWorkspacePath,
   toDisplayPath,
+  toToolDisplayPath,
 } from '../src/services/WorkspaceFileSystem';
 
-describe('WorkspaceFileSystem SAF paths', () => {
+describe('AndroidExternalStorage URI path conversion', () => {
   it('converts primary tree URIs to Android storage paths', () => {
-    expect(safUriToFileSystemPath('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode')).toBe('/storage/emulated/0/Download/LineCode');
+    expect(
+      safTreeUriToFileSystemPath('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode'),
+    ).toBe('/storage/emulated/0/Download/LineCode');
   });
 
   it('converts document URIs below a selected tree', () => {
     expect(
-      safUriToFileSystemPath(
+      safTreeUriToFileSystemPath(
         'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode/document/primary%3ADownload%2FLineCode%2Fsrc%2FApp.tsx',
       ),
     ).toBe('/storage/emulated/0/Download/LineCode/src/App.tsx');
   });
 
-  it('converts denormalized SAF URIs returned by file listing', () => {
-    expect(toDisplayPath('content://com.android.externalstorage.documents/tree/1707-3F0B:joplin/locks')).toBe('/storage/1707-3F0B/joplin/locks');
-  });
-
-  it('uses converted paths for basenames', () => {
-    expect(basename('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode')).toBe('LineCode');
-  });
-
-  it('resolves relative paths inside a SAF workspace', () => {
+  it('converts the Android downloads provider root', () => {
     expect(
-      joinWorkspacePath(
-        'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode',
-        'src/App.tsx',
-      ),
-    ).toBe('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode/src/App.tsx');
+      safTreeUriToFileSystemPath('content://com.android.providers.downloads.documents/tree/downloads'),
+    ).toBe('/storage/emulated/0/Download');
   });
 
-  it('maps displayed Android storage paths back into the SAF workspace', () => {
+  it('rejects provider IDs that cannot be represented as file-system paths', () => {
     expect(
-      joinWorkspacePath(
-        'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode',
-        '/storage/emulated/0/Download/LineCode/src/App.tsx',
-      ),
-    ).toBe('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode/src/App.tsx');
+      safTreeUriToFileSystemPath('content://com.android.providers.downloads.documents/tree/msf%3A42'),
+    ).toBeNull();
+  });
+});
+
+describe('WorkspaceFileSystem local paths', () => {
+  it('uses converted paths for basenames and display labels', () => {
+    expect(basename('/storage/emulated/0/Download/LineCode')).toBe('LineCode');
+    expect(toDisplayPath('file:///storage/emulated/0/Download/LineCode')).toBe('/storage/emulated/0/Download/LineCode');
   });
 
-  it('leaves absolute paths outside the SAF workspace as file-system paths', () => {
+  it('resolves relative paths inside a normal workspace', () => {
     expect(
-      joinWorkspacePath(
-        'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode',
-        '/storage/emulated/0/Documents/Other/App.tsx',
-      ),
+      joinWorkspacePath('/storage/emulated/0/Download/LineCode', 'src/App.tsx'),
+    ).toBe('/storage/emulated/0/Download/LineCode/src/App.tsx');
+  });
+
+  it('keeps absolute child paths unchanged', () => {
+    expect(
+      joinWorkspacePath('/storage/emulated/0/Download/LineCode', '/storage/emulated/0/Documents/Other/App.tsx'),
     ).toBe('/storage/emulated/0/Documents/Other/App.tsx');
   });
 
-  it('computes parent SAF paths without corrupting the URI authority', () => {
+  it('computes relative tool paths below the workspace root', () => {
     expect(
-      parentPath('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode/src/App.tsx'),
-    ).toBe('content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode%2Fsrc');
+      relativeWorkspacePath(
+        '/storage/emulated/0/Download/LineCode/src/App.tsx',
+        '/storage/emulated/0/Download/LineCode',
+      ),
+    ).toBe('src/App.tsx');
+    expect(
+      toToolDisplayPath(
+        '/storage/emulated/0/Download/LineCode',
+        '/storage/emulated/0/Download/LineCode',
+      ),
+    ).toBe('当前工作目录');
+  });
+
+  it('computes parent file-system paths', () => {
+    expect(parentPath('/storage/emulated/0/Download/LineCode/src/App.tsx')).toBe('/storage/emulated/0/Download/LineCode/src');
   });
 });

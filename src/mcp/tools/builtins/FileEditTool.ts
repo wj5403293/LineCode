@@ -22,7 +22,7 @@ export class FileEditTool extends BaseTool {
       const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
       const exists = await workspaceFs.exists(filePath);
       if (!exists) {
-        return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
+        return { content: `文件不存在: ${workspaceFs.toToolDisplayPath(filePath, context.homePath)}`, toolCallId: '', isError: true };
       }
 
       try {

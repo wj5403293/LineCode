@@ -508,6 +508,7 @@ class HotUpdateService {
   private isStateForCurrentApk(state: HotUpdateState | null): boolean {
     return Boolean(
       state &&
+      state.installedVersionCode >= APP_HOT_UPDATE_VERSION_CODE &&
       state.installedApkVersionName === APP_VERSION &&
       state.installedApkVersionCode === APP_ANDROID_VERSION_CODE,
     );

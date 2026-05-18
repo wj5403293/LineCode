@@ -85,11 +85,6 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, 
     try {
       const zipPath = `${RNFS.DocumentDirectoryPath}/linecode_home_export.zip`;
       const { zip } = require('react-native-zip-archive');
-      if (homePath.startsWith('content://')) {
-        setExportError('SAF 外部目录暂不支持直接导出 ZIP。');
-        setExportResult(null);
-        return;
-      }
       await zip(homePath, zipPath);
 
       if (Platform.OS === 'android') {

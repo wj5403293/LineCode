@@ -22,7 +22,7 @@ export class FileReadTool extends BaseTool {
       const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
       const exists = await workspaceFs.exists(filePath);
       if (!exists) {
-        return { content: `文件不存在: ${filePath}`, toolCallId: '', isError: true };
+        return { content: `文件不存在: ${workspaceFs.toToolDisplayPath(filePath, context.homePath)}`, toolCallId: '', isError: true };
       }
 
       try {
@@ -31,9 +31,9 @@ export class FileReadTool extends BaseTool {
           throw new Error('not directory');
         }
         const items = await workspaceFs.readDir(filePath);
-        const list = await this.listDir(items, '');
+        const list = await this.listDir(items);
         return {
-          content: `目录 ${workspaceFs.toDisplayPath(filePath)}:\n${list}\n\n如需读取文件，请指定具体文件路径。`,
+          content: `目录 ${workspaceFs.toToolDisplayPath(filePath, context.homePath)}:\n${list || '(空目录)'}\n\n如需读取文件，请指定具体文件路径。`,
           toolCallId: ''
         };
       } catch {
@@ -58,18 +58,18 @@ export class FileReadTool extends BaseTool {
     }
   }
 
-  private async listDir(items: WorkspaceFileItem[], prefix: string): Promise<string> {
+  private async listDir(items: WorkspaceFileItem[], parentPath = ''): Promise<string> {
     let result = '';
     for (const item of items) {
-      const indent = prefix ? '  ' + prefix : '';
+      const relativePath = parentPath ? `${parentPath}/${item.name}` : item.name;
       if (item.isDirectory()) {
-        result += `${indent}[DIR]  ${item.name}/\n`;
+        result += `[DIR]  ${relativePath}/\n`;
         try {
           const subItems = await workspaceFs.readDir(item.path);
-          result += await this.listDir(subItems, prefix + '  ');
+          result += await this.listDir(subItems, relativePath);
         } catch {}
       } else {
-        result += `${indent}[FILE] ${item.name}\n`;
+        result += `[FILE] ${relativePath}\n`;
       }
     }
     return result;

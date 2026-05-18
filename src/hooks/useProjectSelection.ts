@@ -42,7 +42,7 @@ export function useProjectSelection() {
   }, []);
 
   const handleOpenProject = useCallback(async () => {
-    const selected = await projectService.openSafProject();
+    const selected = await projectService.openExternalProject();
     if (selected) {
       const nextProjects = await projectService.getProjects();
       setProjects(nextProjects);

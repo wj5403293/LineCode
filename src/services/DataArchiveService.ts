@@ -107,9 +107,6 @@ class DataArchiveService {
       await copyDir(CONVERSATION_FILES_DIR, `${payloadDir}/${CONVERSATION_ARCHIVE_DIR}`);
       await copyDir(DIFF_FILES_DIR, `${payloadDir}/${DIFF_ARCHIVE_DIR}`);
       const homeDir = await projectService.getCurrentHomePath();
-      if (homeDir.startsWith('content://')) {
-        throw new Error('导出完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
-      }
       await copyDir(homeDir, `${payloadDir}/home`);
 
       const files = await collectFiles(payloadDir);
@@ -155,9 +152,6 @@ class DataArchiveService {
       await this.restoreConversationFiles(payloadDir);
       await this.restoreDiffFiles(payloadDir);
       const homeDir = await projectService.getCurrentHomePath();
-      if (homeDir.startsWith('content://')) {
-        throw new Error('导入完整 home 暂不支持 SAF 外部项目，请切换到内部项目后重试。');
-      }
       await ensureCleanDir(homeDir);
       await copyDir(`${payloadDir}/home`, homeDir);
     } finally {

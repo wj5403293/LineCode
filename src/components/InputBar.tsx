@@ -261,11 +261,6 @@ export default React.memo(function InputBar({
       setRemoteStatus('loading');
       const project = await projectService.getSelectedProject();
       const projectPath = projectService.getProjectShellPath(project);
-      if (project.source === 'saf' && !projectPath) {
-        setRemoteStatus('error');
-        setRemoteMessage('当前 SAF 项目路径无法转换为 SSH 可用路径。');
-        return;
-      }
       setRemoteMessage(projectPath ? `正在读取远端项目目录: ${projectPath}` : '正在读取远端目录结构...');
       const output = await sshService.executeCommand(buildRemoteTreeCommand(pythonPath, projectPath), 30000);
       setRemoteTree(parseRemoteTree(output));

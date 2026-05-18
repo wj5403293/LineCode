@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
 import { openDocumentTree } from 'react-native-saf-x';
+import { androidExternalStorage, safTreeUriToFileSystemPath } from './AndroidExternalStorage';
 import { workspaceFs } from './WorkspaceFileSystem';
 
 const STORAGE_KEY = '@linecode_projects';
@@ -11,7 +12,7 @@ const LINECODE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode`;
 const DEFAULT_HOME_PATH = `${LINECODE_ROOT}/home`;
 const PROJECT_ROOT = `${LINECODE_ROOT}/project`;
 
-export type ProjectSource = 'default' | 'managed' | 'saf';
+export type ProjectSource = 'default' | 'managed' | 'external';
 
 export interface ProjectOption {
   id: string;
@@ -22,6 +23,7 @@ export interface ProjectOption {
 }
 
 type Listener = (project: ProjectOption, projects: ProjectOption[]) => void;
+type StoredProjectOption = Omit<ProjectOption, 'source'> & { source?: ProjectSource | 'saf' };
 
 function defaultProject(): ProjectOption {
   return {
@@ -37,13 +39,44 @@ function sanitizeProjectName(name: string): string {
   return name.trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-').slice(0, 60);
 }
 
-function uniqueProjects(projects: ProjectOption[]): ProjectOption[] {
+function isContentUri(path: string): boolean {
+  return path.startsWith('content://');
+}
+
+function normalizeProject(project: StoredProjectOption): ProjectOption | null {
+  if (!project || typeof project.path !== 'string') return null;
+  if (project.id === DEFAULT_PROJECT_ID || project.source === 'default') return defaultProject();
+
+  if (project.source === 'saf' || isContentUri(project.path)) {
+    const path = safTreeUriToFileSystemPath(project.path);
+    if (!path) return null;
+    return {
+      id: `external:${path}`,
+      label: project.label || workspaceFs.basename(path) || '外部项目',
+      desc: path,
+      path,
+      source: 'external',
+    };
+  }
+
+  const source: ProjectSource = project.source === 'external' ? 'external' : 'managed';
+  return {
+    id: project.id || `${source}:${project.path}`,
+    label: project.label || workspaceFs.basename(project.path) || '项目',
+    desc: project.desc || (source === 'external' ? project.path : undefined),
+    path: project.path,
+    source,
+  };
+}
+
+function uniqueProjects(projects: StoredProjectOption[]): ProjectOption[] {
   const seen = new Set<string>();
   const next: ProjectOption[] = [];
   for (const project of [defaultProject(), ...projects]) {
-    if (seen.has(project.id)) continue;
-    seen.add(project.id);
-    next.push(project);
+    const normalized = normalizeProject(project);
+    if (!normalized || seen.has(normalized.id)) continue;
+    seen.add(normalized.id);
+    next.push(normalized);
   }
   return next;
 }
@@ -62,7 +95,8 @@ class ProjectService {
     if (this.projects) return this.projects;
 
     const json = await AsyncStorage.getItem(STORAGE_KEY);
-    const stored = json ? JSON.parse(json) as ProjectOption[] : [];
+    const parsed = json ? JSON.parse(json) : [];
+    const stored = Array.isArray(parsed) ? parsed as StoredProjectOption[] : [];
     this.projects = uniqueProjects(stored);
     await this.saveProjects();
     return this.projects;
@@ -121,20 +155,36 @@ class ProjectService {
     return this.setSelectedProject(project.id);
   }
 
-  async openSafProject(): Promise<ProjectOption | null> {
+  async openExternalProject(): Promise<ProjectOption | null> {
     if (Platform.OS !== 'android') {
-      throw new Error('SAF 目录选择仅支持 Android');
+      throw new Error('外部目录选择仅支持 Android');
     }
 
-    const doc = await openDocumentTree(true);
+    await androidExternalStorage.ensureManageExternalStorageGranted();
+
+    const doc = await openDocumentTree(false);
     if (!doc) return null;
 
+    const path = safTreeUriToFileSystemPath(doc.uri);
+    if (!path) {
+      throw new Error('无法将系统目录 URI 转换为文件路径。请选择“内部存储/Download/具体目录”等可解析为 /storage/... 的目录。');
+    }
+
+    const exists = await RNFS.exists(path);
+    if (!exists) {
+      throw new Error(`外部目录不可访问: ${path}`);
+    }
+    const stat = await RNFS.stat(path);
+    if (!stat.isDirectory()) {
+      throw new Error(`选择的路径不是目录: ${path}`);
+    }
+
     const project: ProjectOption = {
-      id: `saf:${doc.uri}`,
-      label: doc.name || '外部项目',
-      desc: workspaceFs.toDisplayPath(doc.uri),
-      path: doc.uri,
-      source: 'saf',
+      id: `external:${path}`,
+      label: doc.name || workspaceFs.basename(path) || '外部项目',
+      desc: path,
+      path,
+      source: 'external',
     };
 
     const projects = await this.getProjects();
@@ -150,13 +200,13 @@ class ProjectService {
   }
 
   async ensureProjectPath(project: ProjectOption): Promise<void> {
-    if (project.source === 'saf') {
-      const hasPermission = await workspaceFs.hasSafPermission(project.path).catch(() => false);
+    if (project.source === 'external') {
+      const hasPermission = await androidExternalStorage.isManageExternalStorageGranted();
       if (!hasPermission) {
-        throw new Error(`外部项目目录权限已失效，请重新选择目录: ${project.label}`);
+        throw new Error(`缺少“管理所有文件”权限，无法访问外部项目目录: ${project.label}`);
       }
 
-      const exists = await workspaceFs.exists(project.path);
+      const exists = await RNFS.exists(project.path);
       if (!exists) {
         throw new Error(`外部项目目录不可访问: ${project.label}`);
       }
@@ -177,7 +227,7 @@ class ProjectService {
   }
 
   getProjectShellPath(project: ProjectOption): string | null {
-    if (project.source !== 'saf') return null;
+    if (project.source !== 'external') return null;
     return workspaceFs.toShellPath(project.path);
   }
 

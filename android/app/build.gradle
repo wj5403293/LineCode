@@ -96,6 +96,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersion.androidVersionCode as Integer
         versionName appVersion.version as String
+        buildConfigField "int", "HOT_UPDATE_VERSION_CODE", "${appVersion.hotUpdateVersionCode as Integer}"
     }
 
     splits {

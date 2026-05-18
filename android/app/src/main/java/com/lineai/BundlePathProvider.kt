@@ -51,7 +51,9 @@ object BundlePathProvider {
 
     return try {
       val json = JSONObject(state.readText(Charsets.UTF_8))
-      json.optString("installedApkVersionName") == BuildConfig.VERSION_NAME &&
+      val installedHotUpdateVersionCode = json.optInt("installedVersionCode", 0)
+      installedHotUpdateVersionCode > BuildConfig.HOT_UPDATE_VERSION_CODE &&
+        json.optString("installedApkVersionName") == BuildConfig.VERSION_NAME &&
         json.optInt("installedApkVersionCode", -1) == BuildConfig.VERSION_CODE
     } catch (_: Exception) {
       false

@@ -175,6 +175,37 @@ describe('HotUpdateService', () => {
     expect(RNFS.unlink).toHaveBeenCalledWith('/tmp/lineai-test/.linecode/updates/current');
   });
 
+  it('ignores installed hot update state when it is older than the built-in bundle', async () => {
+    const nextVersion = APP_HOT_UPDATE_VERSION_CODE + 1;
+    await AsyncStorage.setItem('@linecode_hot_update_state', JSON.stringify({
+      installedVersionCode: APP_HOT_UPDATE_VERSION_CODE - 1,
+      installedVersionName: APP_VERSION,
+      installedApkVersionName: APP_VERSION,
+      installedApkVersionCode: APP_ANDROID_VERSION_CODE,
+      installedAt: 1,
+    }));
+    (RNFS.exists as jest.Mock).mockResolvedValue(true);
+    (RNFS.read as jest.Mock).mockResolvedValue('xh+8A8EDGR8=');
+    (resolveLanzouHotUpdateFiles as jest.Mock).mockResolvedValue({
+      index: { fileId: 'index', name: 'base.txt', sizeLabel: '', shareUrl: 'https://lanzou.example/base.txt' },
+      history: [],
+      zip: { fileId: 'zip', name: 'base.zip', sizeLabel: '', shareUrl: 'https://lanzou.example/base.zip' },
+    });
+    (fetchLanzouTextFile as jest.Mock).mockResolvedValue(JSON.stringify({
+      current: {
+        versionCode: nextVersion,
+        versionName: APP_VERSION,
+        changelog: 'next update',
+      },
+    }));
+
+    const info = await hotUpdateService.checkForUpdate();
+
+    expect(info?.versionCode).toBe(nextVersion);
+    expect(await AsyncStorage.getItem('@linecode_hot_update_state')).toBeNull();
+    expect(RNFS.unlink).toHaveBeenCalledWith('/tmp/lineai-test/.linecode/updates/current');
+  });
+
   it('writes current apk identity for native bundle selection after install', async () => {
     const nextVersion = APP_HOT_UPDATE_VERSION_CODE + 1;
     (resolveLanzouDownloadUrl as jest.Mock).mockResolvedValue('https://cdn.example/base.zip');

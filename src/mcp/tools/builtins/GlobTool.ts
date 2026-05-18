@@ -22,8 +22,8 @@ export class GlobTool extends BaseTool {
         ? workspaceFs.resolvePath(input.path, context.homePath)
         : context.homePath;
 
-      const results = await this.search(searchPath, input.pattern, searchPath);
-      const displaySearchPath = workspaceFs.toDisplayPath(searchPath);
+      const results = await this.search(searchPath, input.pattern);
+      const displaySearchPath = workspaceFs.toToolDisplayPath(searchPath, context.homePath);
       if (results.length === 0) {
         return {
           content: `在 ${displaySearchPath} 目录下未找到匹配 "${input.pattern}" 的文件。`,
@@ -40,15 +40,15 @@ export class GlobTool extends BaseTool {
     }
   }
 
-  private async search(dir: string, pattern: string, rootPath: string): Promise<string[]> {
+  private async search(dir: string, pattern: string, parentPath = ''): Promise<string[]> {
     const results: string[] = [];
     try {
       const items = await workspaceFs.readDir(dir);
       for (const item of items) {
-        const relativePath = this.relativePath(item.path, rootPath);
+        const relativePath = parentPath ? `${parentPath}/${item.name}` : item.name;
         if (item.isDirectory()) {
           if (!item.name.startsWith('.') && !item.name.startsWith('node_modules')) {
-            const subResults = await this.search(item.path, pattern, rootPath);
+            const subResults = await this.search(item.path, pattern, relativePath);
             results.push(...subResults);
           }
         } else {
@@ -61,21 +61,6 @@ export class GlobTool extends BaseTool {
       // 忽略无权限的目录
     }
     return results;
-  }
-
-  private relativePath(path: string, rootPath: string): string {
-    const displayPath = workspaceFs.toDisplayPath(path);
-    const displayRoot = workspaceFs.toDisplayPath(rootPath);
-    const displayRelative = this.stripRoot(displayPath, displayRoot);
-    if (displayRelative !== null) return displayRelative;
-
-    return this.stripRoot(path, rootPath) || path;
-  }
-
-  private stripRoot(path: string, rootPath: string): string | null {
-    const root = rootPath.replace(/\/+$/, '');
-    if (path === root) return '';
-    return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : null;
   }
 
   private matchPath(relativePath: string, pattern: string): boolean {

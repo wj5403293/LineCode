@@ -86,9 +86,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   const projectOptions = useMemo(
     () => projects.map(project => ({
       ...project,
-      desc: project.source === 'saf'
-        ? projectService.getProjectDisplayPath(project)
-        : project.desc,
+      desc: projectService.getProjectDisplayPath(project),
     })),
     [projects],
   );
@@ -233,7 +231,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
             title="项目"
             options={[
               ...projectOptions,
-              { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
+              { id: '__open_project', label: '打开项目', desc: '选择外部目录并使用真实路径' },
               { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
             ]}
             selectedId={selectedProject.id}
@@ -316,7 +314,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           title="项目"
           options={[
             ...projectOptions,
-            { id: '__open_project', label: '打开项目', desc: '使用 SAF 选择外部目录' },
+            { id: '__open_project', label: '打开项目', desc: '选择外部目录并使用真实路径' },
             { id: '__create_project', label: '创建项目', desc: '在 .linecode/project 下创建目录' },
           ]}
           selectedId={selectedProject.id}

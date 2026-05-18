@@ -77,6 +77,7 @@ jest.mock('react-native-saf-x', () => ({
   copyFile: jest.fn(() => Promise.resolve()),
   createDocument: jest.fn(() => Promise.resolve({ uri: 'content://test/doc', name: 'test.log' })),
   openDocument: jest.fn(() => Promise.resolve([])),
+  openDocumentTree: jest.fn(() => Promise.resolve(null)),
 }));
 
 jest.mock('react-native-webview', () => {

@@ -39,14 +39,9 @@ export class HttpServerTool extends BaseTool {
         return { content: `服务器已在运行: http://localhost:${activePort}`, toolCallId: '' };
       }
 
-      const rootPath = workspaceFs.isSafPath(homePath)
-        ? (root ? workspaceFs.resolvePath(root, homePath) : homePath)
-        : resolvePathWithinRoot(root, homePath);
+      const rootPath = resolvePathWithinRoot(root, homePath);
       if (!rootPath) {
         return { content: `HTTP 服务器根目录越界: ${root || ''}`, toolCallId: '', isError: true };
-      }
-      if (workspaceFs.isSafPath(rootPath)) {
-        return { content: 'HTTP 服务器暂不支持 SAF 外部目录，请切换到 LineCode 内部项目。', toolCallId: '', isError: true };
       }
 
       const dirExists = await workspaceFs.exists(rootPath);

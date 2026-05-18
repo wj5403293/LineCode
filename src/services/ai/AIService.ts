@@ -40,9 +40,7 @@ class AIService {
         }
       } else {
         const displayPath = workspaceFs.toDisplayPath(homePath);
-        const rawPathNote = displayPath !== homePath ? `\nSAF 原始 URI: ${homePath}` : '';
-        const safToolNote = displayPath !== homePath ? '\n调用本地文件工具时优先使用相对路径，不要把展示路径当作工具参数。' : '';
-        fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${displayPath}${rawPathNote}\n所有文件操作都相对于此目录进行。${safToolNote}`;
+        fullSystemPrompt += `\n\n## 工作目录\n当前工作目录（home目录）: ${displayPath}\n所有文件操作都相对于此目录进行。`;
       }
     }
 
@@ -84,14 +82,6 @@ class AIService {
 
     const shellPath = projectService.getProjectShellPath(project);
     if (!shellPath) {
-      if (workspaceFs.isSafPath(homePath)) {
-        return [
-          '## SSH 项目目录',
-          `当前已打开外部项目: ${project.label}`,
-          `SAF URI: ${homePath}`,
-          '该 SAF URI 不能直接作为 SSH Shell 路径使用。执行文件查看、搜索或修改前，需要用户重新选择可转换为 /storage/... 的目录，或明确提供远端项目路径。',
-        ].join('\n');
-      }
       return '';
     }
 

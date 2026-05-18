@@ -1,15 +1,4 @@
 import RNFS from 'react-native-fs';
-import {
-  exists as safExists,
-  hasPermission as safHasPermission,
-  listFiles as safListFiles,
-  mkdir as safMkdir,
-  readFile as safReadFile,
-  rename as safRename,
-  stat as safStat,
-  unlink as safUnlink,
-  writeFile as safWriteFile,
-} from 'react-native-saf-x';
 
 export interface WorkspaceFileItem {
   name: string;
@@ -29,10 +18,6 @@ export interface DirectoryStats {
   directories: number;
 }
 
-export function isSafPath(path: string): boolean {
-  return path.startsWith('content://');
-}
-
 function trimTrailingSlash(path: string): string {
   return path.replace(/\/+$/, '');
 }
@@ -41,140 +26,64 @@ function trimLeadingSlash(path: string): string {
   return path.replace(/^\/+/, '');
 }
 
-function dirname(path: string): string {
-  const cleanPath = trimTrailingSlash(path);
-  const index = cleanPath.lastIndexOf('/');
-  return index > 0 ? cleanPath.slice(0, index) : '';
-}
-
-function safeDecodeUriPart(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    try {
-      return decodeURI(value);
-    } catch {
-      return value;
-    }
-  }
-}
-
-function stripUriSuffix(value: string): string {
-  return value.split(/[?#]/)[0];
-}
-
-function extractSafAuthority(uri: string): string | null {
-  const match = uri.match(/^content:\/\/([^/]+)/);
-  return match?.[1] || null;
-}
-
-function extractSafDocumentId(uri: string): string | null {
-  const cleanUri = stripUriSuffix(uri);
-  const documentMarker = '/document/';
-  const documentIndex = cleanUri.indexOf(documentMarker);
-  if (documentIndex >= 0) {
-    return cleanUri.slice(documentIndex + documentMarker.length);
-  }
-
-  const treeMarker = '/tree/';
-  const treeIndex = cleanUri.indexOf(treeMarker);
-  if (treeIndex >= 0) {
-    return cleanUri.slice(treeIndex + treeMarker.length);
-  }
-
-  return null;
-}
-
-function extractDecodedSafDocumentId(uri: string): string | null {
-  const documentId = extractSafDocumentId(uri);
-  if (!documentId) return null;
-  return safeDecodeUriPart(documentId).replace(/^\/+/, '');
-}
-
-function joinAbsolutePath(root: string, rest: string): string {
-  const cleanRest = rest.replace(/^\/+/, '');
-  return cleanRest ? `${root}/${cleanRest}` : root;
-}
-
-export function safUriToFileSystemPath(uri: string): string | null {
-  if (!isSafPath(uri)) return null;
-
-  const documentId = extractSafDocumentId(uri);
-  if (!documentId) return null;
-
-  const decodedDocumentId = safeDecodeUriPart(documentId).replace(/^\/+/, '');
-  if (decodedDocumentId.startsWith('raw:')) {
-    const rawPath = decodedDocumentId.slice('raw:'.length);
-    return rawPath.startsWith('/') ? rawPath : null;
-  }
-
-  const separatorIndex = decodedDocumentId.indexOf(':');
-  if (separatorIndex < 0) return null;
-
-  const volume = decodedDocumentId.slice(0, separatorIndex);
-  const rest = decodedDocumentId.slice(separatorIndex + 1);
-
-  if (volume === 'primary') {
-    return joinAbsolutePath('/storage/emulated/0', rest);
-  }
-
-  if (volume === 'home') {
-    return joinAbsolutePath('/storage/emulated/0/Documents', rest);
-  }
-
-  if (/^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$/.test(volume)) {
-    return joinAbsolutePath(`/storage/${volume}`, rest);
-  }
-
-  return null;
-}
-
-export function toDisplayPath(path: string): string {
-  return safUriToFileSystemPath(path) || path;
-}
-
-export function toShellPath(path: string): string | null {
-  if (isSafPath(path)) {
-    return safUriToFileSystemPath(path);
-  }
-  return path.startsWith('/') ? path : null;
-}
-
 function stripFileScheme(path: string): string {
   return path.startsWith('file://') ? path.slice('file://'.length) : path;
 }
 
+function isContentUri(path: string): boolean {
+  return path.startsWith('content://');
+}
+
+function assertFileSystemPath(path: string, action: string): void {
+  if (isContentUri(path)) {
+    throw new Error(`${action}失败: content:// URI 不能作为工作区路径，请重新选择外部目录并授予“管理所有文件”权限。`);
+  }
+}
+
+function dirname(path: string): string {
+  const cleanPath = trimTrailingSlash(stripFileScheme(path));
+  const index = cleanPath.lastIndexOf('/');
+  return index > 0 ? cleanPath.slice(0, index) : '';
+}
+
 function relativePathUnderRoot(path: string, root: string): string | null {
   const normalizedPath = trimTrailingSlash(stripFileScheme(path));
-  const normalizedRoot = trimTrailingSlash(root);
+  const normalizedRoot = trimTrailingSlash(stripFileScheme(root));
   if (normalizedPath === normalizedRoot) return '';
   return normalizedPath.startsWith(`${normalizedRoot}/`)
     ? normalizedPath.slice(normalizedRoot.length + 1)
     : null;
 }
 
-function joinSafPath(rootPath: string, childPath: string): string {
-  const relativePath = trimLeadingSlash(childPath);
-  if (!relativePath) return trimTrailingSlash(rootPath);
-  return `${trimTrailingSlash(rootPath)}/${relativePath}`;
+export function toDisplayPath(path: string): string {
+  return stripFileScheme(path);
+}
+
+export function toShellPath(path: string): string | null {
+  const cleanPath = stripFileScheme(path);
+  return cleanPath.startsWith('/') ? cleanPath : null;
 }
 
 export function joinWorkspacePath(rootPath: string, childPath: string): string {
-  if (!childPath) return rootPath;
-  if (isSafPath(childPath)) return childPath;
+  const root = trimTrailingSlash(stripFileScheme(rootPath));
+  if (!childPath) return root;
 
-  if (isSafPath(rootPath)) {
-    const displayRoot = safUriToFileSystemPath(rootPath);
-    const relativeFromDisplay = displayRoot ? relativePathUnderRoot(childPath, displayRoot) : null;
-    if (relativeFromDisplay !== null) {
-      return joinSafPath(rootPath, relativeFromDisplay);
-    }
-    if (childPath.startsWith('/') || childPath.startsWith('file://')) return stripFileScheme(childPath);
-    return joinSafPath(rootPath, childPath);
+  const child = stripFileScheme(childPath);
+  if (child.startsWith('/') || isContentUri(child)) return child;
+  return `${root}/${trimLeadingSlash(child)}`;
+}
+
+export function relativeWorkspacePath(path: string, rootPath: string): string | null {
+  return relativePathUnderRoot(path, rootPath);
+}
+
+export function toToolDisplayPath(path: string, rootPath?: string): string {
+  if (rootPath) {
+    const relativePath = relativeWorkspacePath(path, rootPath);
+    if (relativePath === '') return '当前工作目录';
+    if (relativePath !== null) return relativePath;
   }
-
-  if (childPath.startsWith('/') || childPath.startsWith('file://')) return stripFileScheme(childPath);
-  return `${trimTrailingSlash(rootPath)}/${trimLeadingSlash(childPath)}`;
+  return toDisplayPath(path);
 }
 
 export function basename(path: string): string {
@@ -183,28 +92,7 @@ export function basename(path: string): string {
 }
 
 export function parentPath(path: string): string {
-  if (isSafPath(path)) {
-    const authority = extractSafAuthority(path);
-    const documentId = extractDecodedSafDocumentId(path);
-    if (authority && documentId) {
-      const parentIndex = documentId.lastIndexOf('/');
-      if (parentIndex > 0) {
-        const parentDocumentId = documentId.slice(0, parentIndex);
-        return `content://${authority}/tree/${encodeURIComponent(parentDocumentId)}`;
-      }
-    }
-  }
-
   return dirname(path);
-}
-
-async function isDirectoryPath(path: string): Promise<boolean> {
-  if (isSafPath(path)) {
-    const info = await safStat(path);
-    return info.type === 'directory';
-  }
-  const stat = await RNFS.stat(path);
-  return stat.isDirectory();
 }
 
 async function ensureParentDir(filePath: string): Promise<void> {
@@ -213,12 +101,8 @@ async function ensureParentDir(filePath: string): Promise<void> {
   await workspaceFs.mkdir(parent);
 }
 
-function normalizeWorkspaceError(err: unknown, path: string, action: string): Error {
-  const message = err instanceof Error ? err.message : String(err);
-  if (isSafPath(path) && /\b(EPERM|EACCES|Permission Denial|permission)\b/i.test(message)) {
-    return new Error(`${action}失败: 外部目录 SAF 权限不可用，请重新选择项目目录授权 (${toDisplayPath(path)})`);
-  }
-  return err instanceof Error ? err : new Error(message);
+function normalizeWorkspaceError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 async function collectDirStats(path: string, depth: number, maxDepth: number): Promise<DirectoryStats> {
@@ -244,36 +128,28 @@ async function collectDirStats(path: string, depth: number, maxDepth: number): P
 }
 
 export const workspaceFs = {
-  isSafPath,
-  safUriToFileSystemPath,
   toDisplayPath,
   toShellPath,
+  relativePath: relativeWorkspacePath,
+  toToolDisplayPath,
+  basename,
   parentPath,
-  hasSafPermission: safHasPermission,
 
   resolvePath(path: string, rootPath: string): string {
     return joinWorkspacePath(rootPath, path);
   },
 
   async exists(path: string): Promise<boolean> {
-    if (isSafPath(path)) return safExists(path);
-    return RNFS.exists(path);
+    assertFileSystemPath(path, '检查路径');
+    return RNFS.exists(stripFileScheme(path));
   },
 
   async readDir(path: string): Promise<WorkspaceFileItem[]> {
-    if (isSafPath(path)) {
-      const items = await safListFiles(path).catch(err => {
-        throw normalizeWorkspaceError(err, path, '读取目录');
-      });
-      return items.map(item => ({
-        name: item.name,
-        path: item.uri,
-        size: item.size,
-        isDirectory: () => item.type === 'directory',
-      }));
-    }
-
-    const items = await RNFS.readDir(path);
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '读取目录');
+    const items = await RNFS.readDir(filePath).catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
     return items.map(item => ({
       name: item.name,
       path: item.path,
@@ -283,70 +159,55 @@ export const workspaceFs = {
   },
 
   async readFile(path: string): Promise<string> {
-    if (isSafPath(path)) {
-      return safReadFile(path, { encoding: 'utf8' }).catch(err => {
-        throw normalizeWorkspaceError(err, path, '读取文件');
-      });
-    }
-    return RNFS.readFile(path, 'utf8');
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '读取文件');
+    return RNFS.readFile(filePath, 'utf8').catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
   },
 
   async writeFile(path: string, content: string): Promise<void> {
-    await ensureParentDir(path);
-    if (isSafPath(path)) {
-      await safWriteFile(path, content, { encoding: 'utf8', mimeType: 'text/plain' }).catch(err => {
-        throw normalizeWorkspaceError(err, path, '写入文件');
-      });
-      return;
-    }
-    await RNFS.writeFile(path, content, 'utf8');
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '写入文件');
+    await ensureParentDir(filePath);
+    await RNFS.writeFile(filePath, content, 'utf8').catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
   },
 
   async mkdir(path: string): Promise<void> {
-    if (isSafPath(path)) {
-      await safMkdir(path).catch(err => {
-        throw normalizeWorkspaceError(err, path, '创建目录');
-      });
-      return;
-    }
-    await RNFS.mkdir(path, { NSURLIsExcludedFromBackupKey: true });
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '创建目录');
+    await RNFS.mkdir(filePath, { NSURLIsExcludedFromBackupKey: true }).catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
   },
 
   async unlink(path: string): Promise<void> {
-    if (isSafPath(path)) {
-      await safUnlink(path).catch(err => {
-        throw normalizeWorkspaceError(err, path, '删除文件');
-      });
-      return;
-    }
-    await RNFS.unlink(path);
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '删除文件');
+    await RNFS.unlink(filePath).catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
   },
 
   async rename(path: string, newName: string): Promise<string> {
-    if (isSafPath(path)) {
-      const renamed = await safRename(path, newName).catch(err => {
-        throw normalizeWorkspaceError(err, path, '重命名');
-      });
-      return renamed.uri;
-    }
-
-    const parent = dirname(path);
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '重命名');
+    const parent = dirname(filePath);
     const nextPath = `${parent}/${newName}`;
-    await RNFS.moveFile(path, nextPath);
+    await RNFS.moveFile(filePath, nextPath).catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
     return nextPath;
   },
 
   async stat(path: string): Promise<WorkspaceStat> {
-    if (isSafPath(path)) {
-      const info = await safStat(path).catch(err => {
-        throw normalizeWorkspaceError(err, path, '读取文件状态');
-      });
-      return {
-        size: info.size,
-        isDirectory: () => info.type === 'directory',
-      };
-    }
-    const stat = await RNFS.stat(path);
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '读取文件状态');
+    const stat = await RNFS.stat(filePath).catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
     return {
       size: Number(stat.size || 0),
       isDirectory: () => stat.isDirectory(),
@@ -354,7 +215,8 @@ export const workspaceFs = {
   },
 
   async isDirectory(path: string): Promise<boolean> {
-    return isDirectoryPath(path);
+    const stat = await workspaceFs.stat(path);
+    return stat.isDirectory();
   },
 
   async getDirStats(path: string, maxDepth = 24): Promise<DirectoryStats> {
