@@ -2,6 +2,8 @@ import { Message } from '../types';
 import { ChatMessage } from './ai';
 
 const CHARS_PER_TOKEN = 4;
+const STRUCTURE_FIELD_OVERHEAD = 4;
+const MAX_ESTIMATE_DEPTH = 8;
 
 export const COMPACT_TRIGGER_RATIO = 0.8;
 
@@ -34,20 +36,43 @@ Your summary must include:
 
 REMINDER: Do NOT call any tools. Respond with plain text only: an <analysis> block followed by a <summary> block.`;
 
+function estimateStructuredChars(value: unknown, depth = 0): number {
+  if (value == null) return 0;
+  if (typeof value === 'string') return value.length;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value).length;
+  if (depth >= MAX_ESTIMATE_DEPTH) return 0;
+
+  if (Array.isArray(value)) {
+    return value.reduce(
+      (total, item) => total + estimateStructuredChars(item, depth + 1) + STRUCTURE_FIELD_OVERHEAD,
+      0,
+    );
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).reduce(
+      (total, [key, item]) => total + key.length + estimateStructuredChars(item, depth + 1) + STRUCTURE_FIELD_OVERHEAD,
+      0,
+    );
+  }
+
+  return 0;
+}
+
 export function estimateMessageTokens(messages: Pick<Message, 'content' | 'attachments' | 'reasoningContent' | 'toolCalls' | 'toolResults' | 'blocks'>[]): number {
   const chars = messages.reduce((total, message) => {
     let next = total + (message.content?.length || 0) + (message.reasoningContent?.length || 0);
     if (message.attachments) {
-      next += JSON.stringify(message.attachments).length;
+      next += estimateStructuredChars(message.attachments);
     }
     if (message.toolCalls) {
-      next += JSON.stringify(message.toolCalls).length;
+      next += estimateStructuredChars(message.toolCalls);
     }
     if (message.toolResults) {
-      next += JSON.stringify(message.toolResults).length;
+      next += estimateStructuredChars(message.toolResults);
     }
     if (message.blocks) {
-      next += JSON.stringify(message.blocks).length;
+      next += estimateStructuredChars(message.blocks);
     }
     return next;
   }, 0);

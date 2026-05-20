@@ -21,6 +21,7 @@ import { setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '
 import { projectService } from '../services/ProjectService';
 import ChatMessageList from '../components/ChatMessageList';
 import CreateProjectModal from '../components/CreateProjectModal';
+import { Message } from '../types';
 
 interface Props {
   onGoSettings: () => void;
@@ -139,10 +140,22 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     );
   }, [handleToolConfirm]);
 
+  const handleShellCancel = useCallback(() => {
+    handleToolConfirm(false);
+  }, [handleToolConfirm]);
+
+  const handleShellConfirm = useCallback(() => {
+    handleToolConfirm(true);
+  }, [handleToolConfirm]);
+
   const handleRecallUserMessage = useCallback((messageId: string) => {
     const draft = recallUserMessage(messageId);
     setRecalledDraft(draft);
   }, [recallUserMessage]);
+
+  const handleMessageRecall = useCallback((message: Message) => {
+    handleRecallUserMessage(message.id);
+  }, [handleRecallUserMessage]);
 
   const handleMoreSelect = useCallback((id: string) => {
     closeDialog();
@@ -285,12 +298,12 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           thinkingScrollable={thinkingScrollable}
           homePath={homePath}
           shellConfirmToolCallId={shellConfirmToolCallId}
-          onShellCancel={() => handleToolConfirm(false)}
-          onShellConfirm={() => handleToolConfirm(true)}
+          onShellCancel={handleShellCancel}
+          onShellConfirm={handleShellConfirm}
           onShellDefaultExecute={handleShellAutoExecute}
           onViewShellCommand={onViewShellCommand}
           onToolReview={handleToolReview}
-          onRecallUserMessage={(message) => handleRecallUserMessage(message.id)}
+          onRecallUserMessage={handleMessageRecall}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScroll={handleScroll}
           onScrollToBottom={scrollToBottom}

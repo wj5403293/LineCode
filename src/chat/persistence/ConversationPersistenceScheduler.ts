@@ -4,10 +4,15 @@ import { sanitizeMessagesForStorage } from '../../utils/toolPayload';
 
 const DEFAULT_DEBOUNCE_MS = 1200;
 
+function sameMessageSnapshot(first?: Message[], second?: Message[]): boolean {
+  if (!first || !second || first.length !== second.length) return false;
+  return first.every((message, index) => message === second[index]);
+}
+
 export class ConversationPersistenceScheduler {
   private conversationId: string | null = null;
   private pendingMessages: Message[] | null = null;
-  private lastPersistedJsonByConversation = new Map<string, string>();
+  private lastPersistedMessagesByConversation = new Map<string, Message[]>();
   private timeout: ReturnType<typeof setTimeout> | null = null;
   private flushPromise: Promise<void> = Promise.resolve();
 
@@ -23,7 +28,7 @@ export class ConversationPersistenceScheduler {
   markPersisted(messages: Message[], conversationId = this.conversationId) {
     if (!conversationId) return;
     this.pendingMessages = null;
-    this.lastPersistedJsonByConversation.set(conversationId, JSON.stringify(sanitizeMessagesForStorage(messages)));
+    this.lastPersistedMessagesByConversation.set(conversationId, messages);
   }
 
   schedule(messages: Message[], conversationId = this.conversationId) {
@@ -42,14 +47,16 @@ export class ConversationPersistenceScheduler {
     if (!conversationId || !messages || messages.length === 0) return this.flushPromise;
 
     this.pendingMessages = null;
+    if (sameMessageSnapshot(this.lastPersistedMessagesByConversation.get(conversationId), messages)) {
+      return this.flushPromise;
+    }
+
     this.flushPromise = this.flushPromise
       .catch(() => {})
       .then(async () => {
         const sanitizedMessages = sanitizeMessagesForStorage(messages);
-        const json = JSON.stringify(sanitizedMessages);
-        if (this.lastPersistedJsonByConversation.get(conversationId) === json) return;
         await conversationStore.updateConversation(conversationId, { messages: sanitizedMessages });
-        this.lastPersistedJsonByConversation.set(conversationId, json);
+        this.lastPersistedMessagesByConversation.set(conversationId, messages);
       });
 
     return this.flushPromise;

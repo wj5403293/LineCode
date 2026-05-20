@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
 import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment, AgentProgressItem } from '../types';
 import { modelStorage } from '../services/storage';
@@ -33,6 +33,7 @@ interface PendingToolCall {
 }
 
 const TERMINATED_RESULT = '已终止';
+const CONTEXT_METRICS_DEBOUNCE_MS = 300;
 
 function markAgentToolCallsTerminated(toolCalls?: AgentToolCall[]): AgentToolCall[] | undefined {
   if (!toolCalls) return toolCalls;
@@ -230,6 +231,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const [homePath, setHomePath] = useState<string>('');
   const [streaming, setStreaming] = useState(false);
   const [compacting, setCompacting] = useState(false);
+  const [contextPercent, setContextPercent] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const streamingRef = useRef(false);
   const atBottomRef = useRef(true);
@@ -933,11 +935,25 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     }
   }, [runContextCompaction]);
 
-  const contextInfo = model ? parseModelContext(model.modelId) : null;
+  const contextInfo = useMemo(() => model ? parseModelContext(model.modelId) : null, [model]);
   const contextTokens = contextInfo?.contextTokens || 250_000;
-  const contextUsedTokens = contextMetricsRef.current.estimateContextTokens(messages);
-  const contextPercent = Math.min(100, Math.round((contextUsedTokens / contextTokens) * 100));
   const contextSizeLabel = formatContextSize(contextTokens);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      contextMetricsRef.current.clear();
+      setContextPercent(0);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      const contextUsedTokens = contextMetricsRef.current.estimateContextTokens(messages);
+      const nextPercent = Math.min(100, Math.round((contextUsedTokens / contextTokens) * 100));
+      setContextPercent(prev => prev === nextPercent ? prev : nextPercent);
+    }, CONTEXT_METRICS_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [messages, contextTokens]);
 
   const handleToolConfirm = useCallback((confirmed: boolean, defaultExecute = false) => {
     if (!pendingToolCall) return;

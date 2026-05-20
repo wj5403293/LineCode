@@ -59,6 +59,30 @@ describe('ConversationPersistenceScheduler', () => {
     expect(conversationStore.updateConversation).toHaveBeenCalledTimes(1);
   });
 
+  it('skips new arrays when message objects are unchanged', async () => {
+    const scheduler = new ConversationPersistenceScheduler(100);
+    scheduler.setConversationId('conv');
+    const payload = messages('same');
+
+    scheduler.schedule(payload);
+    await scheduler.flush();
+    scheduler.schedule([...payload]);
+    await scheduler.flush();
+
+    expect(conversationStore.updateConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks loaded payloads as persisted without serializing long conversations', () => {
+    const scheduler = new ConversationPersistenceScheduler(100);
+    scheduler.setConversationId('conv');
+    const stringifySpy = jest.spyOn(JSON, 'stringify');
+
+    scheduler.markPersisted(messages(longText(1024 * 1024)));
+
+    expect(stringifySpy).not.toHaveBeenCalled();
+    stringifySpy.mockRestore();
+  });
+
   it('tracks persisted snapshots per conversation', async () => {
     const scheduler = new ConversationPersistenceScheduler(100);
     const firstPayload = messages('same');

@@ -2,16 +2,37 @@ import { Message } from '../types';
 import { estimateMessageTokens } from '../services/contextCompaction';
 
 type TokenMessage = Pick<Message, 'id' | 'content' | 'attachments' | 'reasoningContent' | 'toolCalls' | 'toolResults' | 'blocks' | 'excludeFromContext'>;
+const SIGNATURE_DEPTH_LIMIT = 8;
+
+function structuredLength(value: unknown, depth = 0): number {
+  if (value == null) return 0;
+  if (typeof value === 'string') return value.length;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value).length;
+  if (depth >= SIGNATURE_DEPTH_LIMIT) return 0;
+
+  if (Array.isArray(value)) {
+    return value.reduce((total, item) => total + structuredLength(item, depth + 1), 0);
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).reduce(
+      (total, [key, item]) => total + key.length + structuredLength(item, depth + 1),
+      0,
+    );
+  }
+
+  return 0;
+}
 
 function messageSignature(message: TokenMessage): string {
   return [
     message.id,
     message.content?.length || 0,
     message.reasoningContent?.length || 0,
-    message.attachments?.reduce((total, item) => total + item.name.length + item.path.length + item.source.length, 0) || 0,
-    message.toolCalls?.reduce((total, item) => total + item.id.length + item.name.length + item.arguments.length, 0) || 0,
-    message.toolResults?.reduce((total, item) => total + item.toolCallId.length + item.content.length + (item.diffId?.length || 0), 0) || 0,
-    message.blocks?.reduce((total, item) => total + item.type.length + item.content.length + (item.id?.length || 0) + (item.name?.length || 0), 0) || 0,
+    structuredLength(message.attachments),
+    structuredLength(message.toolCalls),
+    structuredLength(message.toolResults),
+    structuredLength(message.blocks),
     message.excludeFromContext ? 1 : 0,
   ].join(':');
 }
@@ -51,5 +72,9 @@ export class ContextMetricsService {
   shouldCompact(messages: Message[], contextTokens: number, triggerRatio: number): boolean {
     if (messages.length < 4) return false;
     return this.estimateContextTokens(messages) >= contextTokens * triggerRatio;
+  }
+
+  clear() {
+    this.cache.clear();
   }
 }
