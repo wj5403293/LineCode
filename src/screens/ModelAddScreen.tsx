@@ -17,6 +17,7 @@ import { openURL } from '../utils/openURL';
 import { formatContextSize } from '../utils/modelContext';
 import { GPT55_PROMO_TITLE, GPT55_PROMO_URL } from '../constants/promo';
 import { getModelProviderPreset } from '../constants/modelProviders';
+import { LOCAL_MODEL_ENABLED } from '../services/RuntimeConfig';
 
 interface Props {
   onBack: () => void;
@@ -96,7 +97,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
   const preset = getModelProviderPreset(presetId);
   const lockedPreset = !!preset;
   const isEditing = !!editingModelId;
-  const [provider, setProvider] = useState<ProviderId>(local ? 'local' : preset?.provider || 'openai');
+  const [provider, setProvider] = useState<ProviderId>(local && LOCAL_MODEL_ENABLED ? 'local' : preset?.provider || 'openai');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(preset?.baseUrl || '');
@@ -144,6 +145,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
   }, [editingModelId]);
 
   const isLocalProvider = provider === 'local';
+  const localModelUnavailable = isLocalProvider && !LOCAL_MODEL_ENABLED;
   const remoteProvider = isLocalProvider ? 'openai' : provider;
   const effectiveBaseUrl = preset
     ? (baseUrl.trim() || preset.baseUrl)
@@ -151,7 +153,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
   const canQuery = !isLocalProvider && !!(effectiveBaseUrl && apiKey.trim());
   const resolvedName = name.trim() || (!isLocalProvider && preset ? modelId.trim() : '');
   const canSave = isLocalProvider
-    ? !!(name.trim() && localPath)
+    ? !localModelUnavailable && !!(name.trim() && localPath)
     : !!(resolvedName && modelId.trim() && apiKey.trim());
 
   const handleFetchModels = useCallback(async () => {
@@ -224,6 +226,10 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
 
   const handleSelectLocalModel = useCallback(async () => {
     if (importingLocalModel) return;
+    if (!LOCAL_MODEL_ENABLED) {
+      setLocalError('当前安装包未编译本地模型支持，请安装本地模型版。');
+      return;
+    }
     setImportingLocalModel(true);
     setLocalError(null);
 
@@ -345,23 +351,25 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
           {preset ? `提供商：${preset.label}` : '提供商'}
         </Text>
         <View style={styles.toggleRow}>
-          {([...REMOTE_PROVIDERS, 'local'] as ProviderId[]).map(p => (
+          {((LOCAL_MODEL_ENABLED || provider === 'local' ? [...REMOTE_PROVIDERS, 'local'] : REMOTE_PROVIDERS) as ProviderId[]).map(p => (
             <TouchableOpacity
               key={p}
               style={[
                 styles.toggleBtn,
                 { backgroundColor: provider === p ? colors.accent : colors.surfaceLight },
-                (lockedPreset || isEditing) && p !== provider && styles.toggleBtnDisabled,
+                ((lockedPreset || isEditing) && p !== provider) || (!LOCAL_MODEL_ENABLED && p === 'local')
+                  ? styles.toggleBtnDisabled
+                  : null,
               ]}
               onPress={() => {
-                if (lockedPreset || isEditing) return;
+                if (lockedPreset || isEditing || (!LOCAL_MODEL_ENABLED && p === 'local')) return;
                 setProvider(p);
                 setFetchedModels([]);
                 setModelId('');
                 setFetchError(null);
                 setIsCustomId(p === 'local');
               }}
-              disabled={lockedPreset || isEditing}
+              disabled={lockedPreset || isEditing || (!LOCAL_MODEL_ENABLED && p === 'local')}
             >
               <Text style={[styles.toggleText, { color: provider === p ? colors.textOnColor : colors.textSecondary }]}>
                 {PROVIDER_LABELS[p]}
@@ -381,12 +389,17 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
 
         {isLocalProvider ? (
           <>
+            {localModelUnavailable && (
+              <Text style={[styles.errorText, { color: colors.danger }]}>
+                当前安装包未编译本地模型支持，请安装本地模型版。
+              </Text>
+            )}
             <Text style={[styles.label, { color: colors.textSecondary }]}>模型文件</Text>
             <TouchableOpacity
               style={[styles.localFileCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
               onPress={handleSelectLocalModel}
               activeOpacity={0.75}
-              disabled={importingLocalModel}
+              disabled={importingLocalModel || localModelUnavailable}
             >
               <View style={[styles.localFileIcon, { backgroundColor: colors.accentMuted }]}>
                 <FileUp size={20} color={colors.accent} />
@@ -418,6 +431,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
               placeholderTextColor={colors.textTertiary}
               value={localContextTokens}
               onChangeText={(value) => setLocalContextTokens(value.replace(/[^\d]/g, ''))}
+              editable={!localModelUnavailable}
               keyboardType="number-pad"
             />
             <Text style={[styles.hintText, { color: colors.textTertiary }]}>
@@ -436,6 +450,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
                       { backgroundColor: active ? colors.accent : colors.surfaceLight },
                     ]}
                     onPress={() => setLocalAcceleration(acceleration)}
+                    disabled={localModelUnavailable}
                     activeOpacity={0.75}
                   >
                     <View style={styles.accelerationButtonContent}>

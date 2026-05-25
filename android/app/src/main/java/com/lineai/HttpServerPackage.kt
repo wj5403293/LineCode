@@ -14,6 +14,7 @@ class HttpServerPackage : ReactPackage {
             DataArchiveModule(reactContext),
             StoragePermissionModule(reactContext),
             AppLifecycleModule(reactContext),
+            LineAIConfigModule(reactContext),
         )
     }
 

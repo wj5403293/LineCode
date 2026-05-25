@@ -1,13 +1,12 @@
 import { Platform } from 'react-native';
-import {
-  getBackendDevicesInfo,
-  initLlama,
+import type {
   LlamaContext,
   NativeCompletionResult,
   RNLlamaOAICompatibleMessage,
   TokenData,
 } from 'llama.rn';
 import { Model, ContentBlock, ToolCall } from '../../../types';
+import { LOCAL_MODEL_ENABLED } from '../../RuntimeConfig';
 import { ChatMessage, StreamCallbacks, StreamOptions, StreamProcessor, StreamResult } from './StreamProcessor';
 
 const DEFAULT_N_CTX = 4096;
@@ -27,6 +26,28 @@ const THINK_START_TAG = '<think>';
 const THINK_END_TAG = '</think>';
 
 type LocalAcceleration = NonNullable<Model['localModel']>['acceleration'];
+type LlamaModule = typeof import('llama.rn');
+
+let llamaModule: LlamaModule | undefined;
+
+function createLocalModelUnavailableError(cause?: unknown): Error {
+  const detail = cause instanceof Error && cause.message ? ` (${cause.message})` : '';
+  return new Error(`当前安装包未编译本地模型支持，请安装本地模型版。${detail}`);
+}
+
+function getLlamaModule(): LlamaModule {
+  if (!LOCAL_MODEL_ENABLED) {
+    throw createLocalModelUnavailableError();
+  }
+  if (llamaModule) return llamaModule;
+
+  try {
+    llamaModule = require('llama.rn') as LlamaModule;
+    return llamaModule;
+  } catch (err) {
+    throw createLocalModelUnavailableError(err);
+  }
+}
 
 interface LoadedContext {
   key: string;
@@ -57,6 +78,8 @@ export class LocalLlamaProcessor extends StreamProcessor {
     callbacks?: StreamCallbacks,
     options?: StreamOptions,
   ): Promise<StreamResult> {
+    if (!LOCAL_MODEL_ENABLED) throw createLocalModelUnavailableError();
+
     const abortSignal = options?.abortSignal;
     if (abortSignal?.aborted) throw this.createLocalAbortError();
 
@@ -192,6 +215,7 @@ export class LocalLlamaProcessor extends StreamProcessor {
   ): Promise<LlamaContext> {
     if (abortSignal?.aborted) throw this.createLocalAbortError();
     const useNpu = !!devices?.length;
+    const { initLlama } = getLlamaModule();
     return initLlama({
       model: localPath,
       n_ctx: nCtx,
@@ -211,6 +235,7 @@ export class LocalLlamaProcessor extends StreamProcessor {
 
   private async getHtpDevices(): Promise<string[]> {
     if (Platform.OS !== 'android') return [];
+    const { getBackendDevicesInfo } = getLlamaModule();
     const devices = await getBackendDevicesInfo();
     return devices
       .map(device => device.deviceName)

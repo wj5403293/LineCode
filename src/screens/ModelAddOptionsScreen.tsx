@@ -10,6 +10,7 @@ import {
   MODEL_PROVIDER_PROTOCOL_LABELS,
   ModelProviderPreset,
 } from '../constants/modelProviders';
+import { LOCAL_MODEL_ENABLED } from '../services/RuntimeConfig';
 
 interface Props {
   onBack: () => void;
@@ -63,22 +64,24 @@ export default function ModelAddOptionsScreen({ onBack, onCustom, onLocal, onPro
           <ChevronRight size={19} color={colors.textTertiary} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.customCard, styles.stackedCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}
-          onPress={onLocal}
-          activeOpacity={0.75}
-        >
-          <View style={[styles.largeIcon, { backgroundColor: colors.accentMuted }]}>
-            <FileUp size={22} color={colors.accent} />
-          </View>
-          <View style={styles.customText}>
-            <Text style={[styles.customTitle, { color: colors.text }]}>加载本地模型</Text>
-            <Text style={[styles.customDesc, { color: colors.textTertiary }]}>
-              通过系统文件选择器导入 GGUF 文件，并在支持的 Android 设备上启用 NPU
-            </Text>
-          </View>
-          <ChevronRight size={19} color={colors.textTertiary} />
-        </TouchableOpacity>
+        {LOCAL_MODEL_ENABLED && (
+          <TouchableOpacity
+            style={[styles.customCard, styles.stackedCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}
+            onPress={onLocal}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.largeIcon, { backgroundColor: colors.accentMuted }]}>
+              <FileUp size={22} color={colors.accent} />
+            </View>
+            <View style={styles.customText}>
+              <Text style={[styles.customTitle, { color: colors.text }]}>加载本地模型</Text>
+              <Text style={[styles.customDesc, { color: colors.textTertiary }]}>
+                通过系统文件选择器导入 GGUF 文件，并在支持的 Android 设备上启用 NPU
+              </Text>
+            </View>
+            <ChevronRight size={19} color={colors.textTertiary} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.sectionHeader}>
           <Boxes size={16} color={colors.textSecondary} />

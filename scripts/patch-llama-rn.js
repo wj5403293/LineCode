@@ -15,6 +15,7 @@ if (!fs.existsSync(buildGradlePath)) {
 }
 
 const original = fs.readFileSync(buildGradlePath, 'utf8');
+let next = original;
 
 const oldBlock = `    if (hexagonPresent) {
       println("✅ Hexagon SDK detected — enabling DSP build")
@@ -38,14 +39,26 @@ const newBlock = `    if (hexagonPresent) {
       println("llama.rn: using prebuilt native libraries; Hexagon SDK is only required for rnllamaBuildFromSource=true")
     }`;
 
-if (original.includes(newBlock)) {
-  process.exit(0);
+if (!next.includes(newBlock)) {
+  if (!next.includes(oldBlock)) {
+    console.warn('patch-llama-rn: expected build.gradle message block was not found');
+  } else {
+    next = next.replace(oldBlock, newBlock);
+  }
 }
 
-if (!original.includes(oldBlock)) {
-  console.warn('patch-llama-rn: expected build.gradle block was not found');
-  process.exit(0);
+const oldAssetsRoot = 'def assetsRootDir = new File(applicationProject.projectDir, "src/main/assets")';
+const newAssetsRoot = 'def assetsRootDir = new File(applicationProject.projectDir, "src/local/assets")';
+
+if (!next.includes(newAssetsRoot)) {
+  if (!next.includes(oldAssetsRoot)) {
+    console.warn('patch-llama-rn: expected HTP assets root was not found');
+  } else {
+    next = next.replace(oldAssetsRoot, newAssetsRoot);
+  }
 }
 
-fs.writeFileSync(buildGradlePath, original.replace(oldBlock, newBlock));
-console.log('patch-llama-rn: patched llama.rn Android Gradle message');
+if (next !== original) {
+  fs.writeFileSync(buildGradlePath, next);
+  console.log('patch-llama-rn: patched llama.rn Android Gradle configuration');
+}

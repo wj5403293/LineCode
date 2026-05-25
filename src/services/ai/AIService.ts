@@ -11,17 +11,24 @@ import { TONE_PROMPTS } from './constants/tonePrompts';
 import { projectService } from '../ProjectService';
 import { workspaceFs } from '../WorkspaceFileSystem';
 import { extensionService } from '../ExtensionService';
+import { LOCAL_MODEL_ENABLED } from '../RuntimeConfig';
 
 export { SYSTEM_PROMPT };
 export type { ChatMessage };
 
 class AIService {
-  private processors: Record<string, StreamProcessor> = {
-    openai: new OpenAIStreamProcessor(),
-    anthropic: new AnthropicStreamProcessor(),
-    codex: new CodexStreamProcessor(),
-    local: new LocalLlamaProcessor(),
-  };
+  private processors: Record<string, StreamProcessor>;
+
+  constructor() {
+    this.processors = {
+      openai: new OpenAIStreamProcessor(),
+      anthropic: new AnthropicStreamProcessor(),
+      codex: new CodexStreamProcessor(),
+    };
+    if (LOCAL_MODEL_ENABLED) {
+      this.processors.local = new LocalLlamaProcessor();
+    }
+  }
 
   async buildMessages(
     systemPrompt: string,
@@ -171,6 +178,9 @@ class AIService {
 
     console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length, 'reasoningEffort:', reasoningEffort, 'preserveReasoning:', preserveReasoning);
     try {
+      if (model.provider === 'local' && !LOCAL_MODEL_ENABLED) {
+        throw new Error('当前安装包未编译本地模型支持，请安装本地模型版。');
+      }
       const processor = this.processors[model.provider];
       if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
       return await processor.process(model, messages, tools, callbacks, { reasoningEffort, preserveReasoning, abortSignal });

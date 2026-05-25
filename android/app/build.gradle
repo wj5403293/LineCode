@@ -23,7 +23,7 @@ react {
     //   The list of variants to that are debuggable. For those we're going to
     //   skip the bundling of the JS bundle and the assets. Default is "debug", "debugOptimized".
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "liteDebugOptimized", "prodDebug", "prodDebugOptimized"]
+    debuggableVariants = ["remoteDebug", "localDebug", "remoteDebugOptimized", "localDebugOptimized"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -61,6 +61,9 @@ react {
  */
 def enableProguardInReleaseBuilds = false
 def appVersion = new JsonSlurper().parse(rootProject.file("../version.json"))
+def localModelFlavorDimension = "modelRuntime"
+def remoteModelFlavor = "remote"
+def localModelFlavor = "local"
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -97,6 +100,29 @@ android {
         versionCode appVersion.androidVersionCode as Integer
         versionName appVersion.version as String
         buildConfigField "int", "HOT_UPDATE_VERSION_CODE", "${appVersion.hotUpdateVersionCode as Integer}"
+    }
+
+    flavorDimensions localModelFlavorDimension
+    productFlavors {
+        remote {
+            dimension localModelFlavorDimension
+            buildConfigField "boolean", "LOCAL_MODEL_ENABLED", "false"
+            buildConfigField "String", "MODEL_RUNTIME", "\"${remoteModelFlavor}\""
+        }
+        local {
+            dimension localModelFlavorDimension
+            buildConfigField "boolean", "LOCAL_MODEL_ENABLED", "true"
+            buildConfigField "String", "MODEL_RUNTIME", "\"${localModelFlavor}\""
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs = []
+        }
+        local {
+            assets.srcDirs = ['src/local/assets']
+        }
     }
 
     splits {
@@ -153,6 +179,21 @@ android {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+
+    applicationVariants.all { variant ->
+        def runtimeFlavor = variant.productFlavors.find { it.dimension == localModelFlavorDimension }?.name ?: "app"
+        variant.outputs.all { output ->
+            def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            def abiPart = abi ? "-${abi}" : ""
+            outputFileName = "LineCode-${runtimeFlavor}-${variant.versionName}-${variant.buildType.name}${abiPart}.apk"
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withFlavor(localModelFlavorDimension, remoteModelFlavor)) { variant ->
+        variant.packaging.jniLibs.excludes.add("**/librnllama*.so")
     }
 }
 

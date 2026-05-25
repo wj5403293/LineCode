@@ -98,8 +98,22 @@ Builds the system prompt and starts Metro.
 npm run android
 ```
 
-Builds the prompt and runs the Android app.  
-构建提示词并运行 Android 应用。
+Builds the prompt and runs the remote-model Android app.  
+构建提示词并运行纯远端模型版 Android 应用。
+
+```sh
+npm run android:local
+```
+
+Builds the prompt and runs the Android app with local GGUF support.  
+构建提示词并运行带本地 GGUF 支持的 Android 应用。
+
+```sh
+npm run build-android-apks
+```
+
+Builds both Android release APKs: `remote` without local model native libraries, and `local` with GGUF support.  
+同时构建两个 Android release APK：不带本地模型 native 库的 `remote` 版，以及带 GGUF 支持的 `local` 版。
 
 ```sh
 npm run ios
