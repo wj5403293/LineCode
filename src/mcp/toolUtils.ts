@@ -38,7 +38,7 @@ export function isHttpTool(name: string): boolean {
 }
 
 export function isAgentTool(name: string): boolean {
-  return TOOL_CATEGORIES.AGENT.has(name);
+  return TOOL_CATEGORIES.AGENT.has(name) || name.startsWith('agentx_');
 }
 
 export function isShellTool(name: string): boolean {

@@ -22,7 +22,7 @@ interface ToolCallRendererProps {
   onReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
-export function ToolCallRenderer({
+export const ToolCallRenderer = React.memo(function ToolCallRenderer({
   name,
   input,
   result,
@@ -107,7 +107,7 @@ export function ToolCallRenderer({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   toolCallItem: {

@@ -18,16 +18,25 @@ import StorageManagementScreen from '../screens/StorageManagementScreen';
 import KeepAliveSettingsScreen from '../screens/KeepAliveSettingsScreen';
 import DebugSettingsScreen from '../screens/DebugSettingsScreen';
 import ExperimentalSettingsScreen from '../screens/ExperimentalSettingsScreen';
+import ExtensionsScreen from '../screens/ExtensionsScreen';
+import ExtensionDetailScreen from '../screens/ExtensionDetailScreen';
+import AgentExtensionEditScreen from '../screens/AgentExtensionEditScreen';
+import McpExtensionEditScreen from '../screens/McpExtensionEditScreen';
+import type { ExtensionKind } from '../services/ExtensionService';
 
 export type RootStackParamList = {
   Chat: undefined;
   Settings: undefined;
   ModelList: undefined;
   ModelAddOptions: undefined;
-  ModelAdd: { presetId?: string; modelId?: string } | undefined;
+  ModelAdd: { presetId?: string; modelId?: string; local?: boolean } | undefined;
   OutputSettings: undefined;
   LLMSettings: undefined;
   MCPSettings: undefined;
+  Extensions: undefined;
+  ExtensionDetail: { kind: ExtensionKind };
+  AgentExtensionEdit: { agentId?: string } | undefined;
+  McpExtensionEdit: { mcpId?: string } | undefined;
   About: undefined;
   Licenses: undefined;
   ThemeSettings: undefined;
@@ -66,12 +75,49 @@ export default function RootNavigator() {
             onOutput={() => navigation.navigate('OutputSettings')}
             onLLM={() => navigation.navigate('LLMSettings')}
             onMCP={() => navigation.navigate('MCPSettings')}
+            onExtensions={() => navigation.navigate('Extensions')}
             onAbout={() => navigation.navigate('About')}
             onTheme={() => navigation.navigate('ThemeSettings')}
             onData={() => navigation.navigate('DataSettings')}
             onStorage={() => navigation.navigate('StorageManagement')}
             onKeepAlive={() => navigation.navigate('KeepAliveSettings')}
             onExperimental={() => navigation.navigate('ExperimentalSettings')}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Extensions">
+        {({ navigation }) => (
+          <ExtensionsScreen
+            onBack={() => navigation.goBack()}
+            onOpen={(kind) => navigation.navigate('ExtensionDetail', { kind })}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="ExtensionDetail">
+        {({ navigation, route }) => (
+          <ExtensionDetailScreen
+            kind={route.params.kind}
+            onBack={() => navigation.goBack()}
+            onAddAgent={() => navigation.navigate('AgentExtensionEdit')}
+            onEditAgent={(agentId) => navigation.navigate('AgentExtensionEdit', { agentId })}
+            onAddMcp={() => navigation.navigate('McpExtensionEdit')}
+            onEditMcp={(mcpId) => navigation.navigate('McpExtensionEdit', { mcpId })}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="AgentExtensionEdit">
+        {({ navigation, route }) => (
+          <AgentExtensionEditScreen
+            agentId={route.params?.agentId}
+            onBack={() => navigation.goBack()}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="McpExtensionEdit">
+        {({ navigation, route }) => (
+          <McpExtensionEditScreen
+            mcpId={route.params?.mcpId}
+            onBack={() => navigation.goBack()}
           />
         )}
       </Stack.Screen>
@@ -120,6 +166,7 @@ export default function RootNavigator() {
           <ModelAddOptionsScreen
             onBack={() => navigation.goBack()}
             onCustom={() => navigation.navigate('ModelAdd')}
+            onLocal={() => navigation.navigate('ModelAdd', { local: true })}
             onProvider={(presetId) => navigation.navigate('ModelAdd', { presetId })}
           />
         )}
@@ -129,6 +176,7 @@ export default function RootNavigator() {
           <ModelAddScreen
             presetId={route.params?.presetId}
             modelId={route.params?.modelId}
+            local={route.params?.local}
             onBack={() => navigation.goBack()}
           />
         )}

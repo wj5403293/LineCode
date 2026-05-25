@@ -1,5 +1,7 @@
 import { ToolCall, ToolResult, ContentBlock } from '../types';
-import { createDefaultRegistry, ToolContext } from './tools';
+import { ToolContext } from './tools';
+import { createDefaultRegistry } from './tools';
+import { createRuntimeRegistry, isExtensionToolName } from './tools/runtimeRegistry';
 import { diffService } from '../services/DiffService';
 import { permissionService } from '../services/PermissionService';
 import { projectService } from '../services/ProjectService';
@@ -18,7 +20,7 @@ export async function executeTool(
   toolCall: ToolCall,
   options?: ExecuteToolOptions,
 ): Promise<ToolResult> {
-  const registry = createDefaultRegistry();
+  const registry = await createRuntimeRegistry();
   const tool = registry.get(toolCall.name);
 
   if (!tool) {
@@ -123,6 +125,7 @@ export async function executeTool(
 }
 
 export function needsConfirmation(toolCall: ToolCall): boolean {
+  if (isExtensionToolName(toolCall.name)) return false;
   const registry = createDefaultRegistry();
   const tool = registry.get(toolCall.name);
   const result = tool?.requiresConfirmation ?? false;

@@ -61,6 +61,7 @@ jest.mock('react-native-fs', () => ({
   CachesDirectoryPath: '/tmp/lineai-test',
   DocumentDirectoryPath: '/tmp/lineai-test',
   exists: jest.fn(() => Promise.resolve(false)),
+  stat: jest.fn(() => Promise.resolve({ isDirectory: () => true, size: 0 })),
   mkdir: jest.fn(() => Promise.resolve()),
   readDir: jest.fn(() => Promise.resolve([])),
   readFile: jest.fn(() => Promise.resolve('')),
@@ -78,6 +79,7 @@ jest.mock('react-native-saf-x', () => ({
   createDocument: jest.fn(() => Promise.resolve({ uri: 'content://test/doc', name: 'test.log' })),
   openDocument: jest.fn(() => Promise.resolve([])),
   openDocumentTree: jest.fn(() => Promise.resolve(null)),
+  getPersistedUriPermissions: jest.fn(() => Promise.resolve([])),
 }));
 
 jest.mock('react-native-webview', () => {
@@ -93,3 +95,14 @@ jest.mock('react-native-zip-archive', () => ({
   unzip: jest.fn(() => Promise.resolve()),
   unzipWithPassword: jest.fn(() => Promise.resolve()),
 }));
+
+const { NativeModules } = require('react-native');
+
+NativeModules.StoragePermission = {
+  isManageExternalStorageGranted: jest.fn(() => Promise.resolve(true)),
+  openManageExternalStorageSettings: jest.fn(() => Promise.resolve(true)),
+};
+
+NativeModules.AppLifecycle = {
+  exitApp: jest.fn(() => Promise.resolve(null)),
+};

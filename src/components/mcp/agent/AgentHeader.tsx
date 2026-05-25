@@ -21,7 +21,7 @@ function getStatusLabel(status: AgentHeaderProps['status']): string {
   return '失败';
 }
 
-export function AgentHeader({
+export const AgentHeader = React.memo(function AgentHeader({
   name,
   agentType,
   status,
@@ -85,7 +85,7 @@ export function AgentHeader({
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   header: {

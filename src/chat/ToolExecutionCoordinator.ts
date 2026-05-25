@@ -33,6 +33,9 @@ export class ToolExecutionCoordinator {
         return false;
       }
     }
+    if (toolCall.name.startsWith('agentx_') || toolCall.name.startsWith('mcpx_')) {
+      return false;
+    }
     return false;
   }
 }

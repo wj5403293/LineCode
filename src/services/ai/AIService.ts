@@ -6,9 +6,11 @@ import { StreamProcessor, StreamCallbacks, ChatMessage } from './processors/Stre
 import { OpenAIStreamProcessor } from './processors/OpenAIProcessor';
 import { AnthropicStreamProcessor } from './processors/AnthropicProcessor';
 import { CodexStreamProcessor } from './processors/CodexProcessor';
+import { LocalLlamaProcessor } from './processors/LocalLlamaProcessor';
 import { TONE_PROMPTS } from './constants/tonePrompts';
 import { projectService } from '../ProjectService';
 import { workspaceFs } from '../WorkspaceFileSystem';
+import { extensionService } from '../ExtensionService';
 
 export { SYSTEM_PROMPT };
 export type { ChatMessage };
@@ -18,6 +20,7 @@ class AIService {
     openai: new OpenAIStreamProcessor(),
     anthropic: new AnthropicStreamProcessor(),
     codex: new CodexStreamProcessor(),
+    local: new LocalLlamaProcessor(),
   };
 
   async buildMessages(
@@ -51,6 +54,11 @@ class AIService {
     
     if (toolPrompt) {
       fullSystemPrompt += `\n\n${toolPrompt}`;
+    }
+
+    const extensionPrompt = await extensionService.buildExtensionPrompt();
+    if (extensionPrompt) {
+      fullSystemPrompt += `\n\n${extensionPrompt}`;
     }
 
     if (fullSystemPrompt) {
@@ -152,10 +160,13 @@ class AIService {
     if (customTools) {
       tools = customTools;
     } else {
-      const { createDefaultRegistry } = await import('../../mcp/tools');
-      const registry = createDefaultRegistry();
+      const { createRuntimeRegistry, isExtensionToolName } = await import('../../mcp/tools/runtimeRegistry');
+      const registry = await createRuntimeRegistry();
       const enabledTools = await mcpService.getEnabledTools();
-      tools = registry.toJSONSchema(enabledTools);
+      const extensionTools = registry.getAll()
+        .map(tool => tool.name)
+        .filter(isExtensionToolName);
+      tools = registry.toJSONSchema([...enabledTools, ...extensionTools]);
     }
 
     console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length, 'reasoningEffort:', reasoningEffort, 'preserveReasoning:', preserveReasoning);

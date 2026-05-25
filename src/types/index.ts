@@ -29,6 +29,7 @@ export interface AgentProgressItem {
 export interface ContentBlock {
   type: 'thinking' | 'text' | 'tool_use' | 'tool_result' | 'agent' | 'compact';
   content: string;
+  thinkingStatus?: 'running' | 'done';
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
@@ -107,11 +108,19 @@ export interface InputAttachment {
 export interface Model {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'codex';
+  provider: 'openai' | 'anthropic' | 'codex' | 'local';
   modelId: string;
   apiKey: string;
   baseUrl?: string;
   providerLabel?: string;
+  localModel?: {
+    fileUri: string;
+    fileName: string;
+    fileSize?: number;
+    localPath: string;
+    acceleration: 'auto' | 'cpu' | 'npu';
+    nCtx?: number;
+  };
 }
 
 export interface SystemPrompt {

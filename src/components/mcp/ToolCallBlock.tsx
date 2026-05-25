@@ -75,7 +75,9 @@ export default React.memo(function ToolCallBlock({
       );
     }
 
-    const agentType = (input.type as 'explore' | 'sub-coding') || 'explore';
+    const agentType = toolCall.name.startsWith('agentx_')
+      ? 'sub-coding'
+      : ((input.type as 'explore' | 'sub-coding') || 'explore');
     const agentStatus = block?.agentStatus || (result ? (isError ? 'error' : 'done') : 'running');
     const agentOutput = block?.agentOutput || result;
     const agentThinking = block?.agentThinking;
@@ -85,7 +87,7 @@ export default React.memo(function ToolCallBlock({
     
     return (
       <AgentBlock
-        name={String(input.description || 'Agent')}
+        name={String(input.description || input.task || toolCall.name || 'Agent')}
         agentType={agentType}
         status={agentStatus}
         output={agentOutput}

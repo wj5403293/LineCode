@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Archive, RefreshCw, Upload } from 'lucide-react-native';
+import { Archive, Power, RefreshCw, Upload } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
 import { copyFile, createDocument, openDocument } from 'react-native-saf-x';
 import ScreenHeader from '../components/ScreenHeader';
@@ -40,6 +40,28 @@ export default function DataSettingsScreen({ onBack }: Props) {
   const handleToggleAutoUpdate = useCallback(async (enabled: boolean) => {
     await hotUpdateService.setAutoUpdateEnabled(enabled);
     setAutoUpdateEnabled(enabled);
+  }, []);
+
+  const handleDisableAndExit = useCallback(() => {
+    Alert.alert(
+      '关闭热更新并退出',
+      '关闭自动检查更新，并立即终止 App 进程和后台服务。下一次手动启动后生效。是否继续？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '关闭并退出',
+          style: 'destructive',
+          onPress: async () => {
+            setAutoUpdateEnabled(false);
+            try {
+              await hotUpdateService.disableAndExit();
+            } catch (err: any) {
+              Alert.alert('退出失败', err?.message || String(err));
+            }
+          },
+        },
+      ],
+    );
   }, []);
 
   const handleExport = useCallback(async () => {
@@ -112,6 +134,13 @@ export default function DataSettingsScreen({ onBack }: Props) {
               desc="启动时读取 base.txt 更新链路"
               value={autoUpdateEnabled}
               onValueChange={handleToggleAutoUpdate}
+            />
+            <ActionRow
+              icon={<Power size={20} color={colors.danger} />}
+              label="关闭并立即退出"
+              desc="关闭自动更新，立即终止 App 进程和后台服务"
+              busy={false}
+              onPress={handleDisableAndExit}
             />
           </View>
         </View>

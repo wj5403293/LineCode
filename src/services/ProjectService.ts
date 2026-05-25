@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import { Platform } from 'react-native';
-import { openDocumentTree } from 'react-native-saf-x';
+import { getPersistedUriPermissions, openDocumentTree } from 'react-native-saf-x';
 import { androidExternalStorage, safTreeUriToFileSystemPath } from './AndroidExternalStorage';
 import { workspaceFs } from './WorkspaceFileSystem';
 
@@ -41,6 +41,40 @@ function sanitizeProjectName(name: string): string {
 
 function isContentUri(path: string): boolean {
   return path.startsWith('content://');
+}
+
+async function listPersistedUris(): Promise<Set<string>> {
+  try {
+    const list = await getPersistedUriPermissions();
+    return new Set(Array.isArray(list) ? list : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function extractContentUri(message: string): string | null {
+  const match = message.match(/content:\/\/[^\s,)'"]+/i);
+  return match ? match[0] : null;
+}
+
+async function pickExternalTreeUri(): Promise<{ uri: string | null; name?: string }> {
+  // saf-x 内部 openDocumentTree 在 takePersistableUriPermission 之后再做 stat，
+  // 部分设备上 stat 会抛 "Unsupported uri" 等错误，但此时 URI 已经持久化。
+  // 这里记录调用前后的持久化列表做差集，作为 reject 时的兜底恢复路径。
+  const before = await listPersistedUris();
+
+  try {
+    const doc = await openDocumentTree(true);
+    if (!doc) return { uri: null };
+    return { uri: doc.uri, name: doc.name };
+  } catch (err: any) {
+    const message = String(err?.message || err || '');
+    const after = await listPersistedUris();
+    const newUri = [...after].find(item => !before.has(item));
+    const fallback = newUri || extractContentUri(message);
+    if (!fallback) throw err;
+    return { uri: fallback };
+  }
 }
 
 function normalizeProject(project: StoredProjectOption): ProjectOption | null {
@@ -162,10 +196,10 @@ class ProjectService {
 
     await androidExternalStorage.ensureManageExternalStorageGranted();
 
-    const doc = await openDocumentTree(false);
-    if (!doc) return null;
+    const { uri, name } = await pickExternalTreeUri();
+    if (!uri) return null;
 
-    const path = safTreeUriToFileSystemPath(doc.uri);
+    const path = safTreeUriToFileSystemPath(uri);
     if (!path) {
       throw new Error('无法将系统目录 URI 转换为文件路径。请选择“内部存储/Download/具体目录”等可解析为 /storage/... 的目录。');
     }
@@ -181,7 +215,7 @@ class ProjectService {
 
     const project: ProjectOption = {
       id: `external:${path}`,
-      label: doc.name || workspaceFs.basename(path) || '外部项目',
+      label: name || workspaceFs.basename(path) || '外部项目',
       desc: path,
       path,
       source: 'external',

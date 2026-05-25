@@ -18,12 +18,14 @@ const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   codex: 'Codex',
   anthropic: 'Anthropic',
+  local: '本地',
 };
 
 const PROVIDER_COLORS: Record<string, string> = {
   openai: '#10A37F',
   codex: '#4B8BFF',
   anthropic: '#D4A574',
+  local: '#2E7D62',
 };
 
 export default React.memo(function ModelCard({ model, isSelected, isMultiSelect, isChecked, onPress, onLongPress }: Props) {

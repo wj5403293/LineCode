@@ -5,6 +5,7 @@ import { Message } from '../types';
 import { DisplayMode } from '../services/settings';
 import { spacing } from '../constants/theme';
 import { ContainedScrollProvider } from './ContainedScrollContext';
+import { MessageActionsContext, MessageActionsValue } from '../contexts/MessageActionsContext';
 
 interface Props {
   messages: Message[];
@@ -26,6 +27,9 @@ interface Props {
   onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onScrollToBottom: (animated?: boolean) => void;
 }
+
+const renderItem = ({ item }: { item: Message }) => <MessageBubble message={item} />;
+const keyExtractor = (item: Message) => item.id;
 
 function ChatMessageList({
   messages,
@@ -57,24 +61,21 @@ function ChatMessageList({
     setListScrollEnabled(prev => prev === enabled ? prev : enabled);
   }, []);
 
-  const renderItem = useCallback(({ item }: { item: Message }) => (
-    <MessageBubble
-      message={item}
-      codeWrap={codeWrap}
-      displayMode={displayMode}
-      mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-      thinkingAutoExpand={thinkingAutoExpand}
-      thinkingScrollable={thinkingScrollable}
-      homePath={homePath}
-      shellConfirmToolCallId={shellConfirmToolCallId}
-      onShellCancel={onShellCancel}
-      onShellConfirm={onShellConfirm}
-      onShellDefaultExecute={onShellDefaultExecute}
-      onViewShellCommand={onViewShellCommand}
-      onToolReview={onToolReview}
-      onRecallUserMessage={onRecallUserMessage}
-    />
-  ), [
+  const actionsValue = useMemo<MessageActionsValue>(() => ({
+    codeWrap,
+    displayMode,
+    mathFormulaRenderingEnabled,
+    thinkingAutoExpand,
+    thinkingScrollable,
+    homePath,
+    shellConfirmToolCallId,
+    onShellCancel,
+    onShellConfirm,
+    onShellDefaultExecute,
+    onViewShellCommand,
+    onToolReview,
+    onRecallUserMessage,
+  }), [
     codeWrap,
     displayMode,
     mathFormulaRenderingEnabled,
@@ -90,29 +91,29 @@ function ChatMessageList({
     onRecallUserMessage,
   ]);
 
-  const keyExtractor = useCallback((item: Message) => item.id, []);
-
   return (
     <ContainedScrollProvider setOuterScrollEnabled={handleOuterScrollEnabled}>
-      <FlatList
-        ref={listRef}
-        data={visibleMessages}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        onContentSizeChange={() => onScrollToBottom(false)}
-        onScrollBeginDrag={onScrollBeginDrag}
-        onScroll={onScroll}
-        onScrollEndDrag={onScroll}
-        onMomentumScrollEnd={onScroll}
-        scrollEnabled={listScrollEnabled}
-        scrollEventThrottle={32}
-        removeClippedSubviews
-        maxToRenderPerBatch={8}
-        updateCellsBatchingPeriod={50}
-        windowSize={8}
-      />
+      <MessageActionsContext.Provider value={actionsValue}>
+        <FlatList
+          ref={listRef}
+          data={visibleMessages}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          onContentSizeChange={() => onScrollToBottom(false)}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onScroll={onScroll}
+          onScrollEndDrag={onScroll}
+          onMomentumScrollEnd={onScroll}
+          scrollEnabled={listScrollEnabled}
+          scrollEventThrottle={32}
+          removeClippedSubviews
+          maxToRenderPerBatch={8}
+          updateCellsBatchingPeriod={50}
+          windowSize={8}
+        />
+      </MessageActionsContext.Provider>
     </ContainedScrollProvider>
   );
 }

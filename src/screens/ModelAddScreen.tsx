@@ -1,17 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
-  ActivityIndicator, Modal, FlatList,
+  ActivityIndicator, Modal, FlatList, Alert, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Check, ChevronDown, ExternalLink } from 'lucide-react-native';
+import { Search, Check, ChevronDown, ExternalLink, FileUp, Cpu } from 'lucide-react-native';
+import RNFS from 'react-native-fs';
+import { copyFile, openDocument } from 'react-native-saf-x';
 import { Model } from '../types';
 import { modelStorage } from '../services/storage';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
 import { openURL } from '../utils/openURL';
+import { formatContextSize } from '../utils/modelContext';
 import { GPT55_PROMO_TITLE, GPT55_PROMO_URL } from '../constants/promo';
 import { getModelProviderPreset } from '../constants/modelProviders';
 
@@ -19,43 +22,81 @@ interface Props {
   onBack: () => void;
   presetId?: string;
   modelId?: string;
+  local?: boolean;
 }
 
 const CUSTOM_ID = '__custom__';
 type ProviderId = Model['provider'];
+type RemoteProviderId = Exclude<ProviderId, 'local'>;
+type LocalAcceleration = NonNullable<Model['localModel']>['acceleration'];
+const REMOTE_PROVIDERS: RemoteProviderId[] = ['openai', 'codex', 'anthropic'];
+const MODEL_IMPORT_DIR = `${RNFS.DocumentDirectoryPath}/local-models`;
 
 const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: 'OpenAI',
   codex: 'Codex',
   anthropic: 'Anthropic',
+  local: '本地',
 };
 
-const PROVIDER_DEFAULT_BASE_URLS: Record<ProviderId, string> = {
+const PROVIDER_DEFAULT_BASE_URLS: Record<RemoteProviderId, string> = {
   openai: 'https://api.openai.com/v1',
   codex: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
 };
 
-const PROVIDER_PLACEHOLDERS: Record<ProviderId, string> = {
+const PROVIDER_PLACEHOLDERS: Record<RemoteProviderId, string> = {
   openai: 'https://api.example.com/v1',
   codex: 'https://api.example.com/v1',
   anthropic: 'https://api.example.com/anthropic',
 };
 
-const PROVIDER_BASE_URL_HINTS: Record<ProviderId, string> = {
+const PROVIDER_BASE_URL_HINTS: Record<RemoteProviderId, string> = {
   openai: 'OpenAI 兼容协议必须填到 /v1 结尾，例如 https://api.example.com/v1；不要只填域名，也不要加 /chat/completions。',
   codex: 'Codex 使用 Responses API，也必须填到 /v1 结尾，例如 https://api.example.com/v1；不要加 /responses。',
   anthropic: 'Anthropic 协议必须填到 /anthropic 结尾，例如 https://api.example.com/anthropic；不要加 /v1/messages。',
 };
 
-export default function ModelAddScreen({ onBack, presetId, modelId: editingModelId }: Props) {
+const LOCAL_ACCELERATION_LABELS: Record<LocalAcceleration, string> = {
+  auto: '自动',
+  cpu: 'CPU',
+  npu: 'NPU',
+};
+
+function sanitizeFileName(name: string): string {
+  return (name || 'model.gguf').replace(/[^\w.-]+/g, '_').slice(0, 120);
+}
+
+function fileNameWithoutExtension(name: string): string {
+  return name.replace(/\.[^.]+$/, '').trim();
+}
+
+function isGgufFile(name: string): boolean {
+  return /\.gguf$/i.test(name);
+}
+
+function formatFileSize(size?: number): string {
+  if (!size || size < 0) return '';
+  if (size >= 1024 * 1024 * 1024) return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(0)} MB`;
+  if (size >= 1024) return `${(size / 1024).toFixed(0)} KB`;
+  return `${size} B`;
+}
+
+function localModelIdFrom(name: string, nCtx: string): string {
+  const context = Number(nCtx);
+  const contextLabel = Number.isFinite(context) && context > 0 ? ` [${formatContextSize(context)}]` : '';
+  return `${name.trim() || 'local-model'}${contextLabel}`;
+}
+
+export default function ModelAddScreen({ onBack, presetId, modelId: editingModelId, local }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
   const preset = getModelProviderPreset(presetId);
   const lockedPreset = !!preset;
   const isEditing = !!editingModelId;
-  const [provider, setProvider] = useState<ProviderId>(preset?.provider || 'openai');
+  const [provider, setProvider] = useState<ProviderId>(local ? 'local' : preset?.provider || 'openai');
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(preset?.baseUrl || '');
@@ -66,6 +107,14 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
   const [fetchingModels, setFetchingModels] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [localFileUri, setLocalFileUri] = useState('');
+  const [localPath, setLocalPath] = useState('');
+  const [localFileName, setLocalFileName] = useState('');
+  const [localFileSize, setLocalFileSize] = useState<number | undefined>(undefined);
+  const [localAcceleration, setLocalAcceleration] = useState<LocalAcceleration>('auto');
+  const [localContextTokens, setLocalContextTokens] = useState('4096');
+  const [importingLocalModel, setImportingLocalModel] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editingModelId) return;
@@ -82,18 +131,28 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
       setIsCustomId(true);
       setFetchedModels([]);
       setFetchError(null);
+      setLocalFileUri(target.localModel?.fileUri || '');
+      setLocalPath(target.localModel?.localPath || '');
+      setLocalFileName(target.localModel?.fileName || '');
+      setLocalFileSize(target.localModel?.fileSize);
+      setLocalAcceleration(target.localModel?.acceleration || 'auto');
+      setLocalContextTokens(String(target.localModel?.nCtx || 4096));
     });
     return () => {
       cancelled = true;
     };
   }, [editingModelId]);
 
+  const isLocalProvider = provider === 'local';
+  const remoteProvider = isLocalProvider ? 'openai' : provider;
   const effectiveBaseUrl = preset
     ? (baseUrl.trim() || preset.baseUrl)
-    : (baseUrl.trim() || PROVIDER_DEFAULT_BASE_URLS[provider]);
-  const canQuery = !!(effectiveBaseUrl && apiKey.trim());
-  const resolvedName = name.trim() || (preset ? modelId.trim() : '');
-  const canSave = !!(resolvedName && modelId.trim() && apiKey.trim());
+    : (baseUrl.trim() || PROVIDER_DEFAULT_BASE_URLS[remoteProvider]);
+  const canQuery = !isLocalProvider && !!(effectiveBaseUrl && apiKey.trim());
+  const resolvedName = name.trim() || (!isLocalProvider && preset ? modelId.trim() : '');
+  const canSave = isLocalProvider
+    ? !!(name.trim() && localPath)
+    : !!(resolvedName && modelId.trim() && apiKey.trim());
 
   const handleFetchModels = useCallback(async () => {
     if (!canQuery) return;
@@ -105,7 +164,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
       let modelsUrl: string;
       let headers: Record<string, string>;
 
-      if (provider === 'openai' || provider === 'codex') {
+      if (remoteProvider === 'openai' || remoteProvider === 'codex') {
         modelsUrl = `${cleanBase}/models`;
         headers = { 'Authorization': `Bearer ${apiKey}` };
       } else {
@@ -149,7 +208,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     } finally {
       setFetchingModels(false);
     }
-  }, [canQuery, effectiveBaseUrl, apiKey, provider]);
+  }, [canQuery, effectiveBaseUrl, apiKey, remoteProvider]);
 
   const handleSelectModel = useCallback((id: string) => {
     if (id === CUSTOM_ID) {
@@ -163,19 +222,63 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     setShowModelPicker(false);
   }, [name, preset]);
 
+  const handleSelectLocalModel = useCallback(async () => {
+    if (importingLocalModel) return;
+    setImportingLocalModel(true);
+    setLocalError(null);
+
+    try {
+      const docs = await openDocument({ persist: true, multiple: false });
+      const doc = docs?.[0];
+      if (!doc) return;
+
+      if (!isGgufFile(doc.name)) {
+        Alert.alert('模型格式不支持', '当前本地推理仅支持 GGUF 文件。');
+        return;
+      }
+
+      await RNFS.mkdir(MODEL_IMPORT_DIR);
+      const fileName = sanitizeFileName(doc.name);
+      const localModelPath = `${MODEL_IMPORT_DIR}/${Date.now()}_${fileName}`;
+      await copyFile(doc.uri, `file://${localModelPath}`, { replaceIfDestinationExists: true });
+
+      setLocalFileUri(doc.uri);
+      setLocalPath(localModelPath);
+      setLocalFileName(doc.name);
+      setLocalFileSize(doc.size);
+      if (!name.trim()) {
+        setName(fileNameWithoutExtension(doc.name));
+      }
+      setModelId(localModelIdFrom(name.trim() || fileNameWithoutExtension(doc.name), localContextTokens));
+    } catch (err: any) {
+      setLocalError(err?.message || String(err));
+    } finally {
+      setImportingLocalModel(false);
+    }
+  }, [importingLocalModel, localContextTokens, name]);
+
   const handleSave = useCallback(async () => {
     if (!canSave) return;
 
     const models = await modelStorage.getModels();
     const existingModel = editingModelId ? models.find(item => item.id === editingModelId) : undefined;
+    const localCtx = Math.max(512, Math.round(Number(localContextTokens) || 4096));
     const nextModel: Model = {
       id: existingModel?.id || String(Date.now()),
-      name: resolvedName,
+      name: isLocalProvider ? name.trim() : resolvedName,
       provider,
-      providerLabel: preset?.label || existingModel?.providerLabel,
-      modelId: modelId.trim(),
-      apiKey: apiKey.trim(),
-      baseUrl: baseUrl.trim() || undefined,
+      providerLabel: isLocalProvider ? '本地' : preset?.label || existingModel?.providerLabel,
+      modelId: isLocalProvider ? localModelIdFrom(name.trim(), String(localCtx)) : modelId.trim(),
+      apiKey: isLocalProvider ? '' : apiKey.trim(),
+      baseUrl: isLocalProvider ? undefined : baseUrl.trim() || undefined,
+      localModel: isLocalProvider ? {
+        fileUri: localFileUri,
+        fileName: localFileName,
+        fileSize: localFileSize,
+        localPath,
+        acceleration: localAcceleration,
+        nCtx: localCtx,
+      } : undefined,
     };
 
     const updated = existingModel
@@ -193,7 +296,25 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     }
 
     onBack();
-  }, [resolvedName, modelId, apiKey, baseUrl, provider, preset?.label, canSave, onBack, editingModelId]);
+  }, [
+    resolvedName,
+    modelId,
+    apiKey,
+    baseUrl,
+    provider,
+    preset?.label,
+    canSave,
+    onBack,
+    editingModelId,
+    isLocalProvider,
+    name,
+    localFileUri,
+    localFileName,
+    localFileSize,
+    localPath,
+    localAcceleration,
+    localContextTokens,
+  ]);
 
   const handleOpenPromo = useCallback(() => {
     openURL(GPT55_PROMO_URL, (url) => navigation.navigate('InAppBrowser', { url })).catch(() => {});
@@ -224,7 +345,7 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
           {preset ? `提供商：${preset.label}` : '提供商'}
         </Text>
         <View style={styles.toggleRow}>
-          {(['openai', 'codex', 'anthropic'] as const).map(p => (
+          {([...REMOTE_PROVIDERS, 'local'] as ProviderId[]).map(p => (
             <TouchableOpacity
               key={p}
               style={[
@@ -235,10 +356,10 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
               onPress={() => {
                 if (lockedPreset || isEditing) return;
                 setProvider(p);
-                setBaseUrl(baseUrl);
                 setFetchedModels([]);
                 setModelId('');
-                setIsCustomId(false);
+                setFetchError(null);
+                setIsCustomId(p === 'local');
               }}
               disabled={lockedPreset || isEditing}
             >
@@ -252,116 +373,196 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
         <Text style={[styles.label, { color: colors.textSecondary }]}>名称</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-          placeholder={preset ? '可留空，默认使用模型 ID' : '如 GPT-4o、Claude Sonnet'}
+          placeholder={isLocalProvider ? '如 Qwen2.5 7B 本地' : preset ? '可留空，默认使用模型 ID' : '如 GPT-4o、Claude Sonnet'}
           placeholderTextColor={colors.textTertiary}
           value={name}
           onChangeText={setName}
         />
 
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Base URL</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-          placeholder={preset?.placeholder || PROVIDER_PLACEHOLDERS[provider]}
-          placeholderTextColor={colors.textTertiary}
-          value={baseUrl}
-          onChangeText={setBaseUrl}
-          autoCapitalize="none"
-        />
-        <Text style={[styles.hintText, { color: colors.textTertiary }]}>
-          {preset?.hint || PROVIDER_BASE_URL_HINTS[provider]}
-        </Text>
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>API Key</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-          placeholder="sk-..."
-          placeholderTextColor={colors.textTertiary}
-          value={apiKey}
-          onChangeText={setApiKey}
-          secureTextEntry
-        />
-
-        <Text style={[styles.label, { color: colors.textSecondary }]}>模型 ID</Text>
-
-        {isCustomId ? (
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-            placeholder="输入模型 ID"
-            placeholderTextColor={colors.textTertiary}
-            value={modelId}
-            onChangeText={setModelId}
-            autoCapitalize="none"
-          />
-        ) : (
-          <View style={styles.modelRow}>
+        {isLocalProvider ? (
+          <>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>模型文件</Text>
             <TouchableOpacity
-              style={[styles.modelSelector, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
-              onPress={() => {
-                if (fetchedModels.length > 0) {
-                  setShowModelPicker(true);
-                } else {
-                  handleFetchModels();
-                }
-              }}
-              activeOpacity={0.7}
+              style={[styles.localFileCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
+              onPress={handleSelectLocalModel}
+              activeOpacity={0.75}
+              disabled={importingLocalModel}
             >
-              <Text
-                style={[styles.modelSelectorText, { color: modelId ? colors.text : colors.textTertiary }]}
-                numberOfLines={1}
-              >
-                {modelDisplayText}
-              </Text>
-              <ChevronDown size={16} color={colors.textTertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.queryBtn, { backgroundColor: canQuery ? colors.accent : colors.surfaceLight }]}
-              onPress={handleFetchModels}
-              disabled={!canQuery || fetchingModels}
-              activeOpacity={0.7}
-            >
-              {fetchingModels ? (
-                <ActivityIndicator size="small" color={canQuery ? colors.textOnColor : colors.textTertiary} />
+              <View style={[styles.localFileIcon, { backgroundColor: colors.accentMuted }]}>
+                <FileUp size={20} color={colors.accent} />
+              </View>
+              <View style={styles.localFileText}>
+                <Text style={[styles.localFileTitle, { color: localFileName ? colors.text : colors.textTertiary }]} numberOfLines={1}>
+                  {localFileName || '选择 GGUF 模型文件'}
+                </Text>
+                <Text style={[styles.localFileDesc, { color: colors.textTertiary }]} numberOfLines={1}>
+                  {localFileName ? formatFileSize(localFileSize) || '已导入应用私有目录' : '通过 SAF 选择文件，应用会导入本地副本'}
+                </Text>
+              </View>
+              {importingLocalModel ? (
+                <ActivityIndicator size="small" color={colors.accent} />
               ) : (
-                <>
-                  <Search size={16} color={canQuery ? colors.textOnColor : colors.textTertiary} />
-                  <Text style={[styles.queryText, { color: canQuery ? colors.textOnColor : colors.textTertiary }]}>查询</Text>
-                </>
+                <ChevronDown size={16} color={colors.textTertiary} />
               )}
             </TouchableOpacity>
-          </View>
-        )}
+            {!!localPath && (
+              <Text style={[styles.hintText, { color: colors.textTertiary }]} numberOfLines={2}>
+                {localPath}
+              </Text>
+            )}
 
-        {isCustomId && (
-          <TouchableOpacity
-            style={styles.switchBtn}
-            onPress={() => { setIsCustomId(false); setModelId(''); }}
-          >
-            <Text style={[styles.switchBtnText, { color: colors.accent }]}>从列表中选择</Text>
-          </TouchableOpacity>
-        )}
-
-        {fetchError && (
-          <Text style={[styles.errorText, { color: colors.danger }]}>{fetchError}</Text>
-        )}
-
-        <TouchableOpacity
-          style={[styles.promoCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
-          onPress={handleOpenPromo}
-          activeOpacity={0.75}
-        >
-          <View style={styles.promoTextWrap}>
-            <Text style={[styles.promoTitle, { color: colors.text }]} numberOfLines={1}>
-              {GPT55_PROMO_TITLE}
+            <Text style={[styles.label, { color: colors.textSecondary }]}>上下文长度</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+              placeholder="4096"
+              placeholderTextColor={colors.textTertiary}
+              value={localContextTokens}
+              onChangeText={(value) => setLocalContextTokens(value.replace(/[^\d]/g, ''))}
+              keyboardType="number-pad"
+            />
+            <Text style={[styles.hintText, { color: colors.textTertiary }]}>
+              手机端建议从 4096 开始；保存后模型 ID 会自动带上上下文标记。
             </Text>
-            <Text style={[styles.promoSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-              点击前往领取
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>加速</Text>
+            <View style={styles.toggleRow}>
+              {(['auto', 'cpu', ...(Platform.OS === 'android' ? ['npu'] : [])] as LocalAcceleration[]).map(acceleration => {
+                const active = localAcceleration === acceleration;
+                return (
+                  <TouchableOpacity
+                    key={acceleration}
+                    style={[
+                      styles.toggleBtn,
+                      { backgroundColor: active ? colors.accent : colors.surfaceLight },
+                    ]}
+                    onPress={() => setLocalAcceleration(acceleration)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.accelerationButtonContent}>
+                      {acceleration !== 'auto' && <Cpu size={14} color={active ? colors.textOnColor : colors.textSecondary} />}
+                      <Text style={[styles.toggleText, { color: active ? colors.textOnColor : colors.textSecondary }]}>
+                        {LOCAL_ACCELERATION_LABELS[acceleration]}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.hintText, { color: colors.textTertiary }]}>
+              自动模式会优先尝试 Android Hexagon NPU，设备或模型不支持时回退 CPU。
             </Text>
-          </View>
-          <View style={[styles.promoAction, { backgroundColor: colors.accentMuted }]}>
-            <Text style={[styles.promoActionText, { color: colors.accent }]}>前往</Text>
-            <ExternalLink size={14} color={colors.accent} />
-          </View>
-        </TouchableOpacity>
+            {localError && (
+              <Text style={[styles.errorText, { color: colors.danger }]}>{localError}</Text>
+            )}
+          </>
+        ) : (
+          <>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Base URL</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+              placeholder={preset?.placeholder || PROVIDER_PLACEHOLDERS[remoteProvider]}
+              placeholderTextColor={colors.textTertiary}
+              value={baseUrl}
+              onChangeText={setBaseUrl}
+              autoCapitalize="none"
+            />
+            <Text style={[styles.hintText, { color: colors.textTertiary }]}>
+              {preset?.hint || PROVIDER_BASE_URL_HINTS[remoteProvider]}
+            </Text>
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>API Key</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+              placeholder="sk-..."
+              placeholderTextColor={colors.textTertiary}
+              value={apiKey}
+              onChangeText={setApiKey}
+              secureTextEntry
+            />
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>模型 ID</Text>
+
+            {isCustomId ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+                placeholder="输入模型 ID"
+                placeholderTextColor={colors.textTertiary}
+                value={modelId}
+                onChangeText={setModelId}
+                autoCapitalize="none"
+              />
+            ) : (
+              <View style={styles.modelRow}>
+                <TouchableOpacity
+                  style={[styles.modelSelector, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
+                  onPress={() => {
+                    if (fetchedModels.length > 0) {
+                      setShowModelPicker(true);
+                    } else {
+                      handleFetchModels();
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.modelSelectorText, { color: modelId ? colors.text : colors.textTertiary }]}
+                    numberOfLines={1}
+                  >
+                    {modelDisplayText}
+                  </Text>
+                  <ChevronDown size={16} color={colors.textTertiary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.queryBtn, { backgroundColor: canQuery ? colors.accent : colors.surfaceLight }]}
+                  onPress={handleFetchModels}
+                  disabled={!canQuery || fetchingModels}
+                  activeOpacity={0.7}
+                >
+                  {fetchingModels ? (
+                    <ActivityIndicator size="small" color={canQuery ? colors.textOnColor : colors.textTertiary} />
+                  ) : (
+                    <>
+                      <Search size={16} color={canQuery ? colors.textOnColor : colors.textTertiary} />
+                      <Text style={[styles.queryText, { color: canQuery ? colors.textOnColor : colors.textTertiary }]}>查询</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {isCustomId && (
+              <TouchableOpacity
+                style={styles.switchBtn}
+                onPress={() => { setIsCustomId(false); setModelId(''); }}
+              >
+                <Text style={[styles.switchBtnText, { color: colors.accent }]}>从列表中选择</Text>
+              </TouchableOpacity>
+            )}
+
+            {fetchError && (
+              <Text style={[styles.errorText, { color: colors.danger }]}>{fetchError}</Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.promoCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
+              onPress={handleOpenPromo}
+              activeOpacity={0.75}
+            >
+              <View style={styles.promoTextWrap}>
+                <Text style={[styles.promoTitle, { color: colors.text }]} numberOfLines={1}>
+                  {GPT55_PROMO_TITLE}
+                </Text>
+                <Text style={[styles.promoSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                  点击前往领取
+                </Text>
+              </View>
+              <View style={[styles.promoAction, { backgroundColor: colors.accentMuted }]}>
+                <Text style={[styles.promoActionText, { color: colors.accent }]}>前往</Text>
+                <ExternalLink size={14} color={colors.accent} />
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       <Modal visible={showModelPicker} transparent animationType="slide" onRequestClose={() => setShowModelPicker(false)}>
@@ -428,6 +629,12 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   toggleText: { fontSize: fontSizes.md, fontWeight: '600' },
+  accelerationButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
   input: {
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -478,6 +685,34 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     lineHeight: 17,
     marginTop: spacing.sm,
+  },
+  localFileCard: {
+    minHeight: 74,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  localFileIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  localFileText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  localFileTitle: {
+    fontSize: fontSizes.md,
+    fontWeight: '700',
+  },
+  localFileDesc: {
+    fontSize: fontSizes.xs,
+    marginTop: 3,
   },
   promoCard: {
     marginTop: spacing.xl,

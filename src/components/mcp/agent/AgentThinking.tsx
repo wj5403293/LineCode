@@ -14,7 +14,7 @@ interface AgentThinkingProps {
   onToggle: () => void;
 }
 
-export function AgentThinking({ thinking, streaming, expanded, onToggle }: AgentThinkingProps) {
+export const AgentThinking = React.memo(function AgentThinking({ thinking, streaming, expanded, onToggle }: AgentThinkingProps) {
   const { colors } = useTheme();
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
 
@@ -46,7 +46,7 @@ export function AgentThinking({ thinking, streaming, expanded, onToggle }: Agent
       )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   thinkingHeader: {

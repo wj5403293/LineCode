@@ -24,7 +24,110 @@ interface ContentBlockRendererProps {
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
-export function ContentBlockRenderer({
+interface BlockItemProps {
+  block: ContentBlock;
+  blockIndex: number;
+  isLastBlock: boolean;
+  streaming?: boolean;
+  toolResult?: ToolResult;
+  codeWrap?: boolean;
+  mathFormulaRenderingEnabled?: boolean;
+  thinkingAutoExpand?: boolean;
+  thinkingScrollable?: boolean;
+  homePath?: string;
+  shellConfirmToolCallId?: string;
+  onShellCancel?: () => void;
+  onShellConfirm?: () => void;
+  onShellDefaultExecute?: () => void;
+  onViewShellCommand?: (command: string) => void;
+  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
+}
+
+const BlockItem = React.memo(function BlockItem({
+  block,
+  isLastBlock,
+  streaming,
+  toolResult,
+  codeWrap,
+  mathFormulaRenderingEnabled,
+  thinkingAutoExpand,
+  thinkingScrollable,
+  homePath,
+  shellConfirmToolCallId,
+  onShellCancel,
+  onShellConfirm,
+  onShellDefaultExecute,
+  onViewShellCommand,
+  onToolReview,
+}: BlockItemProps) {
+  if (block.type === 'thinking') {
+    const thinkingStreaming = streaming && (
+      block.thinkingStatus === 'running' ||
+      (block.thinkingStatus !== 'done' && isLastBlock)
+    );
+    return (
+      <RenderErrorBoundary label="思考内容" resetKey={block.content}>
+        <ThinkingBlock
+          content={block.content}
+          streaming={thinkingStreaming}
+          autoExpand={thinkingAutoExpand}
+          scrollable={thinkingScrollable}
+          mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+        />
+      </RenderErrorBoundary>
+    );
+  }
+
+  if (block.type === 'tool_use' && block.id && block.name) {
+    const tc: ToolCall = {
+      id: block.id,
+      name: block.name,
+      arguments: block.content || JSON.stringify(block.input || {}),
+    };
+    return (
+      <RenderErrorBoundary
+        label="工具调用"
+        resetKey={toolResetKey(block.id, shellConfirmToolCallId, toolResult)}
+      >
+        <ToolCallBlock
+          toolCall={tc}
+          homePath={homePath}
+          result={toolResult?.content}
+          isError={toolResult?.isError}
+          toolResult={toolResult}
+          block={block}
+          pending={block.id === shellConfirmToolCallId && !toolResult}
+          onShellCancel={onShellCancel}
+          onShellConfirm={onShellConfirm}
+          onShellDefaultExecute={onShellDefaultExecute}
+          onViewShellCommand={onViewShellCommand}
+          onToolReview={onToolReview}
+        />
+      </RenderErrorBoundary>
+    );
+  }
+
+  if (block.type === 'tool_result') {
+    return null;
+  }
+
+  if (block.type === 'compact') {
+    return <ContextCompactBlock status={block.compactStatus} />;
+  }
+
+  return (
+    <RenderErrorBoundary label="消息内容" resetKey={block.content}>
+      <TextBlock
+        content={block.content}
+        streaming={streaming && isLastBlock}
+        codeWrap={codeWrap}
+        mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+      />
+    </RenderErrorBoundary>
+  );
+});
+
+export const ContentBlockRenderer = React.memo(function ContentBlockRenderer({
   blocks,
   toolCalls,
   toolResults,
@@ -51,69 +154,27 @@ export function ContentBlockRenderer({
       <>
         {blocks.map((block, i) => {
           const key = blockKey(block, i);
-          if (block.type === 'thinking') {
-            return (
-              <RenderErrorBoundary key={key} label="思考内容" resetKey={block.content}>
-                <ThinkingBlock
-                  content={block.content}
-                  streaming={streaming && i === blocks.length - 1}
-                  autoExpand={thinkingAutoExpand}
-                  scrollable={thinkingScrollable}
-                  mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-                />
-              </RenderErrorBoundary>
-            );
-          }
-          if (block.type === 'tool_use' && block.id && block.name) {
-            const tc: ToolCall = {
-              id: block.id,
-              name: block.name,
-              arguments: block.content || JSON.stringify(block.input || {}),
-            };
-            const tr = toolResultById.get(block.id);
-            return (
-              <RenderErrorBoundary
-                key={key}
-                label="工具调用"
-                resetKey={toolResetKey(block.id, shellConfirmToolCallId, tr)}
-              >
-                <ToolCallBlock
-                  toolCall={tc}
-                  homePath={homePath}
-                  result={tr?.content}
-                  isError={tr?.isError}
-                  toolResult={tr}
-                  block={block}
-                  pending={block.id === shellConfirmToolCallId && !tr}
-                  onShellCancel={onShellCancel}
-                  onShellConfirm={onShellConfirm}
-                  onShellDefaultExecute={onShellDefaultExecute}
-                  onViewShellCommand={onViewShellCommand}
-                  onToolReview={onToolReview}
-                />
-              </RenderErrorBoundary>
-            );
-          }
-          if (block.type === 'tool_result') {
-            return null;
-          }
-          if (block.type === 'compact') {
-            return (
-              <ContextCompactBlock
-                key={key}
-                status={block.compactStatus}
-              />
-            );
-          }
+          const toolResult = block.type === 'tool_use' && block.id ? toolResultById.get(block.id) : undefined;
           return (
-            <RenderErrorBoundary key={key} label="消息内容" resetKey={block.content}>
-              <TextBlock
-                content={block.content}
-                streaming={streaming && i === blocks.length - 1}
-                codeWrap={codeWrap}
-                mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
-              />
-            </RenderErrorBoundary>
+            <BlockItem
+              key={key}
+              block={block}
+              blockIndex={i}
+              isLastBlock={i === blocks.length - 1}
+              streaming={streaming}
+              toolResult={toolResult}
+              codeWrap={codeWrap}
+              mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
+              thinkingAutoExpand={thinkingAutoExpand}
+              thinkingScrollable={thinkingScrollable}
+              homePath={homePath}
+              shellConfirmToolCallId={shellConfirmToolCallId}
+              onShellCancel={onShellCancel}
+              onShellConfirm={onShellConfirm}
+              onShellDefaultExecute={onShellDefaultExecute}
+              onViewShellCommand={onViewShellCommand}
+              onToolReview={onToolReview}
+            />
           );
         })}
       </>
@@ -152,7 +213,7 @@ export function ContentBlockRenderer({
   }
 
   return null;
-}
+});
 
 function blockKey(block: ContentBlock, index: number): string {
   if (block.id) return block.id;
@@ -179,7 +240,7 @@ interface ContentWithTextProps {
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
 }
 
-export function ContentWithText({
+export const ContentWithText = React.memo(function ContentWithText({
   content,
   blocks,
   toolCalls,
@@ -232,7 +293,7 @@ export function ContentWithText({
       />
     </>
   );
-}
+});
 
 function pendingKey(toolCallId: string, shellConfirmToolCallId?: string): string {
   return toolCallId === shellConfirmToolCallId ? 'pending' : 'idle';

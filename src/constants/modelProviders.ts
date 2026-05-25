@@ -16,6 +16,7 @@ export const MODEL_PROVIDER_PROTOCOL_LABELS: Record<ModelProviderProtocol, strin
   openai: 'OpenAI 兼容',
   codex: 'Codex',
   anthropic: 'Anthropic',
+  local: '本地 GGUF',
 };
 
 export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [

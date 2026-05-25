@@ -1,59 +1,37 @@
 import React from 'react';
 import { Message } from '../types';
-import { DisplayMode } from '../services/settings';
 import UserBubble from './message/UserBubble';
 import AIBubbleFullscreen from './message/AIBubbleFullscreen';
 import AIBubbleCompact from './message/AIBubbleCompact';
+import { useMessageActions } from '../contexts/MessageActionsContext';
 
 interface Props {
   message: Message;
-  codeWrap?: boolean;
-  displayMode?: DisplayMode;
-  mathFormulaRenderingEnabled?: boolean;
-  thinkingAutoExpand?: boolean;
-  thinkingScrollable?: boolean;
-  homePath?: string;
-  shellConfirmToolCallId?: string;
-  onShellCancel?: () => void;
-  onShellConfirm?: () => void;
-  onShellDefaultExecute?: () => void;
-  onViewShellCommand?: (command: string) => void;
-  onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
-  onRecallUserMessage?: (message: Message) => void;
 }
 
-const MemoizedUserBubble = React.memo(UserBubble);
-const MemoizedAIBubbleFullscreen = React.memo(AIBubbleFullscreen);
-const MemoizedAIBubbleCompact = React.memo(AIBubbleCompact);
+function MessageBubble({ message }: Props) {
+  const {
+    codeWrap,
+    displayMode = 'fullscreen',
+    mathFormulaRenderingEnabled,
+    thinkingAutoExpand,
+    thinkingScrollable,
+    homePath,
+    shellConfirmToolCallId,
+    onShellCancel,
+    onShellConfirm,
+    onShellDefaultExecute,
+    onViewShellCommand,
+    onToolReview,
+    onRecallUserMessage,
+  } = useMessageActions();
 
-function MessageBubble({
-  message,
-  codeWrap,
-  displayMode = 'fullscreen',
-  mathFormulaRenderingEnabled,
-  thinkingAutoExpand,
-  thinkingScrollable,
-  homePath,
-  shellConfirmToolCallId,
-  onShellCancel,
-  onShellConfirm,
-  onShellDefaultExecute,
-  onViewShellCommand,
-  onToolReview,
-  onRecallUserMessage,
-}: Props) {
   if (message.hidden) {
     return null;
   }
 
   if (message.role === 'user') {
-    return (
-      <MemoizedUserBubble
-        content={message.content}
-        attachments={message.attachments}
-        onRecall={() => onRecallUserMessage?.(message)}
-      />
-    );
+    return <UserBubble message={message} onRecall={onRecallUserMessage} />;
   }
 
   if (message.role === 'tool') {
@@ -61,7 +39,7 @@ function MessageBubble({
   }
 
   return displayMode === 'fullscreen'
-    ? <MemoizedAIBubbleFullscreen
+    ? <AIBubbleFullscreen
         content={message.content}
         blocks={message.blocks}
         toolCalls={message.toolCalls}
@@ -79,7 +57,7 @@ function MessageBubble({
         onViewShellCommand={onViewShellCommand}
         onToolReview={onToolReview}
       />
-    : <MemoizedAIBubbleCompact
+    : <AIBubbleCompact
         content={message.content}
         blocks={message.blocks}
         toolCalls={message.toolCalls}

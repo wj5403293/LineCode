@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Boxes, ChevronRight, SlidersHorizontal } from 'lucide-react-native';
+import { Boxes, ChevronRight, FileUp, SlidersHorizontal } from 'lucide-react-native';
 import ScreenHeader from '../components/ScreenHeader';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
@@ -14,10 +14,11 @@ import {
 interface Props {
   onBack: () => void;
   onCustom: () => void;
+  onLocal: () => void;
   onProvider: (providerId: string) => void;
 }
 
-export default function ModelAddOptionsScreen({ onBack, onCustom, onProvider }: Props) {
+export default function ModelAddOptionsScreen({ onBack, onCustom, onLocal, onProvider }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -62,6 +63,23 @@ export default function ModelAddOptionsScreen({ onBack, onCustom, onProvider }: 
           <ChevronRight size={19} color={colors.textTertiary} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.customCard, styles.stackedCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}
+          onPress={onLocal}
+          activeOpacity={0.75}
+        >
+          <View style={[styles.largeIcon, { backgroundColor: colors.accentMuted }]}>
+            <FileUp size={22} color={colors.accent} />
+          </View>
+          <View style={styles.customText}>
+            <Text style={[styles.customTitle, { color: colors.text }]}>加载本地模型</Text>
+            <Text style={[styles.customDesc, { color: colors.textTertiary }]}>
+              通过系统文件选择器导入 GGUF 文件，并在支持的 Android 设备上启用 NPU
+            </Text>
+          </View>
+          <ChevronRight size={19} color={colors.textTertiary} />
+        </TouchableOpacity>
+
         <View style={styles.sectionHeader}>
           <Boxes size={16} color={colors.textSecondary} />
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>预置提供商</Text>
@@ -88,6 +106,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+  },
+  stackedCard: {
+    marginTop: spacing.sm,
   },
   largeIcon: {
     width: 44,

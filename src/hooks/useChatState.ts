@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
 import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment, AgentProgressItem } from '../types';
 import { modelStorage } from '../services/storage';
-import { aiService, ChatMessage } from '../services/ai';
+import { aiService, ChatMessage, SYSTEM_PROMPT } from '../services/ai';
 import { ToneMode, ReasoningEffort } from '../services/settings';
 import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor';
 import { agentToolManager } from '../mcp/AgentToolManager';
@@ -23,6 +23,7 @@ import { ConversationPersistenceScheduler } from '../chat/persistence/Conversati
 import { StreamBufferedUpdate, StreamUpdateBuffer } from '../chat/StreamUpdateBuffer';
 import { ToolExecutionCoordinator } from '../chat/ToolExecutionCoordinator';
 import { sanitizeToolCallForStorage } from '../utils/toolPayload';
+import { isAgentTool } from '../mcp/toolUtils';
 
 interface PendingToolCall {
   toolCalls: ToolCall[];
@@ -418,7 +419,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   ): Promise<{ toolMsg: Message; toolResult: ToolResult }> => {
     const toolResult = await executeTool(tc, {
       onProgress: (update: Partial<ContentBlock>) => {
-        if (tc.name === 'agent' || tc.name === 'agent_pipeline' || tc.name === 'shell_execute') {
+        if (isAgentTool(tc.name) || tc.name === 'shell_execute') {
           syncMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.blocks) {
               const updatedBlocks = m.blocks.map(b => {
@@ -742,7 +743,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
 
         syncMessages(prev => [...prev, aiPlaceholder], convId);
 
-        const chatMessages = await aiService.buildMessages('', toChatMessages(localMessages), toneMode, homePath);
+        const chatMessages = await aiService.buildMessages(SYSTEM_PROMPT, toChatMessages(localMessages), toneMode, homePath);
 
         streamBufferRef.current?.cancel();
         const streamBuffer = new StreamUpdateBuffer(80, updates => {

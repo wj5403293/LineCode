@@ -1,7 +1,15 @@
 import { fontSizes, spacing } from '../../constants/theme';
 import type { ThemeColors } from '../../theme';
 
-export function createMdStyle(c: ThemeColors) {
+type MdStyle = ReturnType<typeof buildMdStyle>;
+type UserMdStyle = ReturnType<typeof buildUserMdStyle>;
+type ThinkingMdStyle = ReturnType<typeof buildThinkingMdStyle>;
+
+const mdStyleCache = new WeakMap<ThemeColors, MdStyle>();
+const userMdStyleCache = new WeakMap<ThemeColors, UserMdStyle>();
+const thinkingMdStyleCache = new WeakMap<ThemeColors, ThinkingMdStyle>();
+
+function buildMdStyle(c: ThemeColors) {
   return {
     body: { color: c.text, fontSize: fontSizes.md, lineHeight: 22 },
     code_inline: {
@@ -67,8 +75,8 @@ export function createMdStyle(c: ThemeColors) {
   };
 }
 
-export function createUserMdStyle(c: ThemeColors) {
-  const base = createMdStyle(c);
+function buildUserMdStyle(c: ThemeColors) {
+  const base = buildMdStyle(c);
   return {
     ...base,
     body: { color: '#FFF', fontSize: fontSizes.md, lineHeight: 22 },
@@ -79,10 +87,37 @@ export function createUserMdStyle(c: ThemeColors) {
   };
 }
 
-export function createThinkingMdStyle(c: ThemeColors) {
-  const base = createMdStyle(c);
+function buildThinkingMdStyle(c: ThemeColors) {
+  const base = buildMdStyle(c);
   return {
     ...base,
     body: { color: c.textSecondary, fontSize: fontSizes.sm, lineHeight: 18 },
   };
+}
+
+export function createMdStyle(c: ThemeColors): MdStyle {
+  let cached = mdStyleCache.get(c);
+  if (!cached) {
+    cached = buildMdStyle(c);
+    mdStyleCache.set(c, cached);
+  }
+  return cached;
+}
+
+export function createUserMdStyle(c: ThemeColors): UserMdStyle {
+  let cached = userMdStyleCache.get(c);
+  if (!cached) {
+    cached = buildUserMdStyle(c);
+    userMdStyleCache.set(c, cached);
+  }
+  return cached;
+}
+
+export function createThinkingMdStyle(c: ThemeColors): ThinkingMdStyle {
+  let cached = thinkingMdStyleCache.get(c);
+  if (!cached) {
+    cached = buildThinkingMdStyle(c);
+    thinkingMdStyleCache.set(c, cached);
+  }
+  return cached;
 }

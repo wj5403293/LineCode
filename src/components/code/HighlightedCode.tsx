@@ -8,11 +8,47 @@ interface Props {
   code: string;
   language?: string;
   wordWrap?: boolean;
+  streaming?: boolean;
 }
 
-export default React.memo(function HighlightedCode({ code, language, wordWrap = false }: Props) {
+type TokenLines = Array<Array<{ text: string; color: string }>>;
+
+const HIGHLIGHT_CACHE_MAX = 50;
+const highlightCache = new Map<string, TokenLines>();
+
+function cachedHighlight(
+  code: string,
+  language: string | undefined,
+  syntax: Record<string, string>,
+): TokenLines {
+  const key = `${language || 'auto'}:${code}`;
+  const hit = highlightCache.get(key);
+  if (hit) {
+    highlightCache.delete(key);
+    highlightCache.set(key, hit);
+    return hit;
+  }
+  const result = highlight(code, syntax, language);
+  highlightCache.set(key, result);
+  if (highlightCache.size > HIGHLIGHT_CACHE_MAX) {
+    const oldestKey = highlightCache.keys().next().value;
+    if (oldestKey !== undefined) highlightCache.delete(oldestKey);
+  }
+  return result;
+}
+
+function plainLines(code: string, color: string): TokenLines {
+  return code.split('\n').map(line => (line ? [{ text: line, color }] : []));
+}
+
+export default React.memo(function HighlightedCode({ code, language, wordWrap = false, streaming = false }: Props) {
   const { colors, syntax } = useTheme();
-  const lines = useMemo(() => highlight(code, syntax as unknown as Record<string, string>, language), [code, language, syntax]);
+  const lines = useMemo(() => {
+    if (streaming) {
+      return plainLines(code, colors.text);
+    }
+    return cachedHighlight(code, language, syntax as unknown as Record<string, string>);
+  }, [code, language, syntax, streaming, colors.text]);
 
   return (
     <>

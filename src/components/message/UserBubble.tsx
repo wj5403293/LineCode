@@ -1,21 +1,21 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
-import { InputAttachment } from '../../types';
+import { Message } from '../../types';
 import { getUserMessageCopyText, getVisibleUserMessageText } from '../../utils/messageText';
 import MessageActionBar from './MessageActionBar';
 
 interface Props {
-  content: string;
-  attachments?: InputAttachment[];
-  onRecall?: () => void;
+  message: Message;
+  onRecall?: (message: Message) => void;
 }
 
-export default React.memo(function UserBubble({ content, attachments, onRecall }: Props) {
+export default React.memo(function UserBubble({ message, onRecall }: Props) {
   const { colors } = useTheme();
-  const visibleContent = getVisibleUserMessageText(content, attachments);
-  const copyText = getUserMessageCopyText(content, attachments);
+  const visibleContent = getVisibleUserMessageText(message.content, message.attachments);
+  const copyText = getUserMessageCopyText(message.content, message.attachments);
+  const handleRecall = useCallback(() => onRecall?.(message), [message, onRecall]);
 
   return (
     <View style={styles.row}>
@@ -25,9 +25,9 @@ export default React.memo(function UserBubble({ content, attachments, onRecall }
             <Text style={[styles.text, { color: colors.textOnColor }]}>{visibleContent}</Text>
           </View>
         )}
-        {!!attachments?.length && (
+        {!!message.attachments?.length && (
           <View style={styles.attachmentList}>
-            {attachments.map(item => (
+            {message.attachments.map(item => (
               <View
                 key={`${item.source}:${item.path}`}
                 style={[
@@ -45,7 +45,7 @@ export default React.memo(function UserBubble({ content, attachments, onRecall }
             ))}
           </View>
         )}
-        <MessageActionBar copyText={copyText} align="right" onRecall={onRecall} />
+        <MessageActionBar copyText={copyText} align="right" onRecall={onRecall ? handleRecall : undefined} />
       </View>
     </View>
   );

@@ -13,6 +13,7 @@ class HttpServerPackage : ReactPackage {
             SshModule(reactContext),
             DataArchiveModule(reactContext),
             StoragePermissionModule(reactContext),
+            AppLifecycleModule(reactContext),
         )
     }
 

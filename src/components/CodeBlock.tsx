@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import HighlightedCode from './code/HighlightedCode';
 import CopyButton from './code/CopyButton';
+import { StreamingContext } from '../contexts/StreamingContext';
 
 interface Props {
   language?: string;
@@ -14,6 +15,7 @@ interface Props {
 export default React.memo(function CodeBlock({ language, code, wordWrap = false }: Props) {
   const { colors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const streaming = useContext(StreamingContext);
   const cleanLang = language?.split('\n')[0]?.trim() || '';
   const lineCount = code.split('\n').length;
   const maxBodyHeight = Math.max(180, Math.min(420, Math.floor(windowHeight * 0.48)));
@@ -34,7 +36,7 @@ export default React.memo(function CodeBlock({ language, code, wordWrap = false 
       >
         {wordWrap ? (
           <View style={[styles.codeContent, styles.wrappedCodeContent]}>
-            <HighlightedCode code={code} language={cleanLang || undefined} wordWrap={wordWrap} />
+            <HighlightedCode code={code} language={cleanLang || undefined} wordWrap={wordWrap} streaming={streaming} />
           </View>
         ) : (
           <ScrollView
@@ -46,7 +48,7 @@ export default React.memo(function CodeBlock({ language, code, wordWrap = false 
             contentContainerStyle={styles.horizontalScrollContent}
           >
             <View style={styles.codeContent}>
-              <HighlightedCode code={code} language={cleanLang || undefined} wordWrap={wordWrap} />
+              <HighlightedCode code={code} language={cleanLang || undefined} wordWrap={wordWrap} streaming={streaming} />
             </View>
           </ScrollView>
         )}

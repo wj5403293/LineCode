@@ -11,6 +11,7 @@ import { AgentHeader } from './agent/AgentHeader';
 import { AgentThinking } from './agent/AgentThinking';
 import { ToolCallRenderer } from './ToolCallRenderer';
 import { isWriteTool, isDeleteTool, isReadTool } from '../../mcp/toolUtils';
+import { StreamingContext } from '../../contexts/StreamingContext';
 
 interface Props {
   name: string;
@@ -53,6 +54,10 @@ export default React.memo(function AgentBlock({
     setExpanded(prev => !prev);
   }, []);
 
+  const toggleThinking = useCallback(() => {
+    setThinkingExpanded(prev => !prev);
+  }, []);
+
   useEffect(() => {
     if (status === 'waiting_unlock') {
       setWaitSeconds(0);
@@ -83,11 +88,12 @@ export default React.memo(function AgentBlock({
     `${tc.diffId || `${tc.name}:${String(tc.input?.file_path || 'file')}`}:${index}`
   ), []);
 
-  const handleToolReview = useCallback((key: string) => (
-    (_toolCallId: string, state: 'accepted' | 'rejected') => {
-      setReviewStates(prev => ({ ...prev, [key]: state }));
-    }
-  ), []);
+  const handleToolReview = useCallback(
+    (toolCallId: string, state: 'accepted' | 'rejected') => {
+      setReviewStates(prev => ({ ...prev, [toolCallId]: state }));
+    },
+    [],
+  );
 
   const visibleToolCalls = toolCalls || [];
   const fileChanges = toolCalls?.filter(tc => isWriteTool(tc.name) || isDeleteTool(tc.name)) || [];
@@ -117,7 +123,7 @@ export default React.memo(function AgentBlock({
               thinking={thinking}
               streaming={streaming}
               expanded={thinkingExpanded}
-              onToggle={() => setThinkingExpanded(prev => !prev)}
+              onToggle={toggleThinking}
             />
 
             {hasVisibleTools && (
@@ -143,7 +149,7 @@ export default React.memo(function AgentBlock({
                         reviewState={reviewStates[toolKey]}
                         homePath={homePath}
                         streaming={!tc.result}
-                        onReview={handleToolReview(toolKey)}
+                        onReview={handleToolReview}
                       />
                     );
                   })}
@@ -152,7 +158,9 @@ export default React.memo(function AgentBlock({
             )}
 
             {output ? (
-              <Markdown style={mdStyle}>{output}</Markdown>
+              <StreamingContext.Provider value={!!isRunning}>
+                <Markdown style={mdStyle}>{output}</Markdown>
+              </StreamingContext.Provider>
             ) : isRunning ? (
               <View style={styles.streamingContainer}>
                 <ActivityIndicator size="small" color={agentType === 'explore' ? colors.accent : colors.danger} />
@@ -187,7 +195,7 @@ export default React.memo(function AgentBlock({
                   reviewState={reviewStates[toolKey]}
                   homePath={homePath}
                   streaming={!tc.result}
-                  onReview={handleToolReview(toolKey)}
+                  onReview={handleToolReview}
                 />
               );
             })}

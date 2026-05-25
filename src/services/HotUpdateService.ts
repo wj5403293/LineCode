@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
+import { NativeModules, Platform } from 'react-native';
 import { unzip } from 'react-native-zip-archive';
 import { APP_ANDROID_VERSION_CODE, APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } from '../constants/appInfo';
 import {
@@ -8,6 +9,12 @@ import {
   resolveLanzouHotUpdateFiles,
 } from './LanzouShareResolver';
 import { settingsService } from './settings';
+
+interface AppLifecycleNativeModule {
+  exitApp(delayMs: number): Promise<null>;
+}
+
+const AppLifecycle = NativeModules.AppLifecycle as AppLifecycleNativeModule | undefined;
 
 const UPDATE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/updates`;
 const CURRENT_DIR = `${UPDATE_ROOT}/current`;
@@ -215,6 +222,13 @@ class HotUpdateService {
 
   async setAutoUpdateEnabled(enabled: boolean): Promise<void> {
     await settingsService.setAutoUpdateEnabled(enabled);
+  }
+
+  async disableAndExit(): Promise<void> {
+    await settingsService.setAutoUpdateEnabled(false);
+    if (Platform.OS === 'android' && AppLifecycle?.exitApp) {
+      await AppLifecycle.exitApp(150).catch(() => {});
+    }
   }
 
   async checkForUpdate(): Promise<HotUpdateInfo | null> {
