@@ -5,6 +5,7 @@ import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
 import ToolCallShell from './ToolCallShell';
+import ToolCallGeneric from './ToolCallGeneric';
 import AgentBlock from './AgentBlock';
 import AgentPipelineBlock from './AgentPipelineBlock';
 import { isAgentTool, isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool, parseToolInput } from '../../mcp/toolUtils';
@@ -155,5 +156,13 @@ export default React.memo(function ToolCallBlock({
     );
   }
 
-  return null;
+  return (
+    <ToolCallGeneric
+      name={toolCall.name}
+      input={input}
+      result={result}
+      isError={isError}
+      streaming={!result}
+    />
+  );
 });

@@ -1,12 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { isReadTool, isWriteTool, isDeleteTool, isHttpTool, isShellTool } from '../../mcp/toolUtils';
-import { useTheme } from '../../theme';
 import ToolCallRead from './ToolCallRead';
 import ToolCallWrite from './ToolCallWrite';
 import ToolCallDelete from './ToolCallDelete';
 import ToolCallHttpServer from './ToolCallHttpServer';
 import ToolCallShell from './ToolCallShell';
+import ToolCallGeneric from './ToolCallGeneric';
 
 interface ToolCallRendererProps {
   name: string;
@@ -35,8 +34,6 @@ export const ToolCallRenderer = React.memo(function ToolCallRenderer({
   streamingOutput,
   onReview,
 }: ToolCallRendererProps) {
-  const { colors } = useTheme();
-
   if (isReadTool(name)) {
     return (
       <ToolCallRead
@@ -98,33 +95,12 @@ export const ToolCallRenderer = React.memo(function ToolCallRenderer({
   }
 
   return (
-    <View style={[styles.toolCallItem, { backgroundColor: colors.codeBg }]}>
-      <Text style={[styles.toolName, { color: colors.textTertiary }]}>{name}</Text>
-      {result && (
-        <Text style={[styles.toolResult, { color: colors.textSecondary }, isError && { color: colors.danger }]} numberOfLines={3}>
-          {result}
-        </Text>
-      )}
-    </View>
+    <ToolCallGeneric
+      name={name}
+      input={input}
+      result={result}
+      isError={isError}
+      streaming={streaming}
+    />
   );
-});
-
-const styles = StyleSheet.create({
-  toolCallItem: {
-    alignSelf: 'stretch',
-    width: '100%',
-    maxWidth: '100%',
-    borderRadius: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginBottom: 2,
-  },
-  toolName: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  toolResult: {
-    fontSize: 10,
-    marginTop: 2,
-  },
 });

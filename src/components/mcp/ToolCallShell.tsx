@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertCircle, Check, ChevronDown, ChevronRight, ExternalLink, Play, Terminal, X, Zap } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
+import ContainedScrollView from '../ContainedScrollView';
 
 const COLLAPSED_LINE_COUNT = 4;
 const EXPANDED_OUTPUT_LIMIT = 64 * 1024;
@@ -153,15 +154,14 @@ export default React.memo(function ToolCallShell({
             )}
           </TouchableOpacity>
           {expanded ? (
-            <ScrollView
+            <ContainedScrollView
               style={[styles.expandedOutput, { backgroundColor: colors.surface, borderColor: colors.codeBorder }]}
               contentContainerStyle={styles.expandedOutputContent}
-              nestedScrollEnabled
             >
               <Text selectable style={[styles.result, { color: isError ? colors.danger : colors.textSecondary }]}>
                 {expandedPreview}
               </Text>
-            </ScrollView>
+            </ContainedScrollView>
           ) : (
             <Text
               selectable

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { KeyboardEvent } from 'react-native';
 import { ArrowUp, Plus, Square, X } from 'lucide-react-native';
 import { spacing, fontSizes } from '../constants/theme';
 import { useTheme } from '../theme';
@@ -160,14 +160,15 @@ export default React.memo(function InputBar({
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus>('idle');
   const [remoteMessage, setRemoteMessage] = useState('');
   const [remoteTree, setRemoteTree] = useState<FileTreeNode | null>(null);
-  const [androidKeyboardInset, setAndroidKeyboardInset] = useState(0);
+  const [androidKeyboardLift, setAndroidKeyboardLift] = useState(0);
+  const keyboardProbeRef = useRef<View>(null);
+  const inputFocusedRef = useRef(false);
+  const keyboardTopRef = useRef<number | null>(null);
+  const keyboardLiftRef = useRef(0);
+  const focusProbeBottomRef = useRef(0);
+  const keyboardMeasureTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const [baselineWindowSize, setBaselineWindowSize] = useState({
-    width: windowWidth,
-    height: windowHeight,
-  });
+  const { height: windowHeight } = useWindowDimensions();
   const { tree: localTree, loadTree, expandNode } = useFileTree(homePath);
   const hasText = text.trim().length > 0;
   const canSend = hasText || attachments.length > 0;
@@ -183,11 +184,6 @@ export default React.memo(function InputBar({
     () => [styles.actionBtn, { backgroundColor: sendBtnBg }, streaming && styles.stopBtn],
     [streaming, sendBtnBg],
   );
-  const androidKeyboardLift = useMemo(() => {
-    if (Platform.OS !== 'android' || androidKeyboardInset <= 0) return 0;
-    const resizedByWindow = Math.max(0, baselineWindowSize.height - windowHeight);
-    return Math.max(0, androidKeyboardInset - resizedByWindow - insets.bottom);
-  }, [androidKeyboardInset, baselineWindowSize.height, insets.bottom, windowHeight]);
   const containerStyle = useMemo(() => [
     styles.container,
     {
@@ -198,6 +194,65 @@ export default React.memo(function InputBar({
         : spacing.lg,
     },
   ], [androidKeyboardLift, colors.bg, colors.border]);
+
+  const updateAndroidKeyboardLift = useCallback((nextLift: number) => {
+    const rounded = Math.max(0, Math.ceil(nextLift));
+    keyboardLiftRef.current = rounded;
+    setAndroidKeyboardLift(prev => Math.abs(prev - rounded) <= 1 ? prev : rounded);
+  }, []);
+
+  const clearKeyboardMeasureTimers = useCallback(() => {
+    keyboardMeasureTimersRef.current.forEach(timer => clearTimeout(timer));
+    keyboardMeasureTimersRef.current = [];
+  }, []);
+
+  const measureKeyboardProbe = useCallback((captureBaseline = false) => {
+    if (Platform.OS !== 'android') return;
+    keyboardProbeRef.current?.measureInWindow((_x, y, _width, height) => {
+      const measuredBottom = y + height;
+      const unliftedBottom = measuredBottom + keyboardLiftRef.current;
+      if (captureBaseline) {
+        focusProbeBottomRef.current = unliftedBottom;
+      }
+
+      const keyboardTop = keyboardTopRef.current;
+      if (!inputFocusedRef.current || keyboardTop === null) return;
+      updateAndroidKeyboardLift(unliftedBottom - keyboardTop);
+    });
+  }, [updateAndroidKeyboardLift]);
+
+  const scheduleKeyboardProbeMeasure = useCallback((captureBaseline = false) => {
+    if (Platform.OS !== 'android') return;
+    clearKeyboardMeasureTimers();
+    [0, 40, 120, 260].forEach((delay, index) => {
+      const timer = setTimeout(() => {
+        measureKeyboardProbe(captureBaseline && index === 0);
+      }, delay);
+      keyboardMeasureTimersRef.current.push(timer);
+    });
+  }, [clearKeyboardMeasureTimers, measureKeyboardProbe]);
+
+  const handleInputPressIn = useCallback(() => {
+    measureKeyboardProbe(true);
+  }, [measureKeyboardProbe]);
+
+  const handleInputFocus = useCallback(() => {
+    inputFocusedRef.current = true;
+    scheduleKeyboardProbeMeasure(true);
+  }, [scheduleKeyboardProbeMeasure]);
+
+  const handleInputBlur = useCallback(() => {
+    inputFocusedRef.current = false;
+    focusProbeBottomRef.current = 0;
+    if (keyboardTopRef.current === null) {
+      updateAndroidKeyboardLift(0);
+    }
+  }, [updateAndroidKeyboardLift]);
+
+  const handleKeyboardProbeLayout = useCallback(() => {
+    if (!inputFocusedRef.current || keyboardTopRef.current === null) return;
+    scheduleKeyboardProbeMeasure(false);
+  }, [scheduleKeyboardProbeMeasure]);
 
   useEffect(() => {
     setAttachments([]);
@@ -213,32 +268,34 @@ export default React.memo(function InputBar({
   }, [draftText, onDraftConsumed]);
 
   useEffect(() => {
-    if (androidKeyboardInset === 0) {
-      setBaselineWindowSize(prev => {
-        const widthChanged = Math.abs(prev.width - windowWidth) > 1;
-        return {
-          width: windowWidth,
-          height: widthChanged ? windowHeight : Math.max(prev.height, windowHeight),
-        };
-      });
-    }
-  }, [androidKeyboardInset, windowHeight, windowWidth]);
-
-  useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    const showSub = Keyboard.addListener('keyboardDidShow', event => {
-      setAndroidKeyboardInset(Math.max(0, event.endCoordinates?.height || 0));
-    });
+    const handleKeyboardFrame = (event: KeyboardEvent) => {
+      const keyboardHeight = Math.max(0, event.endCoordinates?.height || 0);
+      const measuredScreenBottom = focusProbeBottomRef.current || windowHeight;
+      const keyboardScreenY = event.endCoordinates?.screenY;
+      keyboardTopRef.current = typeof keyboardScreenY === 'number' && keyboardScreenY > 0
+        ? keyboardScreenY
+        : Math.max(0, measuredScreenBottom - keyboardHeight);
+      scheduleKeyboardProbeMeasure(false);
+    };
+
+    const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardFrame);
+    const changeSub = Keyboard.addListener('keyboardDidChangeFrame', handleKeyboardFrame);
     const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      setAndroidKeyboardInset(0);
+      keyboardTopRef.current = null;
+      focusProbeBottomRef.current = 0;
+      clearKeyboardMeasureTimers();
+      updateAndroidKeyboardLift(0);
     });
 
     return () => {
       showSub.remove();
+      changeSub.remove();
       hideSub.remove();
+      clearKeyboardMeasureTimers();
     };
-  }, []);
+  }, [clearKeyboardMeasureTimers, scheduleKeyboardProbeMeasure, updateAndroidKeyboardLift, windowHeight]);
 
   const detectRemotePython = useCallback(async (): Promise<string> => {
     const output = await sshService.executeCommand('command -v python3 || command -v python || command -v py || true', 10000);
@@ -395,6 +452,9 @@ export default React.memo(function InputBar({
               style={[styles.input, { color: colors.text }]}
               value={text}
               onChangeText={setText}
+              onPressIn={handleInputPressIn}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
               placeholder="输入消息..."
               placeholderTextColor={colors.textTertiary}
               multiline
@@ -416,6 +476,13 @@ export default React.memo(function InputBar({
             </TouchableOpacity>
           </View>
         </View>
+        <View
+          ref={keyboardProbeRef}
+          collapsable={false}
+          pointerEvents="none"
+          onLayout={handleKeyboardProbeLayout}
+          style={styles.keyboardProbe}
+        />
 
         <AttachmentPickerModal
           visible={pickerVisible}
@@ -521,5 +588,10 @@ const styles = StyleSheet.create({
     height: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  keyboardProbe: {
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
 });

@@ -116,6 +116,36 @@ export default React.memo(function AgentBlock({
         onToggle={handleToggle}
       />
 
+      {hasFileChanges && (
+        <View style={[styles.fileChangesSection, { borderTopColor: colors.codeBorder }]}>
+          <View style={styles.sectionHeader}>
+            <FilePenLine size={12} color={colors.textTertiary} />
+            <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>文件变更</Text>
+          </View>
+          <View style={styles.toolsList}>
+            {fileChanges.map((tc, i) => {
+              const originalIndex = visibleToolCalls.indexOf(tc);
+              const toolKey = getToolKey(tc, originalIndex >= 0 ? originalIndex : i);
+              return (
+                <ToolCallRenderer
+                  key={toolKey}
+                  name={tc.name}
+                  input={tc.input}
+                  result={tc.result}
+                  isError={tc.isError}
+                  toolCallId={toolKey}
+                  diffId={tc.diffId}
+                  reviewState={reviewStates[toolKey]}
+                  homePath={homePath}
+                  streaming={!tc.result}
+                  onReview={handleToolReview}
+                />
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {expanded && hasDetails && (
         <View style={[styles.content, { borderTopColor: colors.codeBorder }]}>
           <ContainedScrollView style={styles.outputScroll}>
@@ -125,6 +155,19 @@ export default React.memo(function AgentBlock({
               expanded={thinkingExpanded}
               onToggle={toggleThinking}
             />
+
+            {output ? (
+              <StreamingContext.Provider value={!!isRunning}>
+                <Markdown style={mdStyle}>{output}</Markdown>
+              </StreamingContext.Provider>
+            ) : isRunning ? (
+              <View style={styles.streamingContainer}>
+                <ActivityIndicator size="small" color={agentType === 'explore' ? colors.accent : colors.danger} />
+                <Text style={[styles.streamingText, { color: colors.textTertiary }]}>正在执行任务...</Text>
+              </View>
+            ) : status === 'error' ? (
+              <Text style={[styles.errorText, { color: colors.danger }]}>执行失败</Text>
+            ) : null}
 
             {hasVisibleTools && (
               <View style={styles.toolsSection}>
@@ -156,50 +199,7 @@ export default React.memo(function AgentBlock({
                 </View>
               </View>
             )}
-
-            {output ? (
-              <StreamingContext.Provider value={!!isRunning}>
-                <Markdown style={mdStyle}>{output}</Markdown>
-              </StreamingContext.Provider>
-            ) : isRunning ? (
-              <View style={styles.streamingContainer}>
-                <ActivityIndicator size="small" color={agentType === 'explore' ? colors.accent : colors.danger} />
-                <Text style={[styles.streamingText, { color: colors.textTertiary }]}>正在执行任务...</Text>
-              </View>
-            ) : status === 'error' ? (
-              <Text style={[styles.errorText, { color: colors.danger }]}>执行失败</Text>
-            ) : null}
           </ContainedScrollView>
-        </View>
-      )}
-
-      {hasFileChanges && (
-        <View style={[styles.fileChangesSection, { borderTopColor: colors.codeBorder }]}>
-          <View style={styles.sectionHeader}>
-            <FilePenLine size={12} color={colors.textTertiary} />
-            <Text style={[styles.toolsLabel, { color: colors.textTertiary }]}>文件变更</Text>
-          </View>
-          <View style={styles.toolsList}>
-            {fileChanges.map((tc, i) => {
-              const originalIndex = visibleToolCalls.indexOf(tc);
-              const toolKey = getToolKey(tc, originalIndex >= 0 ? originalIndex : i);
-              return (
-                <ToolCallRenderer
-                  key={toolKey}
-                  name={tc.name}
-                  input={tc.input}
-                  result={tc.result}
-                  isError={tc.isError}
-                  toolCallId={toolKey}
-                  diffId={tc.diffId}
-                  reviewState={reviewStates[toolKey]}
-                  homePath={homePath}
-                  streaming={!tc.result}
-                  onReview={handleToolReview}
-                />
-              );
-            })}
-          </View>
         </View>
       )}
 
@@ -273,6 +273,7 @@ const styles = StyleSheet.create({
   },
   toolsSection: {
     width: '100%',
+    marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   sectionHeader: {
