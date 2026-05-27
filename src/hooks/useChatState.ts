@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { NativeSyntheticEvent, NativeScrollEvent, FlatList } from 'react-native';
+import { NativeSyntheticEvent, NativeScrollEvent, FlatList, LayoutChangeEvent } from 'react-native';
 import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment, AgentProgressItem } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage, SYSTEM_PROMPT } from '../services/ai';
@@ -35,6 +35,27 @@ interface PendingToolCall {
 
 const TERMINATED_RESULT = '已终止';
 const CONTEXT_METRICS_DEBOUNCE_MS = 300;
+const BOTTOM_FOLLOW_THRESHOLD = 80;
+
+interface ScrollMetrics {
+  layoutHeight: number;
+  contentHeight: number;
+  offsetY: number;
+}
+
+function isScrollMetricsNearBottom(metrics: ScrollMetrics): boolean {
+  const maxOffset = Math.max(0, metrics.contentHeight - metrics.layoutHeight);
+  const currentOffset = Math.max(0, metrics.offsetY);
+  return maxOffset - currentOffset <= BOTTOM_FOLLOW_THRESHOLD;
+}
+
+function getScrollMetrics(event: NativeScrollEvent): ScrollMetrics {
+  return {
+    layoutHeight: event.layoutMeasurement.height,
+    contentHeight: event.contentSize.height,
+    offsetY: event.contentOffset.y,
+  };
+}
 
 function markAgentToolCallsTerminated(toolCalls?: AgentToolCall[]): AgentToolCall[] | undefined {
   if (!toolCalls) return toolCalls;
@@ -233,9 +254,12 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   const [streaming, setStreaming] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [contextPercent, setContextPercent] = useState(0);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const streamingRef = useRef(false);
-  const atBottomRef = useRef(true);
+  const shouldFollowBottomRef = useRef(true);
+  const scrollMetricsRef = useRef<ScrollMetrics>({ layoutHeight: 0, contentHeight: 0, offsetY: 0 });
+  const scrollToBottomFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const localMessagesRef = useRef<Message[]>([]);
   const conversationIdRef = useRef<string | null>(null);
@@ -254,13 +278,41 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     });
   }, []);
 
+  const setAtBottom = useCallback((next: boolean) => {
+    setIsAtBottom(prev => prev === next ? prev : next);
+  }, []);
+
+  const enableBottomFollow = useCallback(() => {
+    shouldFollowBottomRef.current = true;
+    setAtBottom(true);
+  }, [setAtBottom]);
+
+  const requestScrollToBottom = useCallback((animated = true) => {
+    if (scrollToBottomFrameRef.current !== null) {
+      cancelAnimationFrame(scrollToBottomFrameRef.current);
+    }
+    scrollToBottomFrameRef.current = requestAnimationFrame(() => {
+      scrollToBottomFrameRef.current = null;
+      flatListRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scrollToBottomFrameRef.current !== null) {
+        cancelAnimationFrame(scrollToBottomFrameRef.current);
+      }
+    };
+  }, []);
+
   const updateConversationId = useCallback((id: string | null) => {
+    enableBottomFollow();
     persistenceRef.current.flush(conversationIdRef.current).catch(() => {});
     conversationIdRef.current = id;
     persistenceRef.current.setConversationId(id);
     setConversationId(id);
     conversationStore.setCurrentConversationId(id).catch(() => {});
-  }, []);
+  }, [enableBottomFollow]);
 
   const loadInitialData = useCallback(async () => {
     const [models, selectedId, convId] = await Promise.all([
@@ -310,6 +362,9 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     persist: 'schedule' | 'flush' | 'none' = 'schedule',
   ): Message[] => {
     const next = messageStoreRef.current.update(updater);
+    if (next.length === 0) {
+      enableBottomFollow();
+    }
     setMessages(next);
     if (persist === 'flush') {
       persistenceRef.current.schedule(next, convId);
@@ -318,7 +373,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       persistenceRef.current.schedule(next, convId);
     }
     return next;
-  }, []);
+  }, [enableBottomFollow]);
 
   useEffect(() => {
     messageStoreRef.current.setMessages(messages);
@@ -332,10 +387,15 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, []);
 
   const scrollToBottom = useCallback((animated = true) => {
-    if (atBottomRef.current) {
-      flatListRef.current?.scrollToEnd({ animated });
+    if (shouldFollowBottomRef.current) {
+      requestScrollToBottom(animated);
     }
-  }, []);
+  }, [requestScrollToBottom]);
+
+  const jumpToBottom = useCallback((animated = true) => {
+    enableBottomFollow();
+    requestScrollToBottom(animated);
+  }, [enableBottomFollow, requestScrollToBottom]);
 
   const applyStreamUpdates = useCallback((aiId: string, updates: StreamBufferedUpdate[], convId: string | null) => {
     if (updates.length === 0) return;
@@ -378,14 +438,46 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [scrollToBottom, syncMessages]);
 
   const handleScrollBeginDrag = useCallback(() => {
-    atBottomRef.current = false;
+    shouldFollowBottomRef.current = false;
   }, []);
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const paddingToBottom = 80;
-    atBottomRef.current = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-  }, []);
+    const metrics = getScrollMetrics(e.nativeEvent);
+    scrollMetricsRef.current = metrics;
+    setAtBottom(isScrollMetricsNearBottom(metrics));
+  }, [setAtBottom]);
+
+  const handleScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const metrics = getScrollMetrics(e.nativeEvent);
+    scrollMetricsRef.current = metrics;
+    const nextAtBottom = isScrollMetricsNearBottom(metrics);
+    setAtBottom(nextAtBottom);
+    if (nextAtBottom) {
+      shouldFollowBottomRef.current = true;
+    }
+  }, [setAtBottom]);
+
+  const handleContentSizeChange = useCallback((_width: number, height: number) => {
+    const metrics = { ...scrollMetricsRef.current, contentHeight: height };
+    scrollMetricsRef.current = metrics;
+    if (shouldFollowBottomRef.current) {
+      setAtBottom(true);
+      requestScrollToBottom(false);
+      return;
+    }
+    setAtBottom(isScrollMetricsNearBottom(metrics));
+  }, [requestScrollToBottom, setAtBottom]);
+
+  const handleListLayout = useCallback((e: LayoutChangeEvent) => {
+    const metrics = { ...scrollMetricsRef.current, layoutHeight: e.nativeEvent.layout.height };
+    scrollMetricsRef.current = metrics;
+    if (shouldFollowBottomRef.current) {
+      setAtBottom(true);
+      requestScrollToBottom(false);
+      return;
+    }
+    setAtBottom(isScrollMetricsNearBottom(metrics));
+  }, [requestScrollToBottom, setAtBottom]);
 
   const summarizeTitle = useCallback(async (titleModel: Model, targetConversationId: string, firstUserMsg: string, firstAiMsg: string) => {
     try {
@@ -694,7 +786,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       attachments: attachments.length > 0 ? attachments : undefined,
     };
 
-    atBottomRef.current = true;
+    enableBottomFollow();
 
     const initialMessages = [...currentMessages, userMsg];
     syncMessages(initialMessages, convId);
@@ -908,7 +1000,7 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
       abortControllerRef.current = null;
       persistenceRef.current.flush(convId).catch(() => {});
     }
-  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, scrollToBottom, syncMessages, updateConversationId]);
+  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow]);
 
   const resetShellAutoApprove = useCallback(() => {
     shellAutoApproveRef.current = false;
@@ -1000,12 +1092,17 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
     conversationId,
     setConversationId: updateConversationId,
     flatListRef,
+    isAtBottom,
     streaming,
     handleSend,
     handleStop,
     scrollToBottom,
+    jumpToBottom,
     handleScrollBeginDrag,
     handleScroll,
+    handleScrollEnd,
+    handleContentSizeChange,
+    handleListLayout,
     clearMessages,
     pendingToolCall,
     homePath,

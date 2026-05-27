@@ -63,9 +63,13 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     handleToolReview,
     model,
     loading,
-    scrollToBottom,
+    isAtBottom,
+    jumpToBottom,
     handleScrollBeginDrag,
     handleScroll,
+    handleScrollEnd,
+    handleContentSizeChange,
+    handleListLayout,
     resetShellAutoApprove,
     handleCompactContext,
     contextSizeLabel,
@@ -306,7 +310,11 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           onRecallUserMessage={handleMessageRecall}
           onScrollBeginDrag={handleScrollBeginDrag}
           onScroll={handleScroll}
-          onScrollToBottom={scrollToBottom}
+          onScrollEnd={handleScrollEnd}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleListLayout}
+          onJumpToBottom={jumpToBottom}
+          showScrollToBottom={!isAtBottom}
         />
 
         <InputBar

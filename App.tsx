@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, InteractionManager, Linking, StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
+import { DefaultTheme, NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './src/theme';
 import RootNavigator, { type RootStackParamList } from './src/navigation/RootNavigator';
 import FirstLaunchGuideModal from './src/components/FirstLaunchGuideModal';
@@ -25,6 +25,19 @@ function AppContent() {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const navigationTheme = useMemo(() => ({
+    ...DefaultTheme,
+    dark: isDark,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: colors.accent,
+      background: colors.bg,
+      card: colors.bg,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.danger,
+    },
+  }), [colors.accent, colors.bg, colors.border, colors.danger, colors.text, isDark]);
 
   useEffect(() => {
     errorReporter.install();
@@ -132,7 +145,7 @@ function AppContent() {
         backgroundColor={colors.bg}
       />
       <AppErrorBoundary onError={setErrorReport}>
-        <NavigationContainer ref={navigationRef}>
+        <NavigationContainer ref={navigationRef} theme={navigationTheme}>
           <RootNavigator />
         </NavigationContainer>
         <FirstLaunchGuideModal onDone={() => setGuideComplete(true)} />

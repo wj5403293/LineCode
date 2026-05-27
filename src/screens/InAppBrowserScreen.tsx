@@ -20,17 +20,17 @@ export default function InAppBrowserScreen({ url, onBack }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surfaceElevated, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
-          <ChevronLeft size={22} color="#FFF" />
-          <Text style={styles.backText}>退出</Text>
+          <ChevronLeft size={22} color={colors.text} />
+          <Text style={[styles.backText, { color: colors.text }]}>退出</Text>
         </TouchableOpacity>
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{title}</Text>
         <View style={styles.backBtn} />
       </View>
 
       {loading && (
-        <View style={styles.loadingBar}>
+        <View style={[styles.loadingBar, { backgroundColor: colors.accentMuted }]}>
           <ActivityIndicator size="small" color={colors.accent} />
         </View>
       )}
@@ -53,18 +53,16 @@ export default function InAppBrowserScreen({ url, onBack }: Props) {
   );
 }
 
-const BROWN = '#8B6914';
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: BROWN,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
     flexDirection: 'row',
@@ -72,12 +70,10 @@ const styles = StyleSheet.create({
     width: 56,
   },
   backText: {
-    color: '#FFF',
     fontSize: fontSizes.md,
     marginLeft: 2,
   },
   title: {
-    color: '#FFF',
     fontSize: fontSizes.md,
     fontWeight: '600',
     flex: 1,
@@ -87,7 +83,6 @@ const styles = StyleSheet.create({
     height: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#5C3D00',
   },
   webview: {
     flex: 1,

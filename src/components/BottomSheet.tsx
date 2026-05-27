@@ -29,7 +29,7 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
         useNativeDriver: true,
       }).start(() => setMounted(false));
     }
-  }, [visible]);
+  }, [visible, translateY]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -63,12 +63,12 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
 
   const backdropOpacity = translateY.interpolate({
     inputRange: [0, 600],
-    outputRange: [0.55, 0],
+    outputRange: [1, 0],
   });
 
   return (
     <>
-      <RNAnimated.View style={[styles.backdrop, { opacity: backdropOpacity, backgroundColor: '#000' }]}>
+      <RNAnimated.View style={[styles.backdrop, { opacity: backdropOpacity, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </RNAnimated.View>
       <RNAnimated.View
