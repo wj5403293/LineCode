@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Text, Pressable, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Copy, Check } from 'lucide-react-native';
@@ -12,11 +12,21 @@ interface Props {
 export default React.memo(function CopyButton({ text }: Props) {
   const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+  }, []);
 
   const handleCopy = useCallback(() => {
     Clipboard.setString(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+    resetTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [text]);
 
   return (

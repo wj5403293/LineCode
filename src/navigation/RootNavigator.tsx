@@ -22,6 +22,8 @@ import ExtensionsScreen from '../screens/ExtensionsScreen';
 import ExtensionDetailScreen from '../screens/ExtensionDetailScreen';
 import AgentExtensionEditScreen from '../screens/AgentExtensionEditScreen';
 import McpExtensionEditScreen from '../screens/McpExtensionEditScreen';
+import TutorialScreen from '../screens/TutorialScreen';
+import type { TutorialVariant } from '../constants/tutorial';
 import type { ExtensionKind } from '../services/ExtensionService';
 
 export type RootStackParamList = {
@@ -45,6 +47,7 @@ export type RootStackParamList = {
   KeepAliveSettings: undefined;
   ExperimentalSettings: undefined;
   DebugSettings: undefined;
+  Tutorial: { variant?: TutorialVariant } | undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
 };
@@ -63,6 +66,7 @@ export default function RootNavigator() {
         {({ navigation }) => (
           <ChatScreen
             onGoSettings={() => navigation.navigate('Settings')}
+            onOpenTutorial={(variant) => navigation.navigate('Tutorial', { variant })}
             onViewShellCommand={(command) => navigation.navigate('ShellCommand', { command })}
           />
         )}
@@ -129,6 +133,15 @@ export default function RootNavigator() {
       <Stack.Screen name="DebugSettings">
         {({ navigation }) => (
           <DebugSettingsScreen onBack={() => navigation.goBack()} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Tutorial">
+        {({ navigation, route }) => (
+          <TutorialScreen
+            variant={route.params?.variant || 'beginner'}
+            onVariantChange={(variant) => navigation.setParams({ variant })}
+            onBack={() => navigation.goBack()}
+          />
         )}
       </Stack.Screen>
       <Stack.Screen name="KeepAliveSettings">

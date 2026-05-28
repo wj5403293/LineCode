@@ -15,6 +15,7 @@ class HttpServerPackage : ReactPackage {
             StoragePermissionModule(reactContext),
             AppLifecycleModule(reactContext),
             LineAIConfigModule(reactContext),
+            KeyboardFrameModule(reactContext),
         )
     }
 

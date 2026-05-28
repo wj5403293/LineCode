@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Search, Check, ChevronDown, ExternalLink, FileUp, Cpu } from 'lucide-react-native';
+import { Search, Check, ChevronDown, FileUp, Cpu } from 'lucide-react-native';
 import RNFS from 'react-native-fs';
 import { copyFile, openDocument } from 'react-native-saf-x';
 import { Model } from '../types';
@@ -13,9 +13,7 @@ import { modelStorage } from '../services/storage';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
-import { openURL } from '../utils/openURL';
 import { formatContextSize } from '../utils/modelContext';
-import { GPT55_PROMO_TITLE, GPT55_PROMO_URL } from '../constants/promo';
 import { getModelProviderPreset } from '../constants/modelProviders';
 import { LOCAL_MODEL_ENABLED } from '../services/RuntimeConfig';
 
@@ -30,6 +28,10 @@ const CUSTOM_ID = '__custom__';
 type ProviderId = Model['provider'];
 type RemoteProviderId = Exclude<ProviderId, 'local'>;
 type LocalAcceleration = NonNullable<Model['localModel']>['acceleration'];
+type LocalDocument = {
+  uri?: string;
+  name?: string | null;
+};
 const REMOTE_PROVIDERS: RemoteProviderId[] = ['openai', 'codex', 'anthropic'];
 const MODEL_IMPORT_DIR = `${RNFS.DocumentDirectoryPath}/local-models`;
 
@@ -68,12 +70,35 @@ function sanitizeFileName(name: string): string {
   return (name || 'model.gguf').replace(/[^\w.-]+/g, '_').slice(0, 120);
 }
 
+function decodeUriFileName(uri?: string): string {
+  if (!uri) return '';
+  const lastSegment = uri.split('/').pop() || '';
+  const rawName = lastSegment.includes(':') ? lastSegment.split(':').pop() || lastSegment : lastSegment;
+  let decoded = rawName;
+  try {
+    decoded = decodeURIComponent(rawName);
+  } catch {}
+  return decoded.split('/').pop() || decoded;
+}
+
+export function getLocalModelDisplayName(document: LocalDocument): string {
+  const name = document.name?.trim() || '';
+  const uriName = decodeUriFileName(document.uri);
+  if (isGgufFile(name) || !uriName) return name;
+  if (isGgufFile(uriName)) return uriName;
+  return name || uriName;
+}
+
 function fileNameWithoutExtension(name: string): string {
   return name.replace(/\.[^.]+$/, '').trim();
 }
 
 function isGgufFile(name: string): boolean {
-  return /\.gguf$/i.test(name);
+  return /\.gguf$/i.test(name.trim());
+}
+
+export function isGgufDocument(document: LocalDocument): boolean {
+  return isGgufFile(document.name || '') || isGgufFile(decodeUriFileName(document.uri));
 }
 
 function formatFileSize(size?: number): string {
@@ -238,24 +263,25 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
       const doc = docs?.[0];
       if (!doc) return;
 
-      if (!isGgufFile(doc.name)) {
+      if (!isGgufDocument(doc)) {
         Alert.alert('模型格式不支持', '当前本地推理仅支持 GGUF 文件。');
         return;
       }
 
       await RNFS.mkdir(MODEL_IMPORT_DIR);
-      const fileName = sanitizeFileName(doc.name);
+      const displayName = getLocalModelDisplayName(doc) || 'model.gguf';
+      const fileName = sanitizeFileName(displayName);
       const localModelPath = `${MODEL_IMPORT_DIR}/${Date.now()}_${fileName}`;
       await copyFile(doc.uri, `file://${localModelPath}`, { replaceIfDestinationExists: true });
 
       setLocalFileUri(doc.uri);
       setLocalPath(localModelPath);
-      setLocalFileName(doc.name);
+      setLocalFileName(displayName);
       setLocalFileSize(doc.size);
       if (!name.trim()) {
-        setName(fileNameWithoutExtension(doc.name));
+        setName(fileNameWithoutExtension(displayName));
       }
-      setModelId(localModelIdFrom(name.trim() || fileNameWithoutExtension(doc.name), localContextTokens));
+      setModelId(localModelIdFrom(name.trim() || fileNameWithoutExtension(displayName), localContextTokens));
     } catch (err: any) {
       setLocalError(err?.message || String(err));
     } finally {
@@ -321,10 +347,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     localAcceleration,
     localContextTokens,
   ]);
-
-  const handleOpenPromo = useCallback(() => {
-    openURL(GPT55_PROMO_URL, (url) => navigation.navigate('InAppBrowser', { url })).catch(() => {});
-  }, [navigation]);
 
   const rightAction = (
     <TouchableOpacity
@@ -558,24 +580,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
               <Text style={[styles.errorText, { color: colors.danger }]}>{fetchError}</Text>
             )}
 
-            <TouchableOpacity
-              style={[styles.promoCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
-              onPress={handleOpenPromo}
-              activeOpacity={0.75}
-            >
-              <View style={styles.promoTextWrap}>
-                <Text style={[styles.promoTitle, { color: colors.text }]} numberOfLines={1}>
-                  {GPT55_PROMO_TITLE}
-                </Text>
-                <Text style={[styles.promoSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                  点击前往领取
-                </Text>
-              </View>
-              <View style={[styles.promoAction, { backgroundColor: colors.accentMuted }]}>
-                <Text style={[styles.promoActionText, { color: colors.accent }]}>前往</Text>
-                <ExternalLink size={14} color={colors.accent} />
-              </View>
-            </TouchableOpacity>
           </>
         )}
       </ScrollView>
@@ -728,41 +732,6 @@ const styles = StyleSheet.create({
   localFileDesc: {
     fontSize: fontSizes.xs,
     marginTop: 3,
-  },
-  promoCard: {
-    marginTop: spacing.xl,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  promoTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  promoTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
-  promoSubtitle: {
-    fontSize: fontSizes.sm,
-    marginTop: 2,
-  },
-  promoAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-  },
-  promoActionText: {
-    fontSize: fontSizes.sm,
-    fontWeight: '700',
   },
   pickerOverlay: {
     flex: 1,

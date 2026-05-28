@@ -175,6 +175,22 @@ export const workspaceFs = {
     });
   },
 
+  async writeFileChunked(path: string, content: string, chunkSize = 32 * 1024): Promise<void> {
+    const filePath = stripFileScheme(path);
+    assertFileSystemPath(filePath, '写入文件');
+    await ensureParentDir(filePath);
+    const firstChunk = content.slice(0, chunkSize);
+    await RNFS.writeFile(filePath, firstChunk, 'utf8').catch(err => {
+      throw normalizeWorkspaceError(err);
+    });
+    for (let offset = chunkSize; offset < content.length; offset += chunkSize) {
+      const chunk = content.slice(offset, offset + chunkSize);
+      await RNFS.appendFile(filePath, chunk, 'utf8').catch(err => {
+        throw normalizeWorkspaceError(err);
+      });
+    }
+  },
+
   async mkdir(path: string): Promise<void> {
     const filePath = stripFileScheme(path);
     assertFileSystemPath(filePath, '创建目录');

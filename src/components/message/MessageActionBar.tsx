@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Check, Copy, RotateCcw } from 'lucide-react-native';
@@ -14,11 +14,21 @@ interface Props {
 export default React.memo(function MessageActionBar({ copyText, align = 'left', onRecall }: Props) {
   const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+  }, []);
 
   const handleCopy = useCallback(() => {
     Clipboard.setString(copyText);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+    }
+    resetTimerRef.current = setTimeout(() => setCopied(false), 1200);
   }, [copyText]);
 
   if (!copyText && !onRecall) return null;

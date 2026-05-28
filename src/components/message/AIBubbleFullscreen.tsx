@@ -22,6 +22,7 @@ interface Props {
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
+  showActionBar?: boolean;
 }
 
 export default React.memo(function AIBubbleFullscreen({
@@ -41,6 +42,7 @@ export default React.memo(function AIBubbleFullscreen({
   onShellDefaultExecute,
   onViewShellCommand,
   onToolReview,
+  showActionBar = true,
 }: Props) {
   return (
     <View style={styles.row}>
@@ -63,7 +65,7 @@ export default React.memo(function AIBubbleFullscreen({
           onViewShellCommand={onViewShellCommand}
           onToolReview={onToolReview}
         />
-        {!streaming && !!content.trim() && (
+        {showActionBar && !streaming && !!content.trim() && (
           <MessageActionBar copyText={content} align="left" />
         )}
       </View>

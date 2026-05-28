@@ -98,11 +98,7 @@ export class CodexStreamProcessor extends StreamProcessor {
     console.log('[LineCode] Codex HTTP response status:', res.status, res.statusText);
 
     try {
-      const result = await this.readResponsesStream(res, callbacks, abortSignal);
-      if (!result.toolCalls || result.toolCalls.length === 0) {
-        this.turnState = undefined;
-      }
-      return result;
+      return await this.readResponsesStream(res, callbacks, abortSignal);
     } catch (err: any) {
       this.turnState = undefined;
       throw err;

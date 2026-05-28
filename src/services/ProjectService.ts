@@ -237,7 +237,7 @@ class ProjectService {
     if (project.source === 'external') {
       const hasPermission = await androidExternalStorage.isManageExternalStorageGranted();
       if (!hasPermission) {
-        throw new Error(`缺少“管理所有文件”权限，无法访问外部项目目录: ${project.label}`);
+        throw new Error(`${androidExternalStorage.getPermissionDeniedMessage()}: ${project.label}`);
       }
 
       const exists = await RNFS.exists(project.path);

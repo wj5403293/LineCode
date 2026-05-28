@@ -23,6 +23,7 @@ interface Props {
   onShellDefaultExecute?: () => void;
   onViewShellCommand?: (command: string) => void;
   onToolReview?: (toolCallId: string, state: 'accepted' | 'rejected', diffId?: string) => void;
+  showActionBar?: boolean;
 }
 
 export default React.memo(function AIBubbleCompact({
@@ -42,6 +43,7 @@ export default React.memo(function AIBubbleCompact({
   onShellDefaultExecute,
   onViewShellCommand,
   onToolReview,
+  showActionBar = true,
 }: Props) {
   const { colors } = useTheme();
   const hasBlocks = blocks && blocks.length > 0;
@@ -73,7 +75,7 @@ export default React.memo(function AIBubbleCompact({
             onToolReview={onToolReview}
           />
         </View>
-        {!streaming && !!content.trim() && (
+        {showActionBar && !streaming && !!content.trim() && (
           <MessageActionBar copyText={content} align="left" />
         )}
       </View>

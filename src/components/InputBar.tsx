@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -9,10 +8,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import type { KeyboardEvent } from 'react-native';
 import { ArrowUp, Plus, Square, X } from 'lucide-react-native';
 import { spacing, fontSizes } from '../constants/theme';
 import { useTheme } from '../theme';
@@ -35,6 +32,14 @@ interface Props {
   contextPercent: number;
   draftText?: string;
   onDraftConsumed?: () => void;
+  keyboardFrame?: NativeKeyboardFrame | null;
+  bottomInset?: number;
+}
+
+export interface NativeKeyboardFrame {
+  visibleBottom: number;
+  windowHeight: number;
+  keyboardHeight: number;
 }
 
 type PickerSource = 'local' | 'ssh';
@@ -152,6 +157,8 @@ export default React.memo(function InputBar({
   contextPercent,
   draftText,
   onDraftConsumed,
+  keyboardFrame,
+  bottomInset = 0,
 }: Props) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<InputAttachment[]>([]);
@@ -168,7 +175,6 @@ export default React.memo(function InputBar({
   const focusProbeBottomRef = useRef(0);
   const keyboardMeasureTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const { colors } = useTheme();
-  const { height: windowHeight } = useWindowDimensions();
   const { tree: localTree, loadTree, expandNode } = useFileTree(homePath);
   const hasText = text.trim().length > 0;
   const canSend = hasText || attachments.length > 0;
@@ -189,11 +195,11 @@ export default React.memo(function InputBar({
     {
       backgroundColor: colors.bg,
       borderTopColor: colors.border,
-      paddingBottom: Platform.OS === 'android'
-        ? spacing.lg + androidKeyboardLift
-        : spacing.lg,
+      paddingBottom: spacing.lg + (Platform.OS === 'android'
+        ? Math.max(bottomInset, androidKeyboardLift)
+        : bottomInset),
     },
-  ], [androidKeyboardLift, colors.bg, colors.border]);
+  ], [androidKeyboardLift, bottomInset, colors.bg, colors.border]);
 
   const updateAndroidKeyboardLift = useCallback((nextLift: number) => {
     const rounded = Math.max(0, Math.ceil(nextLift));
@@ -269,33 +275,25 @@ export default React.memo(function InputBar({
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-
-    const handleKeyboardFrame = (event: KeyboardEvent) => {
-      const keyboardHeight = Math.max(0, event.endCoordinates?.height || 0);
-      const measuredScreenBottom = focusProbeBottomRef.current || windowHeight;
-      const keyboardScreenY = event.endCoordinates?.screenY;
-      keyboardTopRef.current = typeof keyboardScreenY === 'number' && keyboardScreenY > 0
-        ? keyboardScreenY
-        : Math.max(0, measuredScreenBottom - keyboardHeight);
-      scheduleKeyboardProbeMeasure(false);
-    };
-
-    const showSub = Keyboard.addListener('keyboardDidShow', handleKeyboardFrame);
-    const changeSub = Keyboard.addListener('keyboardDidChangeFrame', handleKeyboardFrame);
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+    if (!keyboardFrame) {
       keyboardTopRef.current = null;
       focusProbeBottomRef.current = 0;
       clearKeyboardMeasureTimers();
       updateAndroidKeyboardLift(0);
-    });
+      return;
+    }
 
-    return () => {
-      showSub.remove();
-      changeSub.remove();
-      hideSub.remove();
+    if (keyboardFrame.keyboardHeight <= 0) {
+      keyboardTopRef.current = null;
+      focusProbeBottomRef.current = 0;
       clearKeyboardMeasureTimers();
-    };
-  }, [clearKeyboardMeasureTimers, scheduleKeyboardProbeMeasure, updateAndroidKeyboardLift, windowHeight]);
+      updateAndroidKeyboardLift(0);
+      return;
+    }
+
+    keyboardTopRef.current = keyboardFrame.visibleBottom;
+    scheduleKeyboardProbeMeasure(false);
+  }, [clearKeyboardMeasureTimers, keyboardFrame, scheduleKeyboardProbeMeasure, updateAndroidKeyboardLift]);
 
   const detectRemotePython = useCallback(async (): Promise<string> => {
     const output = await sshService.executeCommand('command -v python3 || command -v python || command -v py || true', 10000);

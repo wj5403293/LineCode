@@ -7,6 +7,7 @@ export const PERMISSIONS: OptionItem[] = [
 ];
 
 export const MORE_OPTIONS: OptionItem[] = [
+  { id: 'tutorial', label: '使用教程', desc: '新手版 / 专业版' },
   { id: 'settings', label: '设置' },
   { id: 'compact', label: '压缩上下文' },
   { id: 'clear', label: '清空对话' },

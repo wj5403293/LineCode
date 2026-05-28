@@ -40,7 +40,14 @@ export class FileWriteTool extends BaseTool {
         } catch {}
       }
 
-      await workspaceFs.writeFile(filePath, input.content);
+      const contentSize = typeof Blob !== 'undefined'
+        ? new Blob([input.content]).size
+        : input.content.length;
+      if (contentSize > 50 * 1024) {
+        await workspaceFs.writeFileChunked(filePath, input.content);
+      } else {
+        await workspaceFs.writeFile(filePath, input.content);
+      }
 
       const isNewFile = !fileExists;
       const lineCount = input.content.split('\n').length;

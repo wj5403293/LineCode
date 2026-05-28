@@ -58,6 +58,8 @@ const KEYS = {
   FIRST_LAUNCH_GUIDE_SEEN: '@lineai_first_launch_guide_seen',
   MCP_EXECUTION_MODE: '@lineai_mcp_execution_mode',
   AUTO_UPDATE_ENABLED: '@linecode_auto_update_enabled',
+  RESTORE_LAST_CONVERSATION_ON_STARTUP: '@linecode_restore_last_conversation_on_startup',
+  EXPERIMENTAL_ANDROID_KEYBOARD_AVOIDANCE: '@linecode_experimental_android_keyboard_avoidance',
   KEEP_ALIVE: '@linecode_keep_alive_settings',
 } as const;
 
@@ -231,6 +233,24 @@ class SettingsService {
 
   async setAutoUpdateEnabled(enabled: boolean): Promise<void> {
     await this.set(KEYS.AUTO_UPDATE_ENABLED, enabled);
+  }
+
+  async getRestoreLastConversationOnStartup(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.RESTORE_LAST_CONVERSATION_ON_STARTUP);
+    return value === 'true';
+  }
+
+  async setRestoreLastConversationOnStartup(enabled: boolean): Promise<void> {
+    await this.set(KEYS.RESTORE_LAST_CONVERSATION_ON_STARTUP, enabled);
+  }
+
+  async getExperimentalAndroidKeyboardAvoidanceEnabled(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.EXPERIMENTAL_ANDROID_KEYBOARD_AVOIDANCE);
+    return value === 'true';
+  }
+
+  async setExperimentalAndroidKeyboardAvoidanceEnabled(enabled: boolean): Promise<void> {
+    await this.set(KEYS.EXPERIMENTAL_ANDROID_KEYBOARD_AVOIDANCE, enabled);
   }
 
   async getKeepAliveSettings(): Promise<KeepAliveSettings> {

@@ -23,11 +23,17 @@ export interface CustomAgentExtension {
   updatedAt: number;
 }
 
+export interface McpRequestHeader {
+  name: string;
+  value: string;
+}
+
 export interface CustomMcpExtension {
   id: string;
   enabled: boolean;
   name: string;
   url: string;
+  requestHeaders: McpRequestHeader[];
   tools: McpToolSummary[];
   createdAt: number;
   updatedAt: number;
@@ -139,6 +145,28 @@ function normalizeInputSchema(value: unknown): Record<string, unknown> | undefin
   return value as Record<string, unknown>;
 }
 
+function normalizeRequestHeaders(value: unknown): McpRequestHeader[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Record<string, unknown>;
+      const name = typeof record.name === 'string' ? record.name.trim() : '';
+      const headerValue = typeof record.value === 'string' ? record.value.trim() : '';
+      if (!name) return null;
+      return { name, value: headerValue };
+    })
+    .filter((item): item is McpRequestHeader => !!item);
+}
+
+function requestHeadersToRecord(headers?: McpRequestHeader[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  normalizeRequestHeaders(headers || []).forEach(header => {
+    record[header.name] = header.value;
+  });
+  return record;
+}
+
 function parseMcpToolResponse(text: string): McpToolSummary[] {
   const jsonText = extractJsonFromEventStream(text);
   const parsed = JSON.parse(jsonText) as Record<string, unknown>;
@@ -179,6 +207,7 @@ function normalizeMcp(value: Partial<CustomMcpExtension>): CustomMcpExtension | 
     enabled: value.enabled !== false,
     name: String(value.name),
     url: String(value.url),
+    requestHeaders: normalizeRequestHeaders(value.requestHeaders),
     tools: Array.isArray(value.tools) ? normalizeToolList(value.tools) : [],
     createdAt: Number(value.createdAt || Date.now()),
     updatedAt: Number(value.updatedAt || Date.now()),
@@ -265,6 +294,11 @@ class ExtensionService {
     ))));
   }
 
+  async deleteAgentExtension(id: string): Promise<void> {
+    const agents = await this.getAgentExtensions();
+    await AsyncStorage.setItem(KEYS.AGENTS, JSON.stringify(agents.filter(agent => agent.id !== id)));
+  }
+
   async getMcpExtensions(): Promise<CustomMcpExtension[]> {
     const json = await AsyncStorage.getItem(KEYS.MCPS);
     const parsed = json ? JSON.parse(json) : [];
@@ -278,6 +312,7 @@ class ExtensionService {
     const timestamp = Date.now();
     const next: CustomMcpExtension = {
       ...input,
+      requestHeaders: normalizeRequestHeaders(input.requestHeaders),
       enabled: input.enabled !== false,
       id: nowId('mcp'),
       createdAt: timestamp,
@@ -297,6 +332,7 @@ class ExtensionService {
     const next: CustomMcpExtension = {
       ...existing,
       ...input,
+      requestHeaders: normalizeRequestHeaders(input.requestHeaders),
       enabled: input.enabled !== false,
       id: existing.id,
       createdAt: existing.createdAt,
@@ -313,6 +349,11 @@ class ExtensionService {
         ? { ...mcp, enabled, updatedAt: Date.now() }
         : mcp
     ))));
+  }
+
+  async deleteMcpExtension(id: string): Promise<void> {
+    const mcps = await this.getMcpExtensions();
+    await AsyncStorage.setItem(KEYS.MCPS, JSON.stringify(mcps.filter(mcp => mcp.id !== id)));
   }
 
   async getInstalledSkills(): Promise<InstalledSkillExtension[]> {
@@ -403,8 +444,9 @@ class ExtensionService {
     ];
   }
 
-  async queryMcpTools(url: string): Promise<McpToolSummary[]> {
+  async queryMcpTools(url: string, requestHeaders: McpRequestHeader[] = []): Promise<McpToolSummary[]> {
     const endpoint = normalizeHttpUrl(url);
+    const customHeaders = requestHeadersToRecord(requestHeaders);
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: `linecode_${Date.now()}`,
@@ -418,6 +460,7 @@ class ExtensionService {
         headers: {
           Accept: 'application/json, text/event-stream',
           'Content-Type': 'application/json',
+          ...customHeaders,
         },
         body,
       });
@@ -438,6 +481,15 @@ class ExtensionService {
     }
 
     throw new Error('没有在 MCP 响应中找到 tools 列表。');
+  }
+
+  async deleteInstalledSkill(id: string): Promise<void> {
+    const skills = await this.getInstalledSkills();
+    const target = skills.find(skill => skill.id === id);
+    await AsyncStorage.setItem(KEYS.SKILLS, JSON.stringify(skills.filter(skill => skill.id !== id)));
+    if (target?.location !== 'ssh' && target?.path && await RNFS.exists(target.path)) {
+      await RNFS.unlink(target.path).catch(() => {});
+    }
   }
 
   async installSkillZip(document: PickedDocument, location: SkillInstallLocation): Promise<InstalledSkillExtension> {
@@ -536,4 +588,5 @@ class ExtensionService {
   }
 }
 
+export { requestHeadersToRecord };
 export const extensionService = new ExtensionService();

@@ -1,4 +1,4 @@
-import { Linking, NativeModules, Platform } from 'react-native';
+import { Linking, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 
 interface StoragePermissionNativeModule {
   isManageExternalStorageGranted(): Promise<boolean>;
@@ -122,10 +122,47 @@ export function safTreeUriToFileSystemPath(uri: string): string | null {
 }
 
 class AndroidExternalStorageService {
+  private getAndroidVersion(): number {
+    return typeof Platform.Version === 'number'
+      ? Platform.Version
+      : Number.parseInt(String(Platform.Version), 10) || 0;
+  }
+
+  private getLegacyStoragePermissions(): string[] {
+    const permissions = [PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE];
+    if (this.getAndroidVersion() <= 29) {
+      permissions.push(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+    }
+    return permissions;
+  }
+
+  private async hasLegacyStoragePermissions(): Promise<boolean> {
+    const results = await Promise.all(
+      this.getLegacyStoragePermissions().map(permission => PermissionsAndroid.check(permission as any)),
+    );
+    return results.every(Boolean);
+  }
+
+  private async requestLegacyStoragePermissions(): Promise<boolean> {
+    const permissions = this.getLegacyStoragePermissions();
+    const result = await PermissionsAndroid.requestMultiple(permissions as any) as Record<string, string>;
+    return permissions.every(permission => result[permission] === PermissionsAndroid.RESULTS.GRANTED);
+  }
+
   async isManageExternalStorageGranted(): Promise<boolean> {
     if (Platform.OS !== 'android') return true;
+    if (this.getAndroidVersion() < 30) {
+      return this.hasLegacyStoragePermissions();
+    }
     if (!StoragePermission?.isManageExternalStorageGranted) return false;
     return StoragePermission.isManageExternalStorageGranted();
+  }
+
+  getPermissionDeniedMessage(): string {
+    if (Platform.OS === 'android' && this.getAndroidVersion() < 30) {
+      return '缺少文件读写权限，无法访问外部项目目录。请允许 LineCode 读取和写入存储空间后重试。';
+    }
+    return '缺少“管理所有文件”权限，无法访问外部项目目录。';
   }
 
   async openManageExternalStorageSettings(): Promise<void> {
@@ -141,6 +178,12 @@ class AndroidExternalStorageService {
 
   async ensureManageExternalStorageGranted(): Promise<void> {
     if (Platform.OS !== 'android') return;
+
+    if (this.getAndroidVersion() < 30) {
+      if (await this.hasLegacyStoragePermissions()) return;
+      if (await this.requestLegacyStoragePermissions()) return;
+      throw new Error('需要授予文件读写权限后才能访问文件。请允许 LineCode 读取和写入存储空间，然后重试。');
+    }
 
     if (!StoragePermission?.isManageExternalStorageGranted) {
       throw new Error('当前 APK 缺少“管理所有文件”权限模块，请安装新版 APK 后再打开外部目录。');

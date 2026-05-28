@@ -3,7 +3,7 @@ import { Alert, View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
-import InputBar from '../components/InputBar';
+import InputBar, { NativeKeyboardFrame } from '../components/InputBar';
 import Dialog from '../components/Dialog';
 import EmptyState from '../components/EmptyState';
 import Sidebar from '../components/Sidebar';
@@ -15,6 +15,7 @@ import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../hooks/useSettings';
 import { useConversationManager } from '../hooks/useConversationManager';
 import { useProjectSelection } from '../hooks/useProjectSelection';
+import type { TutorialVariant } from '../constants/tutorial';
 import { PermissionMode } from '../services/settings';
 import { permissionService } from '../services/PermissionService';
 import { setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '../utils/keepAwake';
@@ -22,13 +23,15 @@ import { projectService } from '../services/ProjectService';
 import ChatMessageList from '../components/ChatMessageList';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { Message } from '../types';
+import { addAndroidKeyboardFrameListener } from '../utils/androidKeyboardFrame';
 
 interface Props {
   onGoSettings: () => void;
+  onOpenTutorial: (variant: TutorialVariant) => void;
   onViewShellCommand: (command: string) => void;
 }
 
-export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) {
+export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCommand }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const {
@@ -43,6 +46,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
     permissionMode,
     mcpExecutionMode,
     keepAliveSettings,
+    experimentalAndroidKeyboardAvoidanceEnabled,
     updatePermissionMode,
     reloadSettings,
   } = useSettings();
@@ -98,6 +102,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   const [createProjectVisible, setCreateProjectVisible] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [recalledDraft, setRecalledDraft] = useState<string | undefined>();
+  const [keyboardFrame, setKeyboardFrame] = useState<NativeKeyboardFrame | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +112,14 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
   );
 
   const containerStyle = useMemo(() => [styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }], [insets.top, colors.bg]);
+
+  useEffect(() => {
+    if (!experimentalAndroidKeyboardAvoidanceEnabled) {
+      setKeyboardFrame(null);
+      return;
+    }
+    return addAndroidKeyboardFrameListener(setKeyboardFrame);
+  }, [experimentalAndroidKeyboardAvoidanceEnabled]);
 
   useEffect(() => {
     permissionService.setMode(permissionMode);
@@ -163,6 +176,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
 
   const handleMoreSelect = useCallback((id: string) => {
     closeDialog();
+    if (id === 'tutorial') onOpenTutorial('beginner');
     if (id === 'settings') onGoSettings();
     if (id === 'clear') clearMessages();
     if (id === 'compact') {
@@ -175,7 +189,7 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
         ],
       );
     }
-  }, [onGoSettings, closeDialog, clearMessages, handleCompactContext]);
+  }, [onOpenTutorial, onGoSettings, closeDialog, clearMessages, handleCompactContext]);
 
   const handleProjectDialogSelect = useCallback((id: string) => {
     if (id === '__open_project') {
@@ -328,6 +342,8 @@ export default function ChatScreen({ onGoSettings, onViewShellCommand }: Props) 
           contextPercent={contextPercent}
           draftText={recalledDraft}
           onDraftConsumed={() => setRecalledDraft(undefined)}
+          keyboardFrame={experimentalAndroidKeyboardAvoidanceEnabled ? keyboardFrame : null}
+          bottomInset={insets.bottom}
         />
 
         <Dialog

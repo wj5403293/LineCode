@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Server, Terminal, Wrench } from 'lucide-react-native';
-import { spacing, fontSizes, radius } from '../constants/theme';
-import { TERMUX_ALLOW_EXTERNAL_APPS_COMMAND } from '../services/SSHService';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BookOpen, GraduationCap, Wrench } from 'lucide-react-native';
+import { fontSizes, radius, spacing } from '../constants/theme';
+import type { TutorialVariant } from '../constants/tutorial';
 import { settingsService } from '../services/settings';
 import { useTheme } from '../theme';
 
 interface Props {
+  onOpenTutorial: (variant: TutorialVariant) => void;
   onDone?: () => void;
 }
 
-export default function FirstLaunchGuideModal({ onDone }: Props) {
+export default function FirstLaunchGuideModal({ onOpenTutorial, onDone }: Props) {
   const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
 
@@ -36,69 +37,51 @@ export default function FirstLaunchGuideModal({ onDone }: Props) {
     onDone?.();
   }, [onDone]);
 
+  const handleOpen = useCallback((variant: TutorialVariant) => {
+    dismiss();
+    onOpenTutorial(variant);
+  }, [dismiss, onOpenTutorial]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
       <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
         <View style={[styles.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}>
-          <Text style={[styles.title, { color: colors.text }]}>使用指南</Text>
-          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            <GuideItem
-              icon={<Wrench size={18} color={colors.accent} />}
-              title="添加模型"
-              text="在设置中添加 OpenAI 兼容或 Anthropic 模型，填写 Base URL、API key 和模型 ID。"
-            />
-            <GuideItem
-              icon={<Terminal size={18} color={colors.accent} />}
-              title="MCP 与权限"
-              text="本地工作区支持文件读写、搜索、Agent 和 HTTP 服务器；SSH Shell 模式只允许执行 shell 命令。"
-            />
-            <GuideItem
-              icon={<Server size={18} color={colors.accent} />}
-              title="Termux intent 授权"
-              text={TERMUX_ALLOW_EXTERNAL_APPS_COMMAND}
-              monospace
-            />
-            <Text style={[styles.note, { color: colors.textSecondary }]}>
-              先在 Termux 执行授权指令，再回设置页授权 RUN_COMMAND 并自动配置 OpenSSH。Termux 默认连接 127.0.0.1:8022；没有默认 SSH 密码。
-            </Text>
-          </ScrollView>
+          <View style={[styles.iconWrap, { backgroundColor: colors.accentMuted }]}>
+            <BookOpen size={28} color={colors.accent} />
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>欢迎使用 LineCode</Text>
+          <Text style={[styles.desc, { color: colors.textSecondary }]}>第一次使用建议先阅读教程。你可以选择适合自己的版本，之后也能从聊天页右上角三个点再次打开。</Text>
+
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.accent }]}
-            onPress={dismiss}
+            style={[styles.option, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
+            onPress={() => handleOpen('beginner')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.buttonText, { color: colors.textOnColor }]}>知道了</Text>
+            <GraduationCap size={22} color={colors.accent} />
+            <View style={styles.optionText}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>新手版教程</Text>
+              <Text style={[styles.optionDesc, { color: colors.textTertiary }]}>零基础，按步骤配置模型、Termux、SSH、MCP。</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.option, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}
+            onPress={() => handleOpen('professional')}
+            activeOpacity={0.75}
+          >
+            <Wrench size={22} color={colors.accent} />
+            <View style={styles.optionText}>
+              <Text style={[styles.optionTitle, { color: colors.text }]}>专业版手册</Text>
+              <Text style={[styles.optionDesc, { color: colors.textTertiary }]}>面向开发者，覆盖协议、执行后端、权限与排障。</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.skipButton} onPress={dismiss} activeOpacity={0.75}>
+            <Text style={[styles.skipText, { color: colors.textTertiary }]}>稍后再看</Text>
           </TouchableOpacity>
         </View>
       </View>
     </Modal>
-  );
-}
-
-function GuideItem({
-  icon,
-  title,
-  text,
-  monospace,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-  monospace?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.item}>
-      <View style={[styles.iconWrap, { backgroundColor: colors.accentMuted }]}>
-        {icon}
-      </View>
-      <View style={styles.itemText}>
-        <Text style={[styles.itemTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.itemDesc, { color: colors.textSecondary }, monospace && styles.monospace]}>
-          {text}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -112,55 +95,45 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing.lg,
-    maxHeight: '82%',
+  },
+  iconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: spacing.md,
   },
   title: {
     fontSize: fontSizes.xl,
-    fontWeight: '700',
-    marginBottom: spacing.md,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
   },
-  body: {
-    marginBottom: spacing.md,
+  desc: {
+    fontSize: fontSizes.sm,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
-  item: {
+  option: {
+    minHeight: 78,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.md,
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
     marginBottom: spacing.md,
   },
-  iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  optionText: { flex: 1 },
+  optionTitle: { fontSize: fontSizes.md, fontWeight: '800' },
+  optionDesc: { fontSize: fontSizes.xs, lineHeight: 18, marginTop: 3 },
+  skipButton: {
+    minHeight: 42,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemText: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  itemDesc: {
-    fontSize: fontSizes.sm,
-    lineHeight: 20,
-  },
-  monospace: {
-    fontFamily: 'monospace',
-  },
-  note: {
-    fontSize: fontSizes.xs,
-    lineHeight: 18,
-  },
-  button: {
-    minHeight: 44,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
+  skipText: { fontSize: fontSizes.sm, fontWeight: '600' },
 });

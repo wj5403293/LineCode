@@ -29,4 +29,16 @@ describe('settingsService math formula rendering', () => {
     await settingsService.setMathFormulaRenderingEnabled(false);
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it('defaults experimental Android keyboard avoidance to disabled', async () => {
+    await expect(settingsService.getExperimentalAndroidKeyboardAvoidanceEnabled()).resolves.toBe(false);
+  });
+
+  it('persists experimental Android keyboard avoidance changes', async () => {
+    await settingsService.setExperimentalAndroidKeyboardAvoidanceEnabled(true);
+    await expect(settingsService.getExperimentalAndroidKeyboardAvoidanceEnabled()).resolves.toBe(true);
+
+    await settingsService.setExperimentalAndroidKeyboardAvoidanceEnabled(false);
+    await expect(settingsService.getExperimentalAndroidKeyboardAvoidanceEnabled()).resolves.toBe(false);
+  });
 });

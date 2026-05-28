@@ -7,9 +7,12 @@ import { useMessageActions } from '../contexts/MessageActionsContext';
 
 interface Props {
   message: Message;
+  contentOverride?: string;
+  streamingOverride?: boolean;
+  showActionBar?: boolean;
 }
 
-function MessageBubble({ message }: Props) {
+function MessageBubble({ message, contentOverride, streamingOverride, showActionBar = true }: Props) {
   const {
     codeWrap,
     displayMode = 'fullscreen',
@@ -38,13 +41,17 @@ function MessageBubble({ message }: Props) {
     return null;
   }
 
+  const content = contentOverride ?? message.content;
+  const streaming = streamingOverride ?? message.streaming;
+  const useFullMessageBlocks = contentOverride === undefined;
+
   return displayMode === 'fullscreen'
     ? <AIBubbleFullscreen
-        content={message.content}
-        blocks={message.blocks}
-        toolCalls={message.toolCalls}
+        content={content}
+        blocks={useFullMessageBlocks ? message.blocks : undefined}
+        toolCalls={useFullMessageBlocks ? message.toolCalls : undefined}
         toolResults={message.toolResults}
-        streaming={message.streaming}
+        streaming={streaming}
         codeWrap={codeWrap}
         mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
         thinkingAutoExpand={thinkingAutoExpand}
@@ -56,13 +63,14 @@ function MessageBubble({ message }: Props) {
         onShellDefaultExecute={onShellDefaultExecute}
         onViewShellCommand={onViewShellCommand}
         onToolReview={onToolReview}
+        showActionBar={showActionBar}
       />
     : <AIBubbleCompact
-        content={message.content}
-        blocks={message.blocks}
-        toolCalls={message.toolCalls}
+        content={content}
+        blocks={useFullMessageBlocks ? message.blocks : undefined}
+        toolCalls={useFullMessageBlocks ? message.toolCalls : undefined}
         toolResults={message.toolResults}
-        streaming={message.streaming}
+        streaming={streaming}
         codeWrap={codeWrap}
         mathFormulaRenderingEnabled={mathFormulaRenderingEnabled}
         thinkingAutoExpand={thinkingAutoExpand}
@@ -74,6 +82,7 @@ function MessageBubble({ message }: Props) {
         onShellDefaultExecute={onShellDefaultExecute}
         onViewShellCommand={onViewShellCommand}
         onToolReview={onToolReview}
+        showActionBar={showActionBar}
       />;
 }
 

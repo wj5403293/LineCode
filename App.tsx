@@ -6,20 +6,25 @@ import { DefaultTheme, NavigationContainer, createNavigationContainerRef } from 
 import { ThemeProvider, useTheme } from './src/theme';
 import RootNavigator, { type RootStackParamList } from './src/navigation/RootNavigator';
 import FirstLaunchGuideModal from './src/components/FirstLaunchGuideModal';
-import FirstLaunchPromoModal from './src/components/FirstLaunchPromoModal';
 import AppErrorBoundary from './src/components/AppErrorBoundary';
 import ErrorReportScreen from './src/screens/ErrorReportScreen';
 import { ErrorReport, errorReporter } from './src/services/ErrorReporter';
 import UpdatePromptModal from './src/components/UpdatePromptModal';
 import { HotUpdateInfo, hotUpdateService } from './src/services/HotUpdateService';
 import { settingsService } from './src/services/settings';
+import { androidExternalStorage } from './src/services/AndroidExternalStorage';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 const AUTO_UPDATE_CHECK_DELAY_MS = 4_000;
 
+export function requestStartupExternalStoragePermission(): void {
+  androidExternalStorage.ensureManageExternalStorageGranted().catch(err => {
+    console.warn('[LineCode] external storage permission request failed:', err);
+  });
+}
+
 function AppContent() {
   const { isDark, colors } = useTheme();
-  const [guideComplete, setGuideComplete] = useState(false);
   const [errorReport, setErrorReport] = useState<ErrorReport | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<HotUpdateInfo | null>(null);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
@@ -89,11 +94,9 @@ function AppContent() {
     };
   }, []);
 
-  const handleNavigateUrl = useCallback((url: string) => {
+  const handleOpenTutorial = useCallback((variant: 'beginner' | 'professional') => {
     if (navigationRef.isReady()) {
-      navigationRef.navigate('InAppBrowser', { url });
-    } else {
-      Linking.openURL(url).catch(() => {});
+      navigationRef.navigate('Tutorial', { variant });
     }
   }, []);
 
@@ -148,8 +151,7 @@ function AppContent() {
         <NavigationContainer ref={navigationRef} theme={navigationTheme}>
           <RootNavigator />
         </NavigationContainer>
-        <FirstLaunchGuideModal onDone={() => setGuideComplete(true)} />
-        <FirstLaunchPromoModal navigateToUrl={handleNavigateUrl} enabled={guideComplete} />
+        <FirstLaunchGuideModal onOpenTutorial={handleOpenTutorial} onDone={() => {}} />
         <UpdatePromptModal
           visible={!!pendingUpdate}
           update={pendingUpdate}
@@ -171,6 +173,8 @@ function AppContent() {
 }
 
 export default function App() {
+  requestStartupExternalStoragePermission();
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>

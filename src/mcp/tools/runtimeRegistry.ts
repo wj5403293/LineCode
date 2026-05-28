@@ -4,6 +4,7 @@ import {
   CustomMcpExtension,
   extensionService,
   McpToolSummary,
+  requestHeadersToRecord,
 } from '../../services/ExtensionService';
 import { modelStorage } from '../../services/storage';
 import { settingsService } from '../../services/settings';
@@ -232,6 +233,7 @@ class CustomMcpHttpTool extends BaseTool<Record<string, unknown>> {
       headers: {
         Accept: 'application/json, text/event-stream',
         'Content-Type': 'application/json',
+        ...requestHeadersToRecord(this.mcp.requestHeaders),
       },
       body,
     });

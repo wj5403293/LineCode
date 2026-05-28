@@ -3,7 +3,7 @@ import { NativeSyntheticEvent, NativeScrollEvent, FlatList, LayoutChangeEvent } 
 import { Message, Model, ToolCall, ContentBlock, AgentToolCall, ToolResult, InputAttachment, AgentProgressItem } from '../types';
 import { modelStorage } from '../services/storage';
 import { aiService, ChatMessage, SYSTEM_PROMPT } from '../services/ai';
-import { ToneMode, ReasoningEffort } from '../services/settings';
+import { ToneMode, ReasoningEffort, settingsService } from '../services/settings';
 import { executeTool, needsConfirmation, getHomePath } from '../mcp/ToolExecutor';
 import { agentToolManager } from '../mcp/AgentToolManager';
 import { conversationStore } from '../services/conversation';
@@ -315,23 +315,30 @@ export function useChatState(toneMode: ToneMode, reasoningEffort: ReasoningEffor
   }, [enableBottomFollow]);
 
   const loadInitialData = useCallback(async () => {
-    const [models, selectedId, convId] = await Promise.all([
+    const [models, selectedId, restoreLastConversation] = await Promise.all([
       modelStorage.getModels(),
       modelStorage.getSelectedModelId(),
-      conversationStore.getCurrentConversationId(),
+      settingsService.getRestoreLastConversationOnStartup(),
     ]);
-
     const selectedModel = selectedId ? models.find(m => m.id === selectedId) : null;
     setModel(selectedModel || models[0] || null);
 
-    if (convId) {
-      const conv = await conversationStore.getConversation(convId);
-      if (conv) {
-        updateConversationId(conv.id);
-        messageStoreRef.current.setMessages(conv.messages);
-        persistenceRef.current.markPersisted(conv.messages);
-        setMessages(conv.messages);
+    if (restoreLastConversation) {
+      const convId = await conversationStore.getCurrentConversationId();
+      if (convId) {
+        const conv = await conversationStore.getConversation(convId);
+        if (conv) {
+          updateConversationId(conv.id);
+          messageStoreRef.current.setMessages(conv.messages);
+          persistenceRef.current.markPersisted(conv.messages);
+          setMessages(conv.messages);
+        }
       }
+    } else {
+      updateConversationId(null);
+      messageStoreRef.current.setMessages([]);
+      persistenceRef.current.markPersisted([]);
+      setMessages([]);
     }
 
     setLoading(false);

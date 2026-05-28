@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, ChevronRight, Search } from 'lucide-react-native';
+import { Plus, Check, ChevronRight, Search, Trash2 } from 'lucide-react-native';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
 import { fontSizes, radius, spacing } from '../constants/theme';
-import { CustomMcpExtension, extensionService, McpToolSummary } from '../services/ExtensionService';
+import { CustomMcpExtension, extensionService, McpRequestHeader, McpToolSummary } from '../services/ExtensionService';
 import { useTheme } from '../theme';
 
 interface Props {
@@ -29,6 +29,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
   const isEditing = !!mcpId;
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [requestHeaders, setRequestHeaders] = useState<McpRequestHeader[]>([]);
   const [enabled, setEnabled] = useState(true);
   const [tools, setTools] = useState<McpToolSummary[]>([]);
   const [querying, setQuerying] = useState(false);
@@ -38,6 +39,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
   const applyMcpToForm = useCallback((mcp: CustomMcpExtension) => {
     setName(mcp.name);
     setUrl(mcp.url);
+    setRequestHeaders(mcp.requestHeaders || []);
     setEnabled(mcp.enabled);
     setTools(mcp.tools);
     setQueried(mcp.tools.length > 0);
@@ -72,7 +74,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
     if (!canQuery) return;
     setQuerying(true);
     try {
-      const nextTools = await extensionService.queryMcpTools(url);
+      const nextTools = await extensionService.queryMcpTools(url, requestHeaders);
       setTools(nextTools);
       setQueried(true);
     } catch (err: any) {
@@ -80,7 +82,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
     } finally {
       setQuerying(false);
     }
-  }, [canQuery, url]);
+  }, [canQuery, requestHeaders, url]);
 
   const handleSave = useCallback(async () => {
     if (!canSave) return;
@@ -90,6 +92,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
         enabled,
         name: name.trim(),
         url: url.trim().replace(/\/$/, ''),
+        requestHeaders,
         tools,
       };
       if (mcpId) {
@@ -103,7 +106,25 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [canSave, enabled, mcpId, name, onBack, tools, url]);
+  }, [canSave, enabled, mcpId, name, onBack, requestHeaders, tools, url]);
+
+  const handleAddHeader = useCallback(() => {
+    setRequestHeaders(prev => [...prev, { name: '', value: '' }]);
+  }, []);
+
+  const handleChangeHeader = useCallback((index: number, field: keyof McpRequestHeader, value: string) => {
+    setRequestHeaders(prev => prev.map((header, headerIndex) => (
+      headerIndex === index ? { ...header, [field]: value } : header
+    )));
+    setTools([]);
+    setQueried(false);
+  }, []);
+
+  const handleRemoveHeader = useCallback((index: number) => {
+    setRequestHeaders(prev => prev.filter((_, headerIndex) => headerIndex !== index));
+    setTools([]);
+    setQueried(false);
+  }, []);
 
   const rightAction = (
     <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={!canSave} activeOpacity={0.75}>
@@ -138,6 +159,44 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
               placeholder="https://example.com/mcp"
               hint={url && !urlValid ? '地址必须以 http:// 或 https:// 开头。' : '查询会请求 tools/list 并展示 MCP 工具列表。'}
             />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <SectionHeader title="自定义请求头" />
+          <View style={[styles.formGroup, { backgroundColor: colors.surfaceElevated }]}>
+            <TouchableOpacity style={styles.addHeaderButton} onPress={handleAddHeader} activeOpacity={0.75}>
+              <View style={[styles.smallIcon, { backgroundColor: colors.accentMuted }]}>
+                <Plus size={16} color={colors.accent} />
+              </View>
+              <Text style={[styles.addHeaderText, { color: colors.accent }]}>添加请求头</Text>
+            </TouchableOpacity>
+            {requestHeaders.map((header, index) => (
+              <View key={index} style={styles.headerRow}>
+                <TextInput
+                  style={[styles.headerInput, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+                  value={header.name}
+                  onChangeText={value => handleChangeHeader(index, 'name', value)}
+                  placeholder="名字"
+                  placeholderTextColor={colors.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TextInput
+                  style={[styles.headerInput, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
+                  value={header.value}
+                  onChangeText={value => handleChangeHeader(index, 'value', value)}
+                  placeholder="值"
+                  placeholderTextColor={colors.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity style={styles.removeHeaderButton} onPress={() => handleRemoveHeader(index)} activeOpacity={0.75}>
+                  <Trash2 size={16} color={colors.textTertiary} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <Text style={[styles.hint, { color: colors.textTertiary }]}>查询和调用 MCP tools 时会附带这些请求头。</Text>
           </View>
         </View>
 
@@ -299,6 +358,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: fontSizes.md,
+  },
+  addHeaderButton: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  smallIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addHeaderText: {
+    fontSize: fontSizes.sm,
+    fontWeight: '700',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerInput: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSizes.sm,
+  },
+  removeHeaderButton: {
+    width: 34,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hint: {
     fontSize: fontSizes.xs,

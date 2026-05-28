@@ -167,6 +167,86 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
     }
   }, [loadData]);
 
+  const handleDeleteAgent = useCallback((agent: CustomAgentExtension) => {
+    Alert.alert('删除 Agent', `确定删除「${agent.name}」？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await extensionService.deleteAgentExtension(agent.id);
+            setAgents(prev => prev.filter(item => item.id !== agent.id));
+          } catch (err: any) {
+            Alert.alert('删除失败', err?.message || String(err));
+            loadData().catch(() => {});
+          }
+        },
+      },
+    ]);
+  }, [loadData]);
+
+  const handleDeleteMcp = useCallback((mcp: CustomMcpExtension) => {
+    Alert.alert('删除 MCP', `确定删除「${mcp.name}」？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await extensionService.deleteMcpExtension(mcp.id);
+            setMcps(prev => prev.filter(item => item.id !== mcp.id));
+          } catch (err: any) {
+            Alert.alert('删除失败', err?.message || String(err));
+            loadData().catch(() => {});
+          }
+        },
+      },
+    ]);
+  }, [loadData]);
+
+  const handleDeleteSkill = useCallback((skill: InstalledSkillExtension) => {
+    Alert.alert('删除 Skill', `确定删除「${skill.name}」？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await extensionService.deleteInstalledSkill(skill.id);
+            setSkills(prev => prev.filter(item => item.id !== skill.id));
+          } catch (err: any) {
+            Alert.alert('删除失败', err?.message || String(err));
+            loadData().catch(() => {});
+          }
+        },
+      },
+    ]);
+  }, [loadData]);
+
+  const handleAgentLongPress = useCallback((agent: CustomAgentExtension) => {
+    Alert.alert(agent.name, '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '修改', onPress: () => onEditAgent(agent.id) },
+      { text: '删除', style: 'destructive', onPress: () => handleDeleteAgent(agent) },
+    ]);
+  }, [handleDeleteAgent, onEditAgent]);
+
+  const handleMcpLongPress = useCallback((mcp: CustomMcpExtension) => {
+    Alert.alert(mcp.name, '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '修改', onPress: () => onEditMcp(mcp.id) },
+      { text: '删除', style: 'destructive', onPress: () => handleDeleteMcp(mcp) },
+    ]);
+  }, [handleDeleteMcp, onEditMcp]);
+
+  const handleSkillLongPress = useCallback((skill: InstalledSkillExtension) => {
+    Alert.alert(skill.name, '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: () => handleDeleteSkill(skill) },
+    ]);
+  }, [handleDeleteSkill]);
+
   const Icon = getIcon(kind);
   const canAdd = kind !== 'linecode';
   const showInlineAction = kind === 'agent' || kind === 'mcp' || kind === 'skills';
@@ -239,9 +319,10 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
               skills,
               colors,
               handleAgentEnabled,
-              onEditAgent,
+              handleAgentLongPress,
               handleMcpEnabled,
-              onEditMcp,
+              handleMcpLongPress,
+              handleSkillLongPress,
             )}
           </View>
         )}
@@ -268,9 +349,10 @@ function renderCustomContent(
   skills: InstalledSkillExtension[],
   colors: ReturnType<typeof useTheme>['colors'],
   onAgentEnabledChange: (agentId: string, enabled: boolean) => void,
-  onEditAgent: (agentId: string) => void,
+  onAgentLongPress: (agent: CustomAgentExtension) => void,
   onMcpEnabledChange: (mcpId: string, enabled: boolean) => void,
-  onEditMcp: (mcpId: string) => void,
+  onMcpLongPress: (mcp: CustomMcpExtension) => void,
+  onSkillLongPress: (skill: InstalledSkillExtension) => void,
 ) {
   if (kind === 'agent') {
     return agents.length === 0 ? (
@@ -283,7 +365,7 @@ function renderCustomContent(
             agent={agent}
             last={index === agents.length - 1}
             onEnabledChange={onAgentEnabledChange}
-            onEdit={onEditAgent}
+            onLongPress={onAgentLongPress}
           />
         ))}
       </View>
@@ -301,7 +383,7 @@ function renderCustomContent(
             mcp={mcp}
             last={index === mcps.length - 1}
             onEnabledChange={onMcpEnabledChange}
-            onEdit={onEditMcp}
+            onLongPress={onMcpLongPress}
           />
         ))}
       </View>
@@ -322,6 +404,7 @@ function renderCustomContent(
             desc={skill.path}
             meta={skill.fileName}
             last={index === skills.length - 1}
+            onLongPress={() => onSkillLongPress(skill)}
           />
         ))}
       </View>
@@ -335,12 +418,12 @@ function AgentRow({
   agent,
   last,
   onEnabledChange,
-  onEdit,
+  onLongPress,
 }: {
   agent: CustomAgentExtension;
   last: boolean;
   onEnabledChange: (agentId: string, enabled: boolean) => void;
-  onEdit: (agentId: string) => void;
+  onLongPress: (agent: CustomAgentExtension) => void;
 }) {
   const { colors } = useTheme();
   return (
@@ -349,7 +432,7 @@ function AgentRow({
         styles.customRow,
         !last && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
       ]}
-      onLongPress={() => onEdit(agent.id)}
+      onLongPress={() => onLongPress(agent)}
       delayLongPress={350}
       activeOpacity={0.75}
     >
@@ -387,12 +470,12 @@ function McpRow({
   mcp,
   last,
   onEnabledChange,
-  onEdit,
+  onLongPress,
 }: {
   mcp: CustomMcpExtension;
   last: boolean;
   onEnabledChange: (mcpId: string, enabled: boolean) => void;
-  onEdit: (mcpId: string) => void;
+  onLongPress: (mcp: CustomMcpExtension) => void;
 }) {
   const { colors } = useTheme();
   return (
@@ -401,7 +484,7 @@ function McpRow({
         styles.customRow,
         !last && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
       ]}
-      onLongPress={() => onEdit(mcp.id)}
+      onLongPress={() => onLongPress(mcp)}
       delayLongPress={350}
       activeOpacity={0.75}
     >
@@ -442,6 +525,7 @@ function CustomRow({
   desc,
   meta,
   last,
+  onLongPress,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -449,14 +533,18 @@ function CustomRow({
   desc: string;
   meta: string;
   last: boolean;
+  onLongPress?: () => void;
 }) {
   const { colors } = useTheme();
   return (
-    <View
+    <TouchableOpacity
       style={[
         styles.customRow,
         !last && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
       ]}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      activeOpacity={0.75}
     >
       <View style={[styles.customIcon, { backgroundColor: colors.accentMuted }]}>
         {icon}
@@ -469,7 +557,7 @@ function CustomRow({
         <Text style={[styles.customSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
         <Text style={[styles.customDesc, { color: colors.textTertiary }]} numberOfLines={2}>{desc}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

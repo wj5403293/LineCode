@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
-import { Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { getPersistedUriPermissions, openDocumentTree } from 'react-native-saf-x';
 import { projectService } from '../src/services/ProjectService';
 
@@ -19,6 +19,11 @@ describe('ProjectService external project picker', () => {
       size: 0,
     });
     (getPersistedUriPermissions as jest.Mock).mockResolvedValue([]);
+    jest.spyOn(PermissionsAndroid, 'check').mockResolvedValue(true);
+    jest.spyOn(PermissionsAndroid, 'requestMultiple').mockResolvedValue({
+      [PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE]: PermissionsAndroid.RESULTS.GRANTED,
+      [PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE]: PermissionsAndroid.RESULTS.GRANTED,
+    } as any);
     (RNFS.exists as jest.Mock).mockImplementation((path: string) => (
       Promise.resolve(path === '/storage/emulated/0/Download/LineCode' || path === '/storage/emulated/0/myfack')
     ));

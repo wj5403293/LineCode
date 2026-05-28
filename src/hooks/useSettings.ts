@@ -12,6 +12,7 @@ export function useSettings() {
   const [mathFormulaRenderingEnabled, setMathFormulaRenderingEnabled] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('auto');
   const [mcpExecutionMode, setMcpExecutionMode] = useState<MCPExecutionMode>('local');
+  const [experimentalAndroidKeyboardAvoidanceEnabled, setExperimentalAndroidKeyboardAvoidanceEnabled] = useState(false);
   const [keepAliveSettings, setKeepAliveSettings] = useState<KeepAliveSettings>({
     wakeLock: true,
     foregroundService: false,
@@ -32,6 +33,7 @@ export function useSettings() {
       mathRendering,
       perm,
       executionMode,
+      experimentalKeyboardAvoidance,
       keepAlive,
     ] = await Promise.all([
       settingsService.getCodeWrap(),
@@ -44,6 +46,7 @@ export function useSettings() {
       settingsService.getMathFormulaRenderingEnabled(),
       settingsService.getPermissionMode(),
       settingsService.getMCPExecutionMode(),
+      settingsService.getExperimentalAndroidKeyboardAvoidanceEnabled(),
       settingsService.getKeepAliveSettings(),
     ]);
 
@@ -57,6 +60,7 @@ export function useSettings() {
     setMathFormulaRenderingEnabled(mathRendering);
     setPermissionMode(perm);
     setMcpExecutionMode(executionMode);
+    setExperimentalAndroidKeyboardAvoidanceEnabled(experimentalKeyboardAvoidance);
     setKeepAliveSettings(keepAlive);
     setLoaded(true);
   }, []);
@@ -95,6 +99,7 @@ export function useSettings() {
     mathFormulaRenderingEnabled,
     permissionMode,
     mcpExecutionMode,
+    experimentalAndroidKeyboardAvoidanceEnabled,
     keepAliveSettings,
     updatePermissionMode,
     updateMCPExecutionMode,
