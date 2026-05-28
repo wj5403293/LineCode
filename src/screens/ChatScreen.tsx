@@ -10,10 +10,9 @@ import Sidebar from '../components/Sidebar';
 import BatchDeleteConfirm from '../components/BatchDeleteConfirm';
 import { useTheme } from '../theme';
 import { PERMISSIONS, MORE_OPTIONS } from '../constants/options';
-import { useChatState } from '../hooks/useChatState';
+import { useChatController } from '../chat/useChatController';
 import { useDialog } from '../hooks/useDialog';
 import { useSettings } from '../hooks/useSettings';
-import { useConversationManager } from '../hooks/useConversationManager';
 import { useProjectSelection } from '../hooks/useProjectSelection';
 import type { TutorialVariant } from '../constants/tutorial';
 import { PermissionMode } from '../services/settings';
@@ -50,47 +49,43 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
     updatePermissionMode,
     reloadSettings,
   } = useSettings();
-  const chat = useChatState(toneMode, reasoningEffort, preserveReasoning);
+  const chat = useChatController({ toneMode, reasoningEffort, preserveReasoning });
   const {
-    reloadModel,
-    streaming,
-    homePath,
-    clearMessages,
-    setMessages,
-    setConversationId,
-    flatListRef,
     messages,
-    handleSend,
-    handleStop,
-    pendingToolCall,
-    handleToolConfirm,
-    handleToolReview,
     model,
     loading,
+    compacting,
+    contextSizeLabel,
+    contextPercent,
+    conversationId,
     isAtBottom,
+    streaming,
+    pendingToolCall,
+    homePath,
+  } = chat.state;
+  const {
+    reloadModel,
+    clearMessages,
+    handleSend,
+    handleStop,
+    handleToolConfirm,
+    handleToolReview,
     jumpToBottom,
+    resetShellAutoApprove,
+    handleCompactContext,
+    recallUserMessage,
+    handleNewConversation: createConversation,
+    handleSelectConversation: selectConversation,
+  } = chat.actions;
+  const {
+    flatListRef,
     handleScrollBeginDrag,
     handleScroll,
     handleScrollEnd,
     handleContentSizeChange,
     handleListLayout,
-    resetShellAutoApprove,
-    handleCompactContext,
-    contextSizeLabel,
-    contextPercent,
-    compacting,
-    recallUserMessage,
-  } = chat;
+  } = chat.list;
   const { dialog, openDialog, closeDialog } = useDialog();
-  const conversation = useConversationManager();
-  const {
-    openSidebar,
-    closeSidebar,
-    sidebarVisible,
-    conversationId,
-    handleNewConversation: createConversation,
-    handleSelectConversation: selectConversation,
-  } = conversation;
   const { projects, selectedProject, handleProjectSelect, handleOpenProject, handleCreateProject } = useProjectSelection();
   const projectOptions = useMemo(
     () => projects.map(project => ({
@@ -103,6 +98,10 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
   const [projectName, setProjectName] = useState('');
   const [recalledDraft, setRecalledDraft] = useState<string | undefined>();
   const [keyboardFrame, setKeyboardFrame] = useState<NativeKeyboardFrame | null>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+
+  const openSidebar = useCallback(() => setSidebarVisible(true), []);
+  const closeSidebar = useCallback(() => setSidebarVisible(false), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -230,19 +229,15 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
 
   const handleNewConversation = useCallback(async () => {
     resetShellAutoApprove();
-    const conv = await createConversation();
-    setConversationId(conv.id);
-    setMessages([]);
-  }, [createConversation, resetShellAutoApprove, setConversationId, setMessages]);
+    await createConversation();
+    closeSidebar();
+  }, [closeSidebar, createConversation, resetShellAutoApprove]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
     resetShellAutoApprove();
-    const conv = await selectConversation(id);
-    if (conv) {
-      setConversationId(conv.id);
-      setMessages(conv.messages);
-    }
-  }, [resetShellAutoApprove, selectConversation, setConversationId, setMessages]);
+    await selectConversation(id);
+    closeSidebar();
+  }, [closeSidebar, resetShellAutoApprove, selectConversation]);
 
   if (!model && !loading) {
     return (
