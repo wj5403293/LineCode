@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, PermissionsAndroid, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import { BatteryCharging, Bell, Music, Zap } from 'lucide-react-native';
-import ScreenHeader from '../components/ScreenHeader';
-import SectionHeader from '../components/SectionHeader';
 import SwitchRow from '../components/SwitchRow';
-import { spacing, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import { KeepAliveSettings, settingsService } from '../services/settings';
 import { requestIgnoreBatteryOptimizations, setFakeMusicPlayback, setForegroundCodingService, setKeepAwake } from '../utils/keepAwake';
+import { ScreenScaffold, SettingsSection } from '../components/ui';
 
 interface Props {
   onBack: () => void;
@@ -22,7 +19,6 @@ const DEFAULT_SETTINGS: KeepAliveSettings = {
 };
 
 export default function KeepAliveSettingsScreen({ onBack }: Props) {
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [settings, setSettings] = useState<KeepAliveSettings>(DEFAULT_SETTINGS);
   const settingsRef = useRef(settings);
@@ -102,61 +98,40 @@ export default function KeepAliveSettingsScreen({ onBack }: Props) {
   }, [update]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <ScreenHeader title="保活设置" onBack={onBack} />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <View style={styles.section}>
-          <SectionHeader title="编码任务保活" />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
-            <SwitchRow
-              icon={<Zap size={20} color={colors.textSecondary} />}
-              label="Wake Lock"
-              desc="对话生成和压缩时保持 CPU 与屏幕唤醒"
-              value={settings.wakeLock}
-              onValueChange={handleWakeLock}
-            />
-            <SwitchRow
-              icon={<Bell size={20} color={colors.textSecondary} />}
-              label="前台服务通知"
-              desc="开启后常驻显示“正在编码”通知"
-              value={settings.foregroundService}
-              onValueChange={handleForegroundService}
-            />
-            <SwitchRow
-              icon={<Music size={20} color={colors.textSecondary} />}
-              label="假音乐播放"
-              desc="后台任务期间启动静音 AudioTrack"
-              value={settings.fakeMusic}
-              onValueChange={handleFakeMusic}
-            />
-          </View>
-        </View>
+    <ScreenScaffold title="保活设置" onBack={onBack}>
+      <SettingsSection title="编码任务保活">
+        <SwitchRow
+          icon={<Zap size={20} color={colors.textSecondary} />}
+          label="Wake Lock"
+          desc="对话生成和压缩时保持 CPU 与屏幕唤醒"
+          value={settings.wakeLock}
+          onValueChange={handleWakeLock}
+        />
+        <SwitchRow
+          icon={<Bell size={20} color={colors.textSecondary} />}
+          label="前台服务通知"
+          desc="开启后常驻显示“正在编码”通知"
+          value={settings.foregroundService}
+          onValueChange={handleForegroundService}
+        />
+        <SwitchRow
+          icon={<Music size={20} color={colors.textSecondary} />}
+          label="假音乐播放"
+          desc="后台任务期间启动静音 AudioTrack"
+          value={settings.fakeMusic}
+          onValueChange={handleFakeMusic}
+        />
+      </SettingsSection>
 
-        <View style={styles.section}>
-          <SectionHeader title="系统白名单" />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
-            <SwitchRow
-              icon={<BatteryCharging size={20} color={colors.textSecondary} />}
-              label="忽略电池优化"
-              desc="打开 Android 白名单申请页面"
-              value={settings.ignoreBatteryOptimizations}
-              onValueChange={handleBattery}
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+      <SettingsSection title="系统白名单">
+        <SwitchRow
+          icon={<BatteryCharging size={20} color={colors.textSecondary} />}
+          label="忽略电池优化"
+          desc="打开 Android 白名单申请页面"
+          value={settings.ignoreBatteryOptimizations}
+          onValueChange={handleBattery}
+        />
+      </SettingsSection>
+    </ScreenScaffold>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  content: { paddingBottom: 100 },
-  section: { paddingTop: spacing.xl },
-  group: {
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-});

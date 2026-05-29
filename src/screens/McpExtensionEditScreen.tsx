@@ -1,21 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Check, ChevronRight, Search, Trash2 } from 'lucide-react-native';
-import ScreenHeader from '../components/ScreenHeader';
-import SectionHeader from '../components/SectionHeader';
+import { Plus, Check, Search, Trash2 } from 'lucide-react-native';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import { CustomMcpExtension, extensionService, McpRequestHeader, McpToolSummary } from '../services/ExtensionService';
+import { ActionRow, FormSection, FormTextField, HeaderActionButton, ScreenScaffold, SettingsSection } from '../components/ui';
 import { useTheme } from '../theme';
 
 interface Props {
@@ -24,7 +13,6 @@ interface Props {
 }
 
 export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const isEditing = !!mcpId;
   const [name, setName] = useState('');
@@ -126,29 +114,18 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
     setQueried(false);
   }, []);
 
-  const rightAction = (
-    <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={!canSave} activeOpacity={0.75}>
-      <Text style={[styles.saveText, { color: canSave ? colors.accent : colors.textTertiary }]}>
-        保存
-      </Text>
-    </TouchableOpacity>
-  );
+  const rightAction = <HeaderActionButton label="保存" onPress={handleSave} disabled={!canSave} />;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <ScreenHeader title={isEditing ? '修改 MCP' : '添加 MCP'} onBack={onBack} rightAction={rightAction} />
-
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
-          <SectionHeader title="连接信息" />
-          <View style={[styles.formGroup, { backgroundColor: colors.surfaceElevated }]}>
-            <LabeledInput
+    <ScreenScaffold title={isEditing ? '修改 MCP' : '添加 MCP'} onBack={onBack} rightAction={rightAction}>
+        <FormSection title="连接信息">
+            <FormTextField
               label="名称"
               value={name}
               onChangeText={setName}
               placeholder="例如：公司 MCP 服务"
             />
-            <LabeledInput
+            <FormTextField
               label="HTTP/S 地址"
               value={url}
               onChangeText={(value) => {
@@ -159,12 +136,9 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
               placeholder="https://example.com/mcp"
               hint={url && !urlValid ? '地址必须以 http:// 或 https:// 开头。' : '查询会请求 tools/list 并展示 MCP 工具列表。'}
             />
-          </View>
-        </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionHeader title="自定义请求头" />
-          <View style={[styles.formGroup, { backgroundColor: colors.surfaceElevated }]}>
+        <FormSection title="自定义请求头">
             <TouchableOpacity style={styles.addHeaderButton} onPress={handleAddHeader} activeOpacity={0.75}>
               <View style={[styles.smallIcon, { backgroundColor: colors.accentMuted }]}>
                 <Plus size={16} color={colors.accent} />
@@ -197,41 +171,22 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
               </View>
             ))}
             <Text style={[styles.hint, { color: colors.textTertiary }]}>查询和调用 MCP tools 时会附带这些请求头。</Text>
-          </View>
-        </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionHeader title="查询" />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
-            <TouchableOpacity
-              style={[styles.actionRow, !canQuery && styles.rowDisabled]}
-              onPress={handleQuery}
+        <SettingsSection title="查询">
+            <ActionRow
+              icon={<Search size={19} color={canQuery ? colors.accent : colors.textTertiary} />}
+              label="查询 MCP 列表"
+              desc={tools.length > 0 ? `已查询到 ${tools.length} 个 tools，保存后会随扩展启用。` : '填写地址后查询服务暴露的 tools。'}
+              busy={querying}
               disabled={!canQuery}
+              showChevron
               activeOpacity={0.75}
-            >
-              <View style={[styles.rowIcon, { backgroundColor: canQuery ? colors.accentMuted : colors.surfaceLight }]}>
-                {querying ? (
-                  <ActivityIndicator size="small" color={colors.accent} />
-                ) : (
-                  <Search size={19} color={canQuery ? colors.accent : colors.textTertiary} />
-                )}
-              </View>
-              <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, { color: canQuery ? colors.text : colors.textTertiary }]}>
-                  查询 MCP 列表
-                </Text>
-                <Text style={[styles.rowDesc, { color: colors.textTertiary }]}>
-                  {tools.length > 0 ? `已查询到 ${tools.length} 个 tools，保存后会随扩展启用。` : '填写地址后查询服务暴露的 tools。'}
-                </Text>
-              </View>
-              <ChevronRight size={17} color={colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-        </View>
+              onPress={handleQuery}
+            />
+        </SettingsSection>
 
-        <View style={styles.section}>
-          <SectionHeader title={`TOOLS 列表 · ${tools.length}`} />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
+        <SettingsSection title={`TOOLS 列表 · ${tools.length}`}>
             {querying ? (
               <StateRow text="正在查询 MCP tools..." />
             ) : tools.length === 0 ? (
@@ -243,41 +198,8 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
                 last={index === tools.length - 1}
               />
             ))}
-          </View>
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-function LabeledInput({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  hint,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  hint?: string;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight }]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textTertiary}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {!!hint && <Text style={[styles.hint, { color: colors.textTertiary }]}>{hint}</Text>}
-    </View>
+        </SettingsSection>
+    </ScreenScaffold>
   );
 }
 
@@ -315,50 +237,6 @@ function StateRow({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  saveButton: {
-    minWidth: 54,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveText: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
-  section: {
-    paddingTop: spacing.lg,
-  },
-  group: {
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  formGroup: {
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  inputGroup: {
-    gap: spacing.xs,
-  },
-  label: {
-    fontSize: fontSizes.sm,
-    fontWeight: '600',
-  },
-  input: {
-    minHeight: 44,
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSizes.md,
-  },
   addHeaderButton: {
     minHeight: 40,
     flexDirection: 'row',
@@ -399,37 +277,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: fontSizes.xs,
     lineHeight: 17,
-  },
-  actionRow: {
-    minHeight: 68,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  rowDisabled: {
-    opacity: 0.55,
-  },
-  rowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
-  rowDesc: {
-    marginTop: 2,
-    fontSize: fontSizes.xs,
-    lineHeight: 18,
   },
   checkCircle: {
     width: 24,

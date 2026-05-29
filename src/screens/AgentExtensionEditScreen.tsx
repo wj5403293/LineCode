@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,16 +10,14 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Brain, Check, ChevronRight, FileText, Sparkles, Wrench, X } from 'lucide-react-native';
-import ScreenHeader from '../components/ScreenHeader';
-import SectionHeader from '../components/SectionHeader';
+import { Brain, FileText, Sparkles, Wrench, X } from 'lucide-react-native';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import { CustomAgentExtension, CustomMcpExtension, extensionService } from '../services/ExtensionService';
 import { aiService } from '../services/ai';
 import { modelStorage } from '../services/storage';
 import { MCPConfig, ToolDefinition } from '../types';
 import { useTheme } from '../theme';
+import { ActionRow, FormSection, FormTextField, HeaderActionButton, ScreenScaffold, SelectableRow, SettingsSection } from '../components/ui';
 
 interface Props {
   onBack: () => void;
@@ -68,7 +65,6 @@ function extractJsonObject(text: string): GeneratedAgentDraft {
 }
 
 export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
-  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const isEditing = !!agentId;
   const [name, setName] = useState('');
@@ -267,64 +263,34 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
     }
   }, [aiDescription, canGenerate, mcpOptions, tools]);
 
-  const rightAction = (
-    <TouchableOpacity
-      style={styles.saveButton}
-      onPress={handleSave}
-      disabled={!canSave}
-      activeOpacity={0.75}
-    >
-      <Text style={[styles.saveText, { color: canSave ? colors.accent : colors.textTertiary }]}>
-        保存
-      </Text>
-    </TouchableOpacity>
-  );
+  const rightAction = <HeaderActionButton label="保存" onPress={handleSave} disabled={!canSave} />;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
-      <ScreenHeader title={isEditing ? '修改 Agent' : '添加 Agent'} onBack={onBack} rightAction={rightAction} />
+    <ScreenScaffold title={isEditing ? '修改 Agent' : '添加 Agent'} onBack={onBack} rightAction={rightAction}>
+        <SettingsSection title="快速创建">
+          <ActionRow
+            icon={<Sparkles size={20} color={colors.accent} />}
+            label="让 AI 写"
+            desc="直接描述所需 Agent，自动填写名称、提示词、触发条件和权限。"
+            showChevron
+            activeOpacity={0.75}
+            onPress={() => setAiWriterVisible(true)}
+          />
+        </SettingsSection>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
-          <SectionHeader title="快速创建" />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
-            <TouchableOpacity
-              style={styles.actionRow}
-              onPress={() => setAiWriterVisible(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.rowIcon, { backgroundColor: colors.accentMuted }]}>
-                <Sparkles size={20} color={colors.accent} />
-              </View>
-              <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>让 AI 写</Text>
-                <Text style={[styles.rowDesc, { color: colors.textTertiary }]}>
-                  直接描述所需 Agent，自动填写名称、提示词、触发条件和权限。
-                </Text>
-              </View>
-              <ChevronRight size={17} color={colors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="基础信息" />
-          <View style={[styles.formGroup, { backgroundColor: colors.surfaceElevated }]}>
-            <LabeledInput label="名字" value={name} onChangeText={setName} placeholder="例如：测试修复 Agent" />
-            <LabeledInput
+        <FormSection title="基础信息">
+            <FormTextField label="名字" value={name} onChangeText={setName} placeholder="例如：测试修复 Agent" />
+            <FormTextField
               label="英文标识"
               value={slug}
               onChangeText={(value) => setSlug(normalizeSlug(value))}
               placeholder="test-fixer"
               hint={slug && !slugValid ? '必须以小写字母开头，只能包含 a-z、0-9、_ 和 -。' : '用于触发和识别自定义 Agent。'}
             />
-          </View>
-        </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionHeader title="行为定义" />
-          <View style={[styles.formGroup, { backgroundColor: colors.surfaceElevated }]}>
-            <LabeledInput
+        <FormSection title="行为定义">
+            <FormTextField
               label="提示词"
               value={prompt}
               onChangeText={setPrompt}
@@ -332,7 +298,7 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
               multiline
               icon={<Brain size={18} color={colors.textSecondary} />}
             />
-            <LabeledInput
+            <FormTextField
               label="触发条件"
               value={trigger}
               onChangeText={setTrigger}
@@ -340,14 +306,11 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
               multiline
               icon={<FileText size={18} color={colors.textSecondary} />}
             />
-          </View>
-        </View>
+        </FormSection>
 
-        <View style={styles.section}>
-          <SectionHeader title={`可使用的工具 · 已选 ${selectedTools.length}`} />
-          <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
+        <SettingsSection title={`可使用的工具 · 已选 ${selectedTools.length}`}>
             {tools.map((tool, index) => (
-              <SelectRow
+              <SelectableRow
                 key={tool.name}
                 label={tool.name}
                 desc={`${tool.category} · ${tool.description}`}
@@ -357,19 +320,17 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
                 last={index === tools.length - 1}
               />
             ))}
-          </View>
-        </View>
+        </SettingsSection>
 
-        <View style={styles.section}>
-          <SectionHeader title={`可使用的 MCP · 已选 ${selectedMcps.length}`} />
+        <SettingsSection title={`可使用的 MCP · 已选 ${selectedMcps.length}`}>
           {mcpOptions.length === 0 ? (
-            <View style={[styles.empty, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={styles.empty}>
               <Text style={[styles.emptyText, { color: colors.textTertiary }]}>暂无 MCP 可选。</Text>
             </View>
           ) : (
-            <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
+            <>
               {mcpOptions.map((option, index) => (
-                <SelectRow
+                <SelectableRow
                   key={option.id}
                   label={option.label}
                   desc={option.desc}
@@ -379,11 +340,9 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
                   last={index === mcpOptions.length - 1}
                 />
               ))}
-            </View>
+            </>
           )}
-        </View>
-      </ScrollView>
-
+        </SettingsSection>
       <AiWriterModal
         visible={aiWriterVisible}
         value={aiDescription}
@@ -395,7 +354,7 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
         }}
         onGenerate={handleGenerateWithAi}
       />
-    </View>
+    </ScreenScaffold>
   );
 }
 
@@ -470,209 +429,7 @@ function AiWriterModal({
   );
 }
 
-function LabeledInput({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  hint,
-  multiline,
-  icon,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  hint?: string;
-  multiline?: boolean;
-  icon?: React.ReactNode;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.inputGroup}>
-      <View style={styles.labelRow}>
-        {icon}
-        <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
-      </View>
-      <TextInput
-        style={[
-          styles.input,
-          multiline && styles.multilineInput,
-          { backgroundColor: colors.surfaceLight, color: colors.text, borderColor: colors.borderLight },
-        ]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textTertiary}
-        autoCapitalize="none"
-        autoCorrect={false}
-        multiline={multiline}
-        textAlignVertical={multiline ? 'top' : 'center'}
-      />
-      {!!hint && <Text style={[styles.hint, { color: colors.textTertiary }]}>{hint}</Text>}
-    </View>
-  );
-}
-
-function SelectRow({
-  label,
-  desc,
-  selected,
-  onPress,
-  icon,
-  last,
-}: {
-  label: string;
-  desc: string;
-  selected: boolean;
-  onPress: () => void;
-  icon: React.ReactNode;
-  last: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <TouchableOpacity
-      style={[
-        styles.selectRow,
-        selected && { backgroundColor: colors.accentMuted },
-        !last && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <View style={[styles.rowIcon, { backgroundColor: selected ? colors.accentMuted : colors.surfaceLight }]}>
-        {icon}
-      </View>
-      <View style={styles.selectText}>
-        <Text style={[styles.selectLabel, { color: selected ? colors.accent : colors.text }]} numberOfLines={1}>
-          {label}
-        </Text>
-        <Text style={[styles.selectDesc, { color: colors.textTertiary }]} numberOfLines={2}>
-          {desc}
-        </Text>
-      </View>
-      <View style={[styles.checkCircle, { backgroundColor: selected ? colors.accent : colors.surfaceLight, borderColor: selected ? colors.accent : colors.borderLight }]}>
-        {selected && <Check size={13} color={colors.textOnColor} />}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  saveButton: {
-    minWidth: 54,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveText: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
-  section: {
-    paddingTop: spacing.lg,
-  },
-  group: {
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  formGroup: {
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  actionRow: {
-    minHeight: 68,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  rowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowTitle: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-  },
-  rowDesc: {
-    marginTop: 2,
-    fontSize: fontSizes.xs,
-    lineHeight: 18,
-  },
-  inputGroup: {
-    gap: spacing.xs,
-  },
-  labelRow: {
-    minHeight: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  label: {
-    fontSize: fontSizes.sm,
-    fontWeight: '600',
-  },
-  input: {
-    minHeight: 44,
-    borderRadius: radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSizes.md,
-  },
-  multilineInput: {
-    minHeight: 120,
-  },
-  hint: {
-    fontSize: fontSizes.xs,
-    lineHeight: 17,
-  },
-  selectRow: {
-    minHeight: 62,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  selectText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  selectLabel: {
-    fontSize: fontSizes.sm,
-    fontWeight: '700',
-  },
-  selectDesc: {
-    marginTop: 2,
-    fontSize: fontSizes.xs,
-    lineHeight: 17,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   empty: {
     marginHorizontal: spacing.lg,
     borderRadius: radius.md,

@@ -8,7 +8,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -30,6 +29,7 @@ import {
 } from '../services/SSHService';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
+import { FormTextField } from '../components/ui';
 import ScreenHeader from '../components/ScreenHeader';
 import SettingsSwitch from '../components/SettingsSwitch';
 
@@ -306,35 +306,35 @@ export default function MCPSettingsScreen({ onBack }: Props) {
                 onPress={handleSetupTermuxOpenSsh}
               />
             </View>
-            <LabeledInput
+            <FormTextField
               label="Host"
               value={sshConfig.host}
               onChangeText={(host) => updateSshConfig({ host })}
             />
-            <LabeledInput
+            <FormTextField
               label="Port"
               value={String(sshConfig.port)}
               keyboardType="number-pad"
               onChangeText={(port) => updateSshConfig({ port: Number(port) || 8022 })}
             />
-            <LabeledInput
+            <FormTextField
               label="Username"
               value={sshConfig.username}
               onChangeText={(username) => updateSshConfig({ username })}
             />
-            <LabeledInput
+            <FormTextField
               label="Password (可选)"
               value={sshConfig.password}
               secureTextEntry
               onChangeText={(password) => updateSshConfig({ password })}
             />
-            <LabeledInput
+            <FormTextField
               label="Private key (无密码登录)"
               value={sshConfig.privateKey}
               multiline
               onChangeText={(privateKey) => updateSshConfig({ privateKey })}
             />
-            <LabeledInput
+            <FormTextField
               label="Key passphrase (可选)"
               value={sshConfig.passphrase}
               secureTextEntry
@@ -406,20 +406,20 @@ export default function MCPSettingsScreen({ onBack }: Props) {
               />
             ))}
           </View>
-          <LabeledInput
+          <FormTextField
             label="Search API URL"
             value={webSearchConfig.baseUrl}
             placeholder="https://api.example.com/search"
             onChangeText={(baseUrl) => updateWebSearchConfig({ baseUrl })}
           />
-          <LabeledInput
+          <FormTextField
             label="API Key"
             value={webSearchConfig.apiKey}
             placeholder="搜索服务密钥"
             secureTextEntry
             onChangeText={(apiKey) => updateWebSearchConfig({ apiKey })}
           />
-          <LabeledInput
+          <FormTextField
             label="模型 / 搜索源"
             value={webSearchConfig.model || ''}
             placeholder="如 basic、advanced、google，可留空"
@@ -427,19 +427,19 @@ export default function MCPSettingsScreen({ onBack }: Props) {
           />
           {webSearchConfig.provider === 'custom' && (
             <>
-              <LabeledInput
+              <FormTextField
                 label="查询参数名"
                 value={webSearchConfig.queryParam || 'q'}
                 placeholder="q"
                 onChangeText={(queryParam) => updateWebSearchConfig({ queryParam })}
               />
-              <LabeledInput
+              <FormTextField
                 label="密钥 Header"
                 value={webSearchConfig.apiKeyHeader || ''}
                 placeholder="Authorization，可留空"
                 onChangeText={(apiKeyHeader) => updateWebSearchConfig({ apiKeyHeader })}
               />
-              <LabeledInput
+              <FormTextField
                 label="密钥 Query 参数"
                 value={webSearchConfig.apiKeyParam || ''}
                 placeholder="api_key，可留空"
@@ -566,43 +566,6 @@ function ActionButton({
   );
 }
 
-function LabeledInput({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  secureTextEntry,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  keyboardType?: 'default' | 'number-pad';
-  secureTextEntry?: boolean;
-  multiline?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.inputRow}>
-      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <TextInput
-        style={[styles.input, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.borderLight }]}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        multiline={multiline}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textTertiary}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { flex: 1, padding: spacing.lg },
@@ -676,9 +639,6 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.xs,
     marginTop: 2,
   },
-  inputRow: {
-    marginTop: spacing.sm,
-  },
   termuxActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -700,19 +660,6 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: fontSizes.xs,
     fontWeight: '700',
-  },
-  inputLabel: {
-    fontSize: fontSizes.xs,
-    marginBottom: 4,
-  },
-  input: {
-    minHeight: 42,
-    maxHeight: 160,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    fontSize: fontSizes.sm,
-    textAlignVertical: 'top',
   },
   testButton: {
     minHeight: 42,

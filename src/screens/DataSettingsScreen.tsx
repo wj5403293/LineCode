@@ -1,12 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,10 +13,11 @@ import { copyFile, createDocument, openDocument } from 'react-native-saf-x';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
 import SwitchRow from '../components/SwitchRow';
-import { spacing, fontSizes, radius } from '../constants/theme';
+import { spacing, radius } from '../constants/theme';
 import { dataArchiveService } from '../services/DataArchiveService';
 import { hotUpdateService } from '../services/HotUpdateService';
 import { useTheme } from '../theme';
+import { ActionRow } from '../components/ui';
 
 interface Props {
   onBack: () => void;
@@ -140,6 +138,7 @@ export default function DataSettingsScreen({ onBack }: Props) {
               label="关闭并立即退出"
               desc="关闭自动更新，立即终止 App 进程和后台服务"
               busy={false}
+              destructive
               onPress={handleDisableAndExit}
             />
           </View>
@@ -170,35 +169,6 @@ export default function DataSettingsScreen({ onBack }: Props) {
   );
 }
 
-interface ActionRowProps {
-  icon: React.ReactNode;
-  label: string;
-  desc: string;
-  busy: boolean;
-  onPress: () => void;
-}
-
-function ActionRow({ icon, label, desc, busy, onPress }: ActionRowProps) {
-  const { colors } = useTheme();
-  return (
-    <TouchableOpacity
-      style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-      disabled={busy}
-    >
-      <View style={styles.actionContent}>
-        {icon}
-        <View style={styles.actionText}>
-          <Text style={[styles.actionLabel, { color: colors.text }]}>{label}</Text>
-          <Text style={[styles.actionDesc, { color: colors.textTertiary }]}>{desc}</Text>
-        </View>
-      </View>
-      {busy && <ActivityIndicator size="small" color={colors.accent} />}
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1 },
@@ -208,29 +178,5 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     borderRadius: radius.md,
     overflow: 'hidden',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  actionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  actionText: {
-    flex: 1,
-  },
-  actionLabel: {
-    fontSize: fontSizes.md,
-    fontWeight: '500',
-  },
-  actionDesc: {
-    fontSize: fontSizes.xs,
-    marginTop: 2,
   },
 });

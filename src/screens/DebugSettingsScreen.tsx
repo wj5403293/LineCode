@@ -16,6 +16,7 @@ import SectionHeader from '../components/SectionHeader';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { ErrorReport, errorReporter } from '../services/ErrorReporter';
 import { useTheme } from '../theme';
+import { ActionRow } from '../components/ui';
 
 interface Props {
   onBack: () => void;
@@ -173,9 +174,12 @@ export default function DebugSettingsScreen({ onBack }: Props) {
           <SectionHeader title="错误处理器测试" />
           <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
             {debugActions.map(action => (
-              <DebugActionRow
+              <ActionRow
                 key={action.id}
-                action={action}
+                icon={<action.icon size={20} color={action.destructive ? colors.danger : colors.accent} />}
+                label={action.label}
+                desc={action.desc}
+                destructive={action.destructive}
                 onPress={() => confirmRun(action)}
               />
             ))}
@@ -226,28 +230,6 @@ export default function DebugSettingsScreen({ onBack }: Props) {
   );
 }
 
-function DebugActionRow({ action, onPress }: { action: DebugAction; onPress: () => void }) {
-  const { colors } = useTheme();
-  const iconColor = action.destructive ? colors.danger : colors.accent;
-  const Icon = action.icon;
-
-  return (
-    <TouchableOpacity
-      style={[styles.actionRow, { borderBottomColor: colors.borderLight }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.actionIcon, { backgroundColor: action.destructive ? colors.dangerMuted : colors.accentMuted }]}>
-        <Icon size={20} color={iconColor} />
-      </View>
-      <View style={styles.actionText}>
-        <Text style={[styles.actionLabel, { color: colors.text }]}>{action.label}</Text>
-        <Text style={[styles.actionDesc, { color: colors.textTertiary }]}>{action.desc}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollView: { flex: 1 },
@@ -274,32 +256,6 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     borderRadius: radius.md,
     overflow: 'hidden',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.md,
-  },
-  actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionText: {
-    flex: 1,
-  },
-  actionLabel: {
-    fontSize: fontSizes.md,
-    fontWeight: '600',
-  },
-  actionDesc: {
-    fontSize: fontSizes.xs,
-    marginTop: 3,
-    lineHeight: 17,
   },
   emptyState: {
     marginHorizontal: spacing.lg,
