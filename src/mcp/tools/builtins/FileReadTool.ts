@@ -1,6 +1,7 @@
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { WorkspaceFileItem, workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../../../services/ToolAccessPolicyService';
 
 const LARGE_FILE_THRESHOLD_BYTES = 50 * 1024;
 const DEFAULT_LIMIT = 2000;
@@ -27,7 +28,8 @@ export class FileReadTool extends BaseTool {
     context: ToolContext,
   ): Promise<ToolResult> {
     try {
-      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
+      const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
+      const filePath = workspaceFs.resolveToolPath(input.file_path, policy, 'read');
       const exists = await workspaceFs.exists(filePath);
       if (!exists) {
         return { content: `文件不存在: ${workspaceFs.toToolDisplayPath(filePath, context.homePath)}`, toolCallId: '', isError: true };

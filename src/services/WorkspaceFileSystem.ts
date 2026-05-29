@@ -18,6 +18,14 @@ export interface DirectoryStats {
   directories: number;
 }
 
+export type WorkspaceAccessMode = 'read' | 'write' | 'delete';
+
+export interface WorkspaceAccessPolicy {
+  homePath: string;
+  extraReadRoots: string[];
+  extraWriteRoots: string[];
+}
+
 function trimTrailingSlash(path: string): string {
   return path.replace(/\/+$/, '');
 }
@@ -53,6 +61,53 @@ function relativePathUnderRoot(path: string, root: string): string | null {
   return normalizedPath.startsWith(`${normalizedRoot}/`)
     ? normalizedPath.slice(normalizedRoot.length + 1)
     : null;
+}
+
+function normalizePolicyRoot(path: string): string {
+  return trimTrailingSlash(stripFileScheme(path));
+}
+
+function isPathUnderRoot(path: string, root: string): boolean {
+  return relativePathUnderRoot(path, root) !== null;
+}
+
+export function createWorkspaceAccessPolicy(input: {
+  homePath: string;
+  extraReadRoots?: string[];
+  extraWriteRoots?: string[];
+}): WorkspaceAccessPolicy {
+  return {
+    homePath: normalizePolicyRoot(input.homePath),
+    extraReadRoots: (input.extraReadRoots || []).map(normalizePolicyRoot).filter(Boolean),
+    extraWriteRoots: (input.extraWriteRoots || []).map(normalizePolicyRoot).filter(Boolean),
+  };
+}
+
+export function isPathAllowedByPolicy(
+  path: string,
+  policy: WorkspaceAccessPolicy,
+  mode: WorkspaceAccessMode,
+): boolean {
+  const normalizedPath = normalizePolicyRoot(path);
+  if (!normalizedPath || isContentUri(normalizedPath)) return false;
+  if (isPathUnderRoot(normalizedPath, policy.homePath)) return true;
+  if (mode === 'read' && policy.extraReadRoots.some(root => isPathUnderRoot(normalizedPath, root))) {
+    return true;
+  }
+  return mode !== 'read' && policy.extraWriteRoots.some(root => isPathUnderRoot(normalizedPath, root));
+}
+
+export function resolveToolPath(
+  path: string,
+  policy: WorkspaceAccessPolicy,
+  mode: WorkspaceAccessMode,
+): string {
+  const resolved = joinWorkspacePath(policy.homePath, path);
+  if (!isPathAllowedByPolicy(resolved, policy, mode)) {
+    const label = mode === 'read' ? '读取' : mode === 'delete' ? '删除' : '写入';
+    throw new Error(`路径不在允许的${label}范围内: ${toDisplayPath(resolved)}`);
+  }
+  return resolved;
 }
 
 export function toDisplayPath(path: string): string {
@@ -138,6 +193,10 @@ export const workspaceFs = {
   resolvePath(path: string, rootPath: string): string {
     return joinWorkspacePath(rootPath, path);
   },
+
+  createAccessPolicy: createWorkspaceAccessPolicy,
+  isPathAllowed: isPathAllowedByPolicy,
+  resolveToolPath,
 
   async exists(path: string): Promise<boolean> {
     assertFileSystemPath(path, '检查路径');

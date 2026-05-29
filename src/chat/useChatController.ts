@@ -23,6 +23,7 @@ import { ToolExecutionCoordinator } from './ToolExecutionCoordinator';
 import { sanitizeToolCallForStorage } from '../utils/toolPayload';
 import { isAgentTool } from '../mcp/toolUtils';
 import { useChatScrollState } from './useChatScrollState';
+import { ConversationIndexer, evolutionDatabase, evolutionService } from '../services/evolution';
 import {
   buildRequestFailedText,
   composeUserContent,
@@ -41,6 +42,7 @@ interface PendingToolCall {
 }
 
 const CONTEXT_METRICS_DEBOUNCE_MS = 300;
+const conversationIndexer = new ConversationIndexer(evolutionDatabase);
 
 export interface UseChatControllerOptions {
   toneMode: ToneMode;
@@ -577,7 +579,15 @@ export function useChatController({
 
         syncMessages(prev => [...prev, aiPlaceholder], convId);
 
-        const chatMessages = await aiService.buildMessages(SYSTEM_PROMPT, toChatMessages(localMessages), toneMode, homePath);
+        const learningContext = model.learningMode
+          ? await evolutionService.buildLearningContext({
+            learningMode: true,
+            userInput: sentContent,
+            homePath,
+            modelId: model.id,
+          }).catch(() => '')
+          : '';
+        const chatMessages = await aiService.buildMessages(SYSTEM_PROMPT, toChatMessages(localMessages), toneMode, homePath, learningContext);
 
         streamBufferRef.current?.cancel();
         const streamBuffer = new StreamUpdateBuffer(80, updates => {
@@ -625,6 +635,14 @@ export function useChatController({
         syncMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m), convId, 'flush');
         localMessages.push(assistantMsg);
         localMessagesRef.current = localMessages;
+        if (model.learningMode) {
+          conversationIndexer.indexConversation({
+            projectId: homePath,
+            conversationId: convId,
+            title: wasNewConversation ? sentContent.trim().replace(/\s+/g, ' ').slice(0, 20) || '新对话' : undefined,
+            messages: [userMsg, assistantMsg],
+          }).catch(() => {});
+        }
 
         if (activeAbortSignal.aborted) break;
 

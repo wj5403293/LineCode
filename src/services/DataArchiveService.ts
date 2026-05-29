@@ -5,11 +5,14 @@ import { unzipWithPassword, zipWithPassword } from 'react-native-zip-archive';
 import { APP_NAME, APP_VERSION } from '../constants/appInfo';
 import { CONVERSATION_FILES_DIR } from './conversation';
 import { DIFF_FILES_DIR } from './DiffService';
+import { EVOLUTION_DB_DIR } from './evolution';
 import { projectService } from './ProjectService';
 
 const ARCHIVE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/archive`;
 const CONVERSATION_ARCHIVE_DIR = 'conversations';
 const DIFF_ARCHIVE_DIR = 'diffs';
+const SKILLS_ARCHIVE_DIR = 'skills';
+const EVOLUTION_ARCHIVE_DIR = 'evolution';
 const BACKUP_HEADER = 'LINECODE-BACKUP-v1\n';
 const BACKUP_PASSWORD_SHA256 = '3b8c62235f137315bfc69ccd3080ce02ec14aba98b040be5716529f0e5357c83';
 const ZIP_ENCRYPTION_METHOD = 'AES-256' as Parameters<typeof zipWithPassword>[3];
@@ -106,6 +109,8 @@ class DataArchiveService {
       await this.exportAsyncStorage(payloadDir);
       await copyDir(CONVERSATION_FILES_DIR, `${payloadDir}/${CONVERSATION_ARCHIVE_DIR}`);
       await copyDir(DIFF_FILES_DIR, `${payloadDir}/${DIFF_ARCHIVE_DIR}`);
+      await copyDir(`${projectService.getLinecodeRoot()}/skills`, `${payloadDir}/${SKILLS_ARCHIVE_DIR}`);
+      await copyDir(EVOLUTION_DB_DIR, `${payloadDir}/${EVOLUTION_ARCHIVE_DIR}`);
       const homeDir = await projectService.getCurrentHomePath();
       await copyDir(homeDir, `${payloadDir}/home`);
 
@@ -151,6 +156,8 @@ class DataArchiveService {
       await this.restoreAsyncStorage(payloadDir);
       await this.restoreConversationFiles(payloadDir);
       await this.restoreDiffFiles(payloadDir);
+      await this.restoreGlobalSkills(payloadDir);
+      await this.restoreEvolutionFiles(payloadDir);
       const homeDir = await projectService.getCurrentHomePath();
       await ensureCleanDir(homeDir);
       await copyDir(`${payloadDir}/home`, homeDir);
@@ -173,6 +180,21 @@ class DataArchiveService {
     await ensureCleanDir(DIFF_FILES_DIR);
     if (!(await RNFS.exists(source))) return;
     await copyDir(source, DIFF_FILES_DIR);
+  }
+
+  private async restoreGlobalSkills(payloadDir: string): Promise<void> {
+    const source = `${payloadDir}/${SKILLS_ARCHIVE_DIR}`;
+    const target = `${projectService.getLinecodeRoot()}/skills`;
+    await ensureCleanDir(target);
+    if (!(await RNFS.exists(source))) return;
+    await copyDir(source, target);
+  }
+
+  private async restoreEvolutionFiles(payloadDir: string): Promise<void> {
+    const source = `${payloadDir}/${EVOLUTION_ARCHIVE_DIR}`;
+    await ensureCleanDir(EVOLUTION_DB_DIR);
+    if (!(await RNFS.exists(source))) return;
+    await copyDir(source, EVOLUTION_DB_DIR);
   }
 
   private async exportAsyncStorage(payloadDir: string): Promise<void> {

@@ -8,6 +8,7 @@ import {
 } from '../../services/ExtensionService';
 import { modelStorage } from '../../services/storage';
 import { settingsService } from '../../services/settings';
+import { toolAccessPolicyService } from '../../services/ToolAccessPolicyService';
 import { workspaceFs } from '../../services/WorkspaceFileSystem';
 import { AgentToolCall, ContentBlock, MCPConfig, ToolResult } from '../../types';
 import { permissionService } from '../../services/PermissionService';
@@ -135,7 +136,8 @@ async function executeToolWithDiff(
   }
 
   const filePath = String(input.file_path || '');
-  const fullPath = workspaceFs.resolvePath(filePath, context.homePath);
+  const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
+  const fullPath = workspaceFs.resolveToolPath(filePath, policy, 'write');
   let oldContent = '';
   let existed = false;
 

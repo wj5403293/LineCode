@@ -9,13 +9,21 @@ const KEYS = {
 class ModelStorage {
   private selectedModelListeners = new Set<(id: string) => void>();
 
+  private normalizeModel(model: Model): Model {
+    return {
+      ...model,
+      learningMode: model.learningMode === true,
+    };
+  }
+
   async getModels(): Promise<Model[]> {
     const json = await AsyncStorage.getItem(KEYS.MODELS);
-    return json ? JSON.parse(json) : [];
+    const parsed = json ? JSON.parse(json) : [];
+    return Array.isArray(parsed) ? parsed.map(model => this.normalizeModel(model)) : [];
   }
 
   async saveModels(models: Model[]): Promise<void> {
-    await AsyncStorage.setItem(KEYS.MODELS, JSON.stringify(models));
+    await AsyncStorage.setItem(KEYS.MODELS, JSON.stringify(models.map(model => this.normalizeModel(model))));
   }
 
   async getSelectedModelId(): Promise<string | null> {

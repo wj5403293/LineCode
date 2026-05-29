@@ -96,6 +96,14 @@ jest.mock('react-native-zip-archive', () => ({
   unzipWithPassword: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('react-native-quick-sqlite', () => ({
+  open: jest.fn(() => ({
+    execute: jest.fn(() => ({ rows: { _array: [] } })),
+    executeAsync: jest.fn(() => Promise.resolve({ rows: { _array: [] } })),
+    close: jest.fn(),
+  })),
+}), { virtual: true });
+
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   return {

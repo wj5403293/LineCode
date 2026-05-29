@@ -35,6 +35,7 @@ class AIService {
     history: ChatMessage[],
     toneMode: ToneMode = 'coding',
     homePath?: string,
+    learningContext?: string,
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
     const toolPrompt = await mcpService.buildToolPrompt();
@@ -66,6 +67,10 @@ class AIService {
     const extensionPrompt = await extensionService.buildExtensionPrompt();
     if (extensionPrompt) {
       fullSystemPrompt += `\n\n${extensionPrompt}`;
+    }
+
+    if (learningContext) {
+      fullSystemPrompt += `\n\n${learningContext}`;
     }
 
     if (fullSystemPrompt) {

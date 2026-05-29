@@ -6,6 +6,7 @@ import { diffService } from '../services/DiffService';
 import { permissionService } from '../services/PermissionService';
 import { projectService } from '../services/ProjectService';
 import { workspaceFs } from '../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../services/ToolAccessPolicyService';
 
 export async function getHomePath(): Promise<string> {
   return projectService.getCurrentHomePath();
@@ -61,7 +62,8 @@ export async function executeTool(
 
   if (tool.category === 'write' && tool.name !== 'file_delete') {
     const filePath = String(input.file_path || '');
-    const fullPath = workspaceFs.resolvePath(filePath, homePath);
+    const policy = await toolAccessPolicyService.buildPolicy(homePath);
+    const fullPath = workspaceFs.resolveToolPath(filePath, policy, 'write');
 
     try {
       let oldContent = '';

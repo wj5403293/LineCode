@@ -1,6 +1,7 @@
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../../../services/ToolAccessPolicyService';
 
 export class GlobTool extends BaseTool {
   readonly name = 'glob';
@@ -18,8 +19,9 @@ export class GlobTool extends BaseTool {
 
   async execute(input: { pattern: string; path?: string }, context: ToolContext): Promise<ToolResult> {
     try {
+      const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
       const searchPath = input.path
-        ? workspaceFs.resolvePath(input.path, context.homePath)
+        ? workspaceFs.resolveToolPath(input.path, policy, 'read')
         : context.homePath;
 
       const results = await this.search(searchPath, input.pattern);

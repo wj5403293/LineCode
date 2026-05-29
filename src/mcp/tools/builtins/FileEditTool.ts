@@ -1,6 +1,7 @@
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../../../services/ToolAccessPolicyService';
 
 export class FileEditTool extends BaseTool {
   readonly name = 'file_edit';
@@ -19,7 +20,8 @@ export class FileEditTool extends BaseTool {
 
   async execute(input: { file_path: string; old_string: string; new_string: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
+      const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
+      const filePath = workspaceFs.resolveToolPath(input.file_path, policy, 'write');
       const exists = await workspaceFs.exists(filePath);
       if (!exists) {
         return { content: `文件不存在: ${workspaceFs.toToolDisplayPath(filePath, context.homePath)}`, toolCallId: '', isError: true };

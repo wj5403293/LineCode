@@ -1,6 +1,7 @@
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../../../services/ToolAccessPolicyService';
 
 export class FileDeleteTool extends BaseTool {
   readonly name = 'file_delete';
@@ -23,9 +24,11 @@ export class FileDeleteTool extends BaseTool {
     const results: string[] = [];
     const errors: string[] = [];
 
+    const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
+
     for (const path of input.paths) {
       try {
-        const targetPath = workspaceFs.resolvePath(path, context.homePath);
+        const targetPath = workspaceFs.resolveToolPath(path, policy, 'delete');
 
         const exists = await workspaceFs.exists(targetPath);
         if (!exists) {

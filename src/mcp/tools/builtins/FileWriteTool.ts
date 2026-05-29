@@ -1,6 +1,7 @@
 import { BaseTool, ToolContext } from '../BaseTool';
 import { ToolResult } from '../../../types';
 import { workspaceFs } from '../../../services/WorkspaceFileSystem';
+import { toolAccessPolicyService } from '../../../services/ToolAccessPolicyService';
 
 export class FileWriteTool extends BaseTool {
   readonly name = 'file_write';
@@ -18,7 +19,8 @@ export class FileWriteTool extends BaseTool {
 
   async execute(input: { file_path: string; content: string }, context: ToolContext): Promise<ToolResult> {
     try {
-      const filePath = workspaceFs.resolvePath(input.file_path, context.homePath);
+      const policy = await toolAccessPolicyService.buildPolicy(context.homePath);
+      const filePath = workspaceFs.resolveToolPath(input.file_path, policy, 'write');
       const dir = workspaceFs.parentPath(filePath);
 
       const dirExists = await workspaceFs.exists(dir);

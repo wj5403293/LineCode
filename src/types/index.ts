@@ -113,6 +113,7 @@ export interface Model {
   apiKey: string;
   baseUrl?: string;
   providerLabel?: string;
+  learningMode?: boolean;
   localModel?: {
     fileUri: string;
     fileName: string;
