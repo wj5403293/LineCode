@@ -19,7 +19,6 @@ import { ToolRegistry } from './ToolRegistry';
 
 const CUSTOM_AGENT_PREFIX = 'agentx_';
 const CUSTOM_MCP_PREFIX = 'mcpx_';
-const CUSTOM_AGENT_MAX_ITERATIONS = 20;
 
 export interface RuntimeRegistryOptions {
   includeCustomAgents?: boolean;
@@ -334,7 +333,7 @@ class CustomAgentTool extends BaseTool<{ task: string; context?: string }> {
 
     try {
       const { aiService } = await import('../../services/ai');
-      for (let iteration = 0; iteration < CUSTOM_AGENT_MAX_ITERATIONS; iteration++) {
+      while (true) {
         const result = await aiService.sendMessage(
           model,
           messages,
@@ -408,9 +407,6 @@ class CustomAgentTool extends BaseTool<{ task: string; context?: string }> {
         }
       }
 
-      const finalOutput = output || `自定义 Agent 已达到最大迭代次数 (${CUSTOM_AGENT_MAX_ITERATIONS})。`;
-      progressUpdate({ agentStatus: 'done', agentOutput: finalOutput, agentThinking: thinkingContent });
-      return { toolCallId: '', content: finalOutput };
     } catch (err: any) {
       const message = `自定义 Agent 执行失败: ${err?.message || String(err)}`;
       progressUpdate({ agentStatus: 'error', agentOutput: message, agentThinking: thinkingContent });

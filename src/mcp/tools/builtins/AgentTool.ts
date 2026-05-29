@@ -39,8 +39,6 @@ const AGENT_PROMPTS: Record<AgentType, string> = {
 - 如果文件被锁定或修改失败，等待后重试或报告问题`,
 };
 
-const AGENT_MAX_ITERATIONS = 20;
-
 export class AgentTool extends BaseTool {
   readonly name = 'agent';
   readonly description = '分派 Agent 处理任务。类型: explore(代码探索,只读), sub-coding(编程任务,可写)。';
@@ -420,7 +418,7 @@ export class AgentTool extends BaseTool {
       const tools = allTools.map(t => t.toJSON());
       const preserveReasoning = await settingsService.getPreserveReasoning();
 
-      for (let iteration = 0; iteration < AGENT_MAX_ITERATIONS; iteration++) {
+      while (true) {
         if (this.aborted) {
           agent.status = 'error';
           agent.output = '用户终止了任务';
@@ -511,11 +509,6 @@ export class AgentTool extends BaseTool {
         }
       }
 
-      if (!agent.status || agent.status === 'running') {
-        agent.status = 'done';
-        agent.output = output || '任务完成';
-      }
-      
       agent.endTime = Date.now();
       progressUpdate({ 
         agentStatus: agent.status, 

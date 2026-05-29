@@ -55,8 +55,6 @@ const AGENT_PROMPTS: Record<AgentType, string> = {
 - 如果文件被锁定或修改失败，等待后重试或报告问题`,
 };
 
-const AGENT_MAX_ITERATIONS = 20;
-
 function topologicalSort(agents: PipelineAgent[]): string[][] {
   const inDegree = new Map<string, number>();
   const graph = new Map<string, string[]>();
@@ -256,7 +254,7 @@ export class AgentPipelineTool extends BaseTool {
     ];
 
     try {
-      for (let iteration = 0; iteration < AGENT_MAX_ITERATIONS; iteration++) {
+      while (true) {
         if (this.aborted) {
           agent.status = 'error';
           agent.output = '用户终止了任务';
@@ -385,11 +383,6 @@ export class AgentPipelineTool extends BaseTool {
         }
       }
 
-      if (!agent.status || agent.status === 'running') {
-        agent.status = 'done';
-        agent.output = output || '任务完成';
-      }
-      
       agent.endTime = Date.now();
       progressUpdate({ 
         agentStatus: agent.status, 
