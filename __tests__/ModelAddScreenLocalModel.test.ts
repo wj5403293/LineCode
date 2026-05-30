@@ -15,6 +15,20 @@ describe('ModelAddScreen local GGUF document detection', () => {
     expect(getLocalModelDisplayName(doc)).toBe('Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf');
   });
 
+  it('uses the decoded SAF basename when the document name is a storage document id', () => {
+    const doc = {
+      uri: 'content://com.android.externalstorage.documents/document/primary%3ADownload%2FModels%2FQwen3.gguf',
+      name: 'primary:Download/Models/Qwen3.gguf',
+      type: 'file' as const,
+      lastModified: 0,
+      mime: 'application/octet-stream',
+      size: 1024,
+    };
+
+    expect(isGgufDocument(doc)).toBe(true);
+    expect(getLocalModelDisplayName(doc)).toBe('Qwen3.gguf');
+  });
+
   it('accepts uppercase GGUF extensions from display name', () => {
     const doc = {
       uri: 'content://picker/model',

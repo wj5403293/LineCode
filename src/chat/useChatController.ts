@@ -44,7 +44,58 @@ interface PendingToolCall {
 }
 
 const CONTEXT_METRICS_DEBOUNCE_MS = 300;
+const CONTEXT_LIMIT_RETRY_COUNT = 1;
 const conversationIndexer = new ConversationIndexer(evolutionDatabase);
+
+const CONTEXT_LIMIT_ERROR_PATTERNS = [
+  /context[_\s-]*length/i,
+  /context window/i,
+  /maximum context/i,
+  /max(?:imum)? tokens/i,
+  /token limit/i,
+  /too many tokens/i,
+  /prompt is too long/i,
+  /input is too long/i,
+  /reduce (?:the )?(?:length|input)/i,
+  /exceed(?:s|ed|ing)?.*(?:context|token)/i,
+  /上下文.*(?:超|满|长度|限制)/i,
+];
+
+export function isContextLimitError(err: unknown): boolean {
+  const parts = [
+    err instanceof Error ? err.message : '',
+    typeof err === 'object' && err ? String((err as any).code || '') : '',
+    typeof err === 'object' && err ? String((err as any).status || '') : '',
+    String(err || ''),
+  ].filter(Boolean);
+  const text = parts.join('\n');
+  return CONTEXT_LIMIT_ERROR_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function getAutoCompactPreservedTail(messages: Message[], activeUserMessageId?: string): Message[] {
+  const contextMessages = messages.filter(message => !message.excludeFromContext);
+  const last = contextMessages[contextMessages.length - 1];
+  if (!last) return [];
+
+  if (activeUserMessageId && last.id === activeUserMessageId && last.role === 'user') {
+    return [last];
+  }
+
+  if (last.role === 'user') {
+    return [last];
+  }
+
+  if (last.role === 'tool') {
+    for (let index = contextMessages.length - 1; index >= 0; index -= 1) {
+      const message = contextMessages[index];
+      if (message.role === 'assistant' && message.toolCalls?.length) {
+        return contextMessages.slice(index);
+      }
+    }
+  }
+
+  return [];
+}
 
 export interface UseChatControllerOptions {
   toneMode: ToneMode;
@@ -501,6 +552,35 @@ export function useChatController({
     }
   }, [model, scrollToBottom, syncMessages, toChatMessages]);
 
+  const runAutoContextCompaction = useCallback(async (
+    sourceMessages: Message[],
+    contextTokens: number,
+    options: { activeUserMessageId?: string; force?: boolean } = {},
+  ): Promise<Message[]> => {
+    const contextMessages = sourceMessages.filter(m => !m.excludeFromContext);
+    if (!options.force && !contextMetricsRef.current.shouldCompact(contextMessages, contextTokens, COMPACT_TRIGGER_RATIO)) {
+      return sourceMessages;
+    }
+
+    const preservedTail = getAutoCompactPreservedTail(sourceMessages, options.activeUserMessageId);
+    const preservedIds = new Set(preservedTail.map(message => message.id));
+    const baseMessages = sourceMessages.filter(message => !preservedIds.has(message.id));
+    if (baseMessages.filter(m => !m.excludeFromContext).length < 4) {
+      return sourceMessages;
+    }
+
+    compactingRef.current = true;
+    setCompacting(true);
+    try {
+      const compacted = await runContextCompaction(baseMessages, preservedTail);
+      contextMetricsRef.current.clear();
+      return compacted;
+    } finally {
+      compactingRef.current = false;
+      setCompacting(false);
+    }
+  }, [runContextCompaction]);
+
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -582,31 +662,29 @@ export function useChatController({
         .then(() => persistenceRef.current.markPersisted(initialMessages))
         .catch(() => {});
     }
-    streamingRef.current = true;
-    setStreaming(true);
-
     const localMessages: Message[] = [...initialMessages];
     localMessagesRef.current = localMessages;
     let abortSignal: AbortSignal | null = null;
 
     try {
       const contextInfo = parseModelContext(model.modelId);
-      const latestMessages = messageStoreRef.current.getSnapshot();
-      const existingContextMessages = latestMessages.filter(m => !m.excludeFromContext);
-      const canCompactExistingContext = existingContextMessages.length >= 4;
-      if (canCompactExistingContext && contextMetricsRef.current.shouldCompact(existingContextMessages, contextInfo.contextTokens, COMPACT_TRIGGER_RATIO)) {
-        compactingRef.current = true;
-        setCompacting(true);
-        const compactedMessages = await runContextCompaction(latestMessages.filter(m => m.id !== userMsg.id), [userMsg]);
-        localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
+      const preparedMessages = await runAutoContextCompaction(
+        messageStoreRef.current.getSnapshot(),
+        contextInfo.contextTokens,
+        { activeUserMessageId: userMsg.id },
+      );
+      if (preparedMessages !== initialMessages) {
+        localMessages.splice(0, localMessages.length, ...preparedMessages.filter(m => !m.excludeFromContext));
         localMessagesRef.current = localMessages;
-        compactingRef.current = false;
-        setCompacting(false);
       }
 
-      abortControllerRef.current = new AbortController();
-      const activeAbortSignal = abortControllerRef.current.signal;
+      streamingRef.current = true;
+      setStreaming(true);
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
+      const activeAbortSignal = requestController.signal;
       abortSignal = activeAbortSignal;
+      let contextLimitRetries = 0;
 
       while (true) {
         if (activeAbortSignal.aborted) {
@@ -639,20 +717,55 @@ export function useChatController({
         });
         streamBufferRef.current = streamBuffer;
 
-        const result = await aiService.sendMessage(model, chatMessages, {
-          onStatus: (status) => {
-            if (activeAbortSignal.aborted) return;
-            streamBuffer.pushStatus(status);
-          },
-          onBlocks: (blocks) => {
-            if (activeAbortSignal.aborted) return;
-            streamBuffer.pushBlocks(blocks);
-          },
-          onToolCallDetected: (toolCall) => {
-            if (activeAbortSignal.aborted) return;
-            streamBuffer.pushToolCall(toolCall);
-          },
-        }, reasoningEffort, undefined, activeAbortSignal, preserveReasoning);
+        let result: Awaited<ReturnType<typeof aiService.sendMessage>>;
+        try {
+          result = await aiService.sendMessage(model, chatMessages, {
+            onStatus: (status) => {
+              if (activeAbortSignal.aborted) return;
+              streamBuffer.pushStatus(status);
+            },
+            onBlocks: (blocks) => {
+              if (activeAbortSignal.aborted) return;
+              streamBuffer.pushBlocks(blocks);
+            },
+            onToolCallDetected: (toolCall) => {
+              if (activeAbortSignal.aborted) return;
+              streamBuffer.pushToolCall(toolCall);
+            },
+          }, reasoningEffort, undefined, activeAbortSignal, preserveReasoning);
+        } catch (err) {
+          streamBuffer.cancel();
+          if (streamBufferRef.current === streamBuffer) {
+            streamBufferRef.current = null;
+          }
+
+          if (
+            !activeAbortSignal.aborted &&
+            contextLimitRetries < CONTEXT_LIMIT_RETRY_COUNT &&
+            isContextLimitError(err)
+          ) {
+            contextLimitRetries += 1;
+            syncMessages(prev => prev.filter(message => message.id !== aiId), convId, 'none');
+            abortControllerRef.current = null;
+            const beforeCompaction = messageStoreRef.current.getSnapshot();
+            const compactedMessages = await runAutoContextCompaction(
+              beforeCompaction,
+              contextInfo.contextTokens,
+              { force: true },
+            );
+            if (compactedMessages === beforeCompaction) {
+              throw err;
+            }
+            localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
+            localMessagesRef.current = localMessages;
+            if (!activeAbortSignal.aborted) {
+              abortControllerRef.current = requestController;
+              continue;
+            }
+          }
+
+          throw err;
+        }
         streamBuffer.flush();
         if (streamBufferRef.current === streamBuffer) {
           streamBufferRef.current = null;
@@ -804,7 +917,7 @@ export function useChatController({
       abortControllerRef.current = null;
       persistenceRef.current.flush(convId).catch(() => {});
     }
-  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow]);
+  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runAutoContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow]);
 
   const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
     await chatHookManager.invoke(

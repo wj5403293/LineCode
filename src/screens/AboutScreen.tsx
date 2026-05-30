@@ -18,6 +18,7 @@ import { APP_ANDROID_VERSION_CODE, APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } fr
 import { errorReporter } from '../services/ErrorReporter';
 import UpdatePromptModal from '../components/UpdatePromptModal';
 import { HotUpdateInfo, HotUpdateState, hotUpdateService } from '../services/HotUpdateService';
+import { getSafDocumentDisplayName } from '../utils/safDocument';
 
 interface AboutItemProps {
   icon: React.ReactNode;
@@ -103,7 +104,7 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
           return;
         }
         await copyFile(`file://${log.path}`, doc.uri, { replaceIfDestinationExists: true });
-        Alert.alert('导出完成', `已保存到: ${doc.name || log.fileName}`);
+        Alert.alert('导出完成', `已保存到: ${getSafDocumentDisplayName(doc, { fallbackName: log.fileName })}`);
       } else {
         await Share.share({
           title: log.fileName,

@@ -31,7 +31,7 @@ describe('file tools large file handling', () => {
     expect(result.content).not.toContain('4\tfour');
   });
 
-  it('does not read oversized files without a range and asks the AI to read in segments', async () => {
+  it('does not read oversized files without a range and reports segmented read retry text', async () => {
     RNFS.stat.mockResolvedValue({ isDirectory: () => false, size: 51 * 1024 });
 
     const result = await new FileReadTool().execute(
@@ -40,7 +40,9 @@ describe('file tools large file handling', () => {
     );
 
     expect(result.isError).toBe(true);
-    expect(result.content).toContain('超过 50KB');
+    expect(result.content).toContain('单次读取大小超过 50KB');
+    expect(result.content).toContain('正在尝试分段读取');
+    expect(result.content).not.toContain('请让 AI');
     expect(result.content).toContain('start_line');
     expect(result.content).toContain('end_line');
     expect(RNFS.readFile).not.toHaveBeenCalled();

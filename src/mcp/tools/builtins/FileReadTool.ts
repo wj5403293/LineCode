@@ -56,8 +56,8 @@ export class FileReadTool extends BaseTool {
       if (!hasLineRange && stat && stat.size > LARGE_FILE_THRESHOLD_BYTES) {
         return {
           content: [
-            `文件 ${workspaceFs.toToolDisplayPath(filePath, context.homePath)} 大小为 ${stat.size} bytes，超过 50KB。`,
-            '为避免一次性读取过大内容，请让 AI 使用 start_line 和 end_line 分段读取，例如：',
+            `文件 ${workspaceFs.toToolDisplayPath(filePath, context.homePath)} 大小为 ${stat.size} bytes，单次读取大小超过 50KB。`,
+            '正在尝试分段读取，请使用 start_line 和 end_line 指定行号范围，例如：',
             `{"file_path":"${input.file_path}","start_line":1,"end_line":200}`,
           ].join('\n'),
           toolCallId: '',

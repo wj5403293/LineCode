@@ -107,6 +107,23 @@ describe('ExtensionService delete extensions', () => {
     expect((await extensionService.getLineCodeExtensions()).map(item => item.id)).toEqual([installed.id]);
   });
 
+  it('uses the SAF URI basename when extension picker names are provider ids', async () => {
+    const copyFile = require('react-native-saf-x').copyFile;
+
+    const installed = await extensionService.installLineCodeLip({
+      uri: 'content://com.android.providers.downloads.documents/document/msf%3ADownload%2Fplugin.lip',
+      name: 'msf:12345',
+    });
+
+    expect(installed.fileName).toBe('plugin.lip');
+    expect(installed.name).toBe('plugin');
+    expect(copyFile).toHaveBeenCalledWith(
+      'content://com.android.providers.downloads.documents/document/msf%3ADownload%2Fplugin.lip',
+      expect.stringMatching(/^file:\/\/\/tmp\/lineai-test\/\.linecode\/extensions\/\d+_plugin\.lip$/),
+      { replaceIfDestinationExists: true },
+    );
+  });
+
   it('deletes LineCode extensions from storage and local filesystem', async () => {
     await AsyncStorage.setItem('@linecode_extension_linecode', JSON.stringify([
       {

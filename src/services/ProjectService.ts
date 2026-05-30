@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { getPersistedUriPermissions, openDocumentTree } from 'react-native-saf-x';
 import { androidExternalStorage, safTreeUriToFileSystemPath } from './AndroidExternalStorage';
 import { workspaceFs } from './WorkspaceFileSystem';
+import { getSafDocumentDisplayName } from '../utils/safDocument';
 
 const STORAGE_KEY = '@linecode_projects';
 const SELECTED_KEY = '@linecode_selected_project';
@@ -66,14 +67,14 @@ async function pickExternalTreeUri(): Promise<{ uri: string | null; name?: strin
   try {
     const doc = await openDocumentTree(true);
     if (!doc) return { uri: null };
-    return { uri: doc.uri, name: doc.name };
+    return { uri: doc.uri, name: getSafDocumentDisplayName(doc) };
   } catch (err: any) {
     const message = String(err?.message || err || '');
     const after = await listPersistedUris();
     const newUri = [...after].find(item => !before.has(item));
     const fallback = newUri || extractContentUri(message);
     if (!fallback) throw err;
-    return { uri: fallback };
+    return { uri: fallback, name: getSafDocumentDisplayName({ uri: fallback }) };
   }
 }
 

@@ -15,6 +15,7 @@ interface Props {
   label: string;
   desc?: string;
   onPress?: () => void;
+  onLongPress?: () => void;
   busy?: boolean;
   disabled?: boolean;
   destructive?: boolean;
@@ -27,6 +28,7 @@ export default React.memo(function ActionRow({
   label,
   desc,
   onPress,
+  onLongPress,
   busy = false,
   disabled = false,
   destructive = false,
@@ -41,8 +43,9 @@ export default React.memo(function ActionRow({
     <TouchableOpacity
       style={[styles.row, { borderBottomColor: colors.borderLight }, muted && styles.disabled]}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={activeOpacity}
-      disabled={muted || !onPress}
+      disabled={muted || (!onPress && !onLongPress)}
     >
       <View style={[styles.iconWrap, { backgroundColor: iconBackground }]}>
         {icon}

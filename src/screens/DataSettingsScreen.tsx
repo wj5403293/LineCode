@@ -18,6 +18,7 @@ import { dataArchiveService } from '../services/DataArchiveService';
 import { hotUpdateService } from '../services/HotUpdateService';
 import { useTheme } from '../theme';
 import { ActionRow } from '../components/ui';
+import { getSafDocumentDisplayName } from '../utils/safDocument';
 
 interface Props {
   onBack: () => void;
@@ -77,7 +78,8 @@ export default function DataSettingsScreen({ onBack }: Props) {
           return;
         }
         await copyFile(`file://${archivePath}`, doc.uri, { replaceIfDestinationExists: true });
-        Alert.alert('导出完成', `已保存到: ${doc.name}`);
+        const savedName = getSafDocumentDisplayName(doc, { fallbackName: `linecode_backup_${Date.now()}.linecode` });
+        Alert.alert('导出完成', `已保存到: ${savedName}`);
       } else {
         Alert.alert('导出完成', archivePath);
       }

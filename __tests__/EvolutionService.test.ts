@@ -135,4 +135,28 @@ describe('evolution learning context', () => {
     expect(overview.shortTerm.map(item => item.content)).toEqual(['短期任务状态']);
     expect(overview.history.map(item => item.text)).toEqual(['聊天索引内容']);
   });
+
+  it('edits and deletes memories through the overview service', async () => {
+    const db = new EvolutionDatabase('/tmp/lineai-test/.linecode/evolution/memory-edit-db.json');
+    const service = new MemoryOverviewService(db);
+
+    await service.addMemory('初始项目记忆', 'project', '/project-a');
+    let overview = await service.getOverview('/project-a');
+    const memory = overview.project[0];
+
+    await service.updateMemory(memory.id, {
+      content: '更新后的环境记忆',
+      scope: 'environment',
+      projectId: '/project-a',
+    });
+    overview = await service.getOverview('/project-a');
+
+    expect(overview.project).toEqual([]);
+    expect(overview.environment.map(item => item.content)).toEqual(['更新后的环境记忆']);
+
+    await service.deleteMemory(memory.id);
+    overview = await service.getOverview('/project-a');
+
+    expect(overview.environment).toEqual([]);
+  });
 });

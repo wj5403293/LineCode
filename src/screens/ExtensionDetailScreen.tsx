@@ -29,6 +29,7 @@ import {
   SkillInstallTarget,
 } from '../services/ExtensionService';
 import { useTheme } from '../theme';
+import { getSafDocumentDisplayName, hasSafDocumentExtension } from '../utils/safDocument';
 
 interface Props {
   kind: ExtensionKind;
@@ -132,11 +133,12 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
         const docs = await openDocument({ persist: false, multiple: false });
         const doc = docs?.[0];
         if (!doc) return;
-        if (doc.name && !doc.name.toLowerCase().endsWith('.lip')) {
+        const fileName = getSafDocumentDisplayName(doc, { preferredExtensions: ['.lip'] });
+        if (!hasSafDocumentExtension(doc, ['.lip'])) {
           Alert.alert('请选择 LIP', 'LineCode 扩展需要选择 .lip 文件。');
           return;
         }
-        const installed = await extensionService.installLineCodeLip({ uri: doc.uri, name: doc.name });
+        const installed = await extensionService.installLineCodeLip({ uri: doc.uri, name: fileName });
         await loadData();
         Alert.alert('导入完成', `${installed.name}\n${installed.path}`);
       } catch (err: any) {
@@ -149,11 +151,12 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
         const docs = await openDocument({ persist: false, multiple: false });
         const doc = docs?.[0];
         if (!doc) return;
-        if (doc.name && !doc.name.toLowerCase().endsWith('.zip')) {
+        const fileName = getSafDocumentDisplayName(doc, { preferredExtensions: ['.zip'] });
+        if (!hasSafDocumentExtension(doc, ['.zip'])) {
           Alert.alert('请选择 ZIP', 'Skills 扩展需要选择 .zip 文件。');
           return;
         }
-        setPendingSkill({ uri: doc.uri, name: doc.name });
+        setPendingSkill({ uri: doc.uri, name: fileName });
       } catch (err: any) {
         Alert.alert('选择失败', err?.message || String(err));
       }

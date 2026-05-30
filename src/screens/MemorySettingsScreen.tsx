@@ -3,7 +3,7 @@ import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } fro
 import { BookOpen, Clock3, Database, FolderKanban, Globe2, Plus } from 'lucide-react-native';
 import { ActionRow, ScreenScaffold, SettingsSection } from '../components/ui';
 import { MemoryOverview, memoryOverviewService } from '../services/evolution';
-import { MemoryScope } from '../services/evolution/types';
+import { EvolutionMemory, MemoryScope } from '../services/evolution/types';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import { useTheme } from '../theme';
 
@@ -41,12 +41,21 @@ function previewText(section: MemorySectionKey, item: any): string {
   return String(text || '').replace(/\s+/g, ' ').slice(0, 80) || '空内容';
 }
 
+function isEditableMemorySection(section: MemorySectionKey): section is 'longTerm' | 'project' | 'environment' {
+  return section === 'longTerm' || section === 'project' || section === 'environment';
+}
+
+function dialogPreview(content: string): string {
+  return content.length > 120 ? `${content.slice(0, 120)}...` : content;
+}
+
 export default function MemorySettingsScreen({ onBack }: Props) {
   const { colors } = useTheme();
   const [overview, setOverview] = useState<MemoryOverview>(EMPTY_OVERVIEW);
   const [addVisible, setAddVisible] = useState(false);
-  const [newScope, setNewScope] = useState<MemoryScope>('user');
-  const [newContent, setNewContent] = useState('');
+  const [editTarget, setEditTarget] = useState<EvolutionMemory | null>(null);
+  const [draftScope, setDraftScope] = useState<MemoryScope>('user');
+  const [draftContent, setDraftContent] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -68,21 +77,76 @@ export default function MemorySettingsScreen({ onBack }: Props) {
     { key: 'history' as const, title: '聊天索引', icon: BookOpen, items: overview.history },
   ], [overview]);
 
-  const handleAdd = useCallback(async () => {
-    const content = newContent.trim();
+  const closeEditor = useCallback(() => {
+    setAddVisible(false);
+    setEditTarget(null);
+  }, []);
+
+  const openAdd = useCallback(() => {
+    setEditTarget(null);
+    setDraftScope('user');
+    setDraftContent('');
+    setAddVisible(true);
+  }, []);
+
+  const openEdit = useCallback((memory: EvolutionMemory) => {
+    setAddVisible(false);
+    setEditTarget(memory);
+    setDraftScope(memory.scope);
+    setDraftContent(memory.content);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    const content = draftContent.trim();
     if (!content) return;
     try {
-      await memoryOverviewService.addMemory(content, newScope, overview.projectId);
-      setNewContent('');
-      setAddVisible(false);
+      if (editTarget) {
+        await memoryOverviewService.updateMemory(editTarget.id, {
+          content,
+          scope: draftScope,
+          projectId: overview.projectId,
+        });
+      } else {
+        await memoryOverviewService.addMemory(content, draftScope, overview.projectId);
+      }
+      setDraftContent('');
+      closeEditor();
       await load();
     } catch (err: any) {
-      Alert.alert('添加记忆失败', err?.message || String(err));
+      Alert.alert(editTarget ? '编辑记忆失败' : '添加记忆失败', err?.message || String(err));
     }
-  }, [load, newContent, newScope, overview.projectId]);
+  }, [closeEditor, draftContent, draftScope, editTarget, load, overview.projectId]);
+
+  const handleDelete = useCallback((memory: EvolutionMemory) => {
+    Alert.alert('删除记忆', `确定删除这条记忆？\n\n${dialogPreview(memory.content)}`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await memoryOverviewService.deleteMemory(memory.id);
+            await load();
+          } catch (err: any) {
+            Alert.alert('删除记忆失败', err?.message || String(err));
+          }
+        },
+      },
+    ]);
+  }, [load]);
+
+  const handleMemoryLongPress = useCallback((memory: EvolutionMemory) => {
+    Alert.alert('记忆操作', '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '编辑', onPress: () => openEdit(memory) },
+      { text: '删除', style: 'destructive', onPress: () => handleDelete(memory) },
+    ]);
+  }, [handleDelete, openEdit]);
+
+  const editorVisible = addVisible || !!editTarget;
 
   const rightAction = (
-    <TouchableOpacity style={styles.headerButton} onPress={() => setAddVisible(true)}>
+    <TouchableOpacity style={styles.headerButton} onPress={openAdd}>
       <Plus size={20} color={colors.accent} />
     </TouchableOpacity>
   );
@@ -104,40 +168,41 @@ export default function MemorySettingsScreen({ onBack }: Props) {
                 desc={formatTime(item.updatedAt || item.createdAt)}
                 showChevron
                 onPress={() => Alert.alert(section.title, itemText(section.key, item))}
+                onLongPress={isEditableMemorySection(section.key) ? () => handleMemoryLongPress(item as EvolutionMemory) : undefined}
               />
             );
           })}
         </SettingsSection>
       ))}
 
-      <Modal visible={addVisible} transparent animationType="fade" onRequestClose={() => setAddVisible(false)}>
+      <Modal visible={editorVisible} transparent animationType="fade" onRequestClose={closeEditor}>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}> 
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated }]}> 
-            <Text style={[styles.modalTitle, { color: colors.text }]}>添加记忆</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{editTarget ? '编辑记忆' : '添加记忆'}</Text>
             <View style={styles.scopeRow}>
               {(['user', 'project', 'environment'] as MemoryScope[]).map(scope => (
                 <TouchableOpacity
                   key={scope}
-                  style={[styles.scopeButton, { borderColor: newScope === scope ? colors.accent : colors.borderLight }]}
-                  onPress={() => setNewScope(scope)}
+                  style={[styles.scopeButton, { borderColor: draftScope === scope ? colors.accent : colors.borderLight }]}
+                  onPress={() => setDraftScope(scope)}
                 >
-                  <Text style={[styles.scopeText, { color: newScope === scope ? colors.accent : colors.textSecondary }]}>{scope}</Text>
+                  <Text style={[styles.scopeText, { color: draftScope === scope ? colors.accent : colors.textSecondary }]}>{scope}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             <TextInput
               style={[styles.input, { color: colors.text, borderColor: colors.borderLight, backgroundColor: colors.inputBg }]}
-              value={newContent}
-              onChangeText={setNewContent}
+              value={draftContent}
+              onChangeText={setDraftContent}
               placeholder="输入要保存的记忆"
               placeholderTextColor={colors.textTertiary}
               multiline
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setAddVisible(false)}>
+              <TouchableOpacity onPress={closeEditor}>
                 <Text style={[styles.modalActionText, { color: colors.textSecondary }]}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleAdd}>
+              <TouchableOpacity onPress={handleSave}>
                 <Text style={[styles.modalSaveText, { color: colors.accent }]}>保存</Text>
               </TouchableOpacity>
             </View>

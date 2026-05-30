@@ -63,7 +63,7 @@ export default React.memo(function ToolCallShell({
       tail,
     ].join('\n');
   }, [displayResult]);
-  const statusColor = isError ? colors.danger : streaming ? colors.accent : colors.success;
+  const statusColor = isError ? colors.danger : colors.success;
 
   useEffect(() => {
     if (!streaming || autoExpandedRef.current) return;
@@ -134,16 +134,18 @@ export default React.memo(function ToolCallShell({
             activeOpacity={canExpand ? 0.72 : 1}
             disabled={!canExpand}
           >
-            {streaming ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : isError ? (
-              <AlertCircle size={12} color={colors.danger} />
-            ) : (
-              <Check size={12} color={colors.success} />
+            {!streaming && (
+              <>
+                {isError ? (
+                  <AlertCircle size={12} color={colors.danger} />
+                ) : (
+                  <Check size={12} color={colors.success} />
+                )}
+                <Text style={[styles.outputTitle, { color: statusColor }]}>
+                  {isError ? '执行失败' : '执行完成'}
+                </Text>
+              </>
             )}
-            <Text style={[styles.outputTitle, { color: statusColor }]}>
-              {streaming ? '执行中' : isError ? '执行失败' : '执行完成'}
-            </Text>
             <Text style={[styles.outputMeta, { color: colors.textTertiary }]}>
               {outputLines.length} 行
             </Text>

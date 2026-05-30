@@ -43,7 +43,23 @@ describe('ProjectService external project picker', () => {
 
     expect(openDocumentTree).toHaveBeenCalledWith(true);
     expect(project?.path).toBe('/storage/emulated/0/Download/LineCode');
+    expect(project?.label).toBe('LineCode');
     expect(project?.source).toBe('external');
+  });
+
+  it('normalizes SAF document ids returned as tree names', async () => {
+    (openDocumentTree as jest.Mock).mockResolvedValueOnce({
+      uri: 'content://com.android.externalstorage.documents/tree/primary%3ADownload%2FLineCode',
+      name: 'primary:Download/LineCode',
+      type: 'directory',
+      lastModified: 0,
+      mime: 'vnd.android.document/directory',
+      size: 0,
+    });
+
+    const project = await projectService.openExternalProject();
+
+    expect(project?.label).toBe('LineCode');
   });
 
   it('recovers the picked URI from persisted permissions when openDocumentTree rejects with Unsupported uri', async () => {

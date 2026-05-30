@@ -1,6 +1,6 @@
 import { EvolutionDatabase, evolutionDatabase } from './EvolutionDatabase';
 import { projectService } from '../ProjectService';
-import { ConversationIndexEntry, EvolutionMemory, WorkingMemoryEntry } from './types';
+import { ConversationIndexEntry, EvolutionMemory, MemoryScope, WorkingMemoryEntry } from './types';
 
 export interface MemoryOverview {
   longTerm: EvolutionMemory[];
@@ -36,7 +36,7 @@ export class MemoryOverviewService {
     };
   }
 
-  async addMemory(content: string, scope: 'user' | 'project' | 'environment', projectId?: string): Promise<void> {
+  async addMemory(content: string, scope: MemoryScope, projectId?: string): Promise<void> {
     const resolvedProjectId = scope === 'user'
       ? undefined
       : projectId ?? await projectService.getCurrentHomePath().catch(() => undefined);
@@ -47,6 +47,29 @@ export class MemoryOverviewService {
       source: 'manual',
       confidence: 1,
     });
+  }
+
+  async updateMemory(id: string, input: { content: string; scope: MemoryScope; projectId?: string }): Promise<void> {
+    const memories = await this.database.getMemories();
+    const existing = memories.find(memory => memory.id === id);
+    if (!existing) {
+      throw new Error('Memory not found.');
+    }
+    const resolvedProjectId = input.scope === 'user'
+      ? undefined
+      : input.projectId ?? existing.projectId ?? await projectService.getCurrentHomePath().catch(() => undefined);
+    await this.database.upsertMemory({
+      id,
+      scope: input.scope,
+      projectId: resolvedProjectId,
+      content: input.content,
+      source: existing.source,
+      confidence: existing.confidence,
+    });
+  }
+
+  async deleteMemory(id: string): Promise<void> {
+    await this.database.deleteMemory(id);
   }
 }
 

@@ -127,6 +127,14 @@ export class EvolutionDatabase {
     return [...this.state!.memories];
   }
 
+  async deleteMemory(id: string): Promise<void> {
+    await this.ensureLoaded();
+    const next = this.state!.memories.filter(memory => memory.id !== id);
+    if (next.length === this.state!.memories.length) return;
+    this.state!.memories = next;
+    await this.persist();
+  }
+
   async searchMemories(query: string, options: { projectId?: string; limit?: number } = {}): Promise<EvolutionMemory[]> {
     const memories = await this.getMemories();
     return ragRank(query, memories

@@ -14,6 +14,7 @@ import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
 import SettingsSwitch from '../components/SettingsSwitch';
 import { formatContextSize } from '../utils/modelContext';
+import { getSafDocumentDisplayName, hasSafDocumentExtension, SafDocumentLike } from '../utils/safDocument';
 import { getModelProviderPreset } from '../constants/modelProviders';
 import { LOCAL_MODEL_ENABLED } from '../services/RuntimeConfig';
 
@@ -28,10 +29,7 @@ const CUSTOM_ID = '__custom__';
 type ProviderId = Model['provider'];
 type RemoteProviderId = Exclude<ProviderId, 'local'>;
 type LocalAcceleration = NonNullable<Model['localModel']>['acceleration'];
-type LocalDocument = {
-  uri?: string;
-  name?: string | null;
-};
+type LocalDocument = SafDocumentLike;
 const REMOTE_PROVIDERS: RemoteProviderId[] = ['openai', 'codex', 'anthropic'];
 const MODEL_IMPORT_DIR = `${RNFS.DocumentDirectoryPath}/local-models`;
 
@@ -70,35 +68,16 @@ function sanitizeFileName(name: string): string {
   return (name || 'model.gguf').replace(/[^\w.-]+/g, '_').slice(0, 120);
 }
 
-function decodeUriFileName(uri?: string): string {
-  if (!uri) return '';
-  const lastSegment = uri.split('/').pop() || '';
-  const rawName = lastSegment.includes(':') ? lastSegment.split(':').pop() || lastSegment : lastSegment;
-  let decoded = rawName;
-  try {
-    decoded = decodeURIComponent(rawName);
-  } catch {}
-  return decoded.split('/').pop() || decoded;
-}
-
 export function getLocalModelDisplayName(document: LocalDocument): string {
-  const name = document.name?.trim() || '';
-  const uriName = decodeUriFileName(document.uri);
-  if (isGgufFile(name) || !uriName) return name;
-  if (isGgufFile(uriName)) return uriName;
-  return name || uriName;
+  return getSafDocumentDisplayName(document, { preferredExtensions: ['.gguf'] });
 }
 
 function fileNameWithoutExtension(name: string): string {
   return name.replace(/\.[^.]+$/, '').trim();
 }
 
-function isGgufFile(name: string): boolean {
-  return /\.gguf$/i.test(name.trim());
-}
-
 export function isGgufDocument(document: LocalDocument): boolean {
-  return isGgufFile(document.name || '') || isGgufFile(decodeUriFileName(document.uri));
+  return hasSafDocumentExtension(document, ['.gguf']);
 }
 
 function formatFileSize(size?: number): string {

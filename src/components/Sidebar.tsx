@@ -12,6 +12,7 @@ import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ExportModal } from './sidebar/ExportModal';
 import { LineCodePluginContributionItem } from '../services/LineCodePluginService';
 import { workspaceFs } from '../services/WorkspaceFileSystem';
+import { getSafDocumentDisplayName } from '../utils/safDocument';
 
 const SIDEBAR_WIDTH = 300;
 
@@ -114,7 +115,7 @@ function SidebarInner({
           return;
         }
         await copyFile(`file://${zipPath}`, destDoc.uri, { replaceIfDestinationExists: true });
-        setExportResult(`已保存到: ${destDoc.name}`);
+        setExportResult(`已保存到: ${getSafDocumentDisplayName(destDoc, { fallbackName: fileName })}`);
       } else {
         setExportResult(zipPath);
       }

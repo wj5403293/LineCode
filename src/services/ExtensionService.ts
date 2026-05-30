@@ -7,6 +7,7 @@ import { MCPConfig, ToolDefinition } from '../types';
 import { mcpService } from './MCPService';
 import { projectService } from './ProjectService';
 import { sshService } from './SSHService';
+import { getSafDocumentDisplayName } from '../utils/safDocument';
 
 export type ExtensionKind = 'agent' | 'mcp' | 'skills' | 'linecode';
 
@@ -551,7 +552,10 @@ class ExtensionService {
   }
 
   async installLineCodeLip(document: PickedDocument): Promise<InstalledLineCodeExtension> {
-    const fileName = ensureLipFileName(document.name || `linecode_${Date.now()}.lip`);
+    const fileName = ensureLipFileName(getSafDocumentDisplayName(document, {
+      preferredExtensions: ['.lip'],
+      fallbackName: `linecode_${Date.now()}.lip`,
+    }));
     const timestamp = Date.now();
     const targetRoot = `${projectService.getLinecodeRoot()}/extensions`;
     await RNFS.mkdir(targetRoot);
@@ -577,7 +581,10 @@ class ExtensionService {
   }
 
   async installSkillZip(document: PickedDocument, location: SkillInstallLocation): Promise<InstalledSkillExtension> {
-    const fileName = ensureZipFileName(document.name || `skill_${Date.now()}.zip`);
+    const fileName = ensureZipFileName(getSafDocumentDisplayName(document, {
+      preferredExtensions: ['.zip'],
+      fallbackName: `skill_${Date.now()}.zip`,
+    }));
     const timestamp = Date.now();
     let path: string;
     let locationLabel: string;
