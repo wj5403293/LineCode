@@ -10,10 +10,7 @@ class ModelStorage {
   private selectedModelListeners = new Set<(id: string) => void>();
 
   private normalizeModel(model: Model): Model {
-    return {
-      ...model,
-      learningMode: model.learningMode === true,
-    };
+    return { ...model };
   }
 
   async getModels(): Promise<Model[]> {

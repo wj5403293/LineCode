@@ -12,16 +12,18 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openDocument } from 'react-native-saf-x';
-import { Archive, Brain, ChevronRight, Cpu, FileText, Plus, Terminal, Wrench, X } from 'lucide-react-native';
+import { Archive, Brain, ChevronRight, Cpu, FileText, Plus, Terminal, X } from 'lucide-react-native';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
 import SettingsSwitch from '../components/SettingsSwitch';
+import McpIcon from '../components/icons/McpIcon';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import {
   CustomAgentExtension,
   CustomMcpExtension,
   ExtensionKind,
   extensionService,
+  InstalledLineCodeExtension,
   InstalledSkillExtension,
   PickedDocument,
   SkillInstallTarget,
@@ -46,7 +48,7 @@ const TITLE_MAP: Record<ExtensionKind, string> = {
 
 function getIcon(kind: ExtensionKind) {
   if (kind === 'agent') return Brain;
-  if (kind === 'mcp') return Wrench;
+  if (kind === 'mcp') return McpIcon;
   if (kind === 'skills') return Archive;
   return Cpu;
 }
@@ -56,6 +58,12 @@ function getInlineActionText(kind: ExtensionKind): { title: string; desc: string
     return {
       title: '选择 ZIP 安装',
       desc: '选择技能包后再选择安装位置，SSH 模式会推送到远端 ~/.linecode。',
+    };
+  }
+  if (kind === 'linecode') {
+    return {
+      title: '导入 LIP 扩展',
+      desc: '选择 .lip 文件导入到应用扩展目录，长按已导入扩展可删除。',
     };
   }
   if (kind === 'agent') {
@@ -77,6 +85,7 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
   const [agents, setAgents] = useState<CustomAgentExtension[]>([]);
   const [mcps, setMcps] = useState<CustomMcpExtension[]>([]);
   const [skills, setSkills] = useState<InstalledSkillExtension[]>([]);
+  const [lineCodeExtensions, setLineCodeExtensions] = useState<InstalledLineCodeExtension[]>([]);
   const [skillTargets, setSkillTargets] = useState<SkillInstallTarget[]>([]);
   const [pendingSkill, setPendingSkill] = useState<PickedDocument | null>(null);
   const [installingTarget, setInstallingTarget] = useState<string | null>(null);
@@ -84,15 +93,17 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextAgents, nextMcps, nextSkills, nextSkillTargets] = await Promise.all([
+      const [nextAgents, nextMcps, nextSkills, nextLineCodeExtensions, nextSkillTargets] = await Promise.all([
         extensionService.getAgentExtensions(),
         extensionService.getMcpExtensions(),
         extensionService.getInstalledSkills(),
+        extensionService.getLineCodeExtensions(),
         extensionService.getSkillInstallTargets(),
       ]);
       setAgents(nextAgents);
       setMcps(nextMcps);
       setSkills(nextSkills);
+      setLineCodeExtensions(nextLineCodeExtensions);
       setSkillTargets(nextSkillTargets);
     } catch (err: any) {
       Alert.alert('加载失败', err?.message || String(err));
@@ -116,6 +127,23 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
       onAddMcp();
       return;
     }
+    if (kind === 'linecode') {
+      try {
+        const docs = await openDocument({ persist: false, multiple: false });
+        const doc = docs?.[0];
+        if (!doc) return;
+        if (doc.name && !doc.name.toLowerCase().endsWith('.lip')) {
+          Alert.alert('请选择 LIP', 'LineCode 扩展需要选择 .lip 文件。');
+          return;
+        }
+        const installed = await extensionService.installLineCodeLip({ uri: doc.uri, name: doc.name });
+        await loadData();
+        Alert.alert('导入完成', `${installed.name}\n${installed.path}`);
+      } catch (err: any) {
+        Alert.alert('导入失败', err?.message || String(err));
+      }
+      return;
+    }
     if (kind === 'skills') {
       try {
         const docs = await openDocument({ persist: false, multiple: false });
@@ -130,7 +158,7 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
         Alert.alert('选择失败', err?.message || String(err));
       }
     }
-  }, [kind, onAddAgent, onAddMcp]);
+  }, [kind, loadData, onAddAgent, onAddMcp]);
 
   const handleInstallSkill = useCallback(async (target: SkillInstallTarget) => {
     if (!pendingSkill || target.disabled || installingTarget) return;
@@ -224,6 +252,25 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
     ]);
   }, [loadData]);
 
+  const handleDeleteLineCodeExtension = useCallback((extension: InstalledLineCodeExtension) => {
+    Alert.alert('删除 LineCode 扩展', `确定删除「${extension.name}」？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await extensionService.deleteLineCodeExtension(extension.id);
+            setLineCodeExtensions(prev => prev.filter(item => item.id !== extension.id));
+          } catch (err: any) {
+            Alert.alert('删除失败', err?.message || String(err));
+            loadData().catch(() => {});
+          }
+        },
+      },
+    ]);
+  }, [loadData]);
+
   const handleAgentLongPress = useCallback((agent: CustomAgentExtension) => {
     Alert.alert(agent.name, '选择操作', [
       { text: '取消', style: 'cancel' },
@@ -247,9 +294,16 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
     ]);
   }, [handleDeleteSkill]);
 
+  const handleLineCodeLongPress = useCallback((extension: InstalledLineCodeExtension) => {
+    Alert.alert(extension.name, '选择操作', [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: () => handleDeleteLineCodeExtension(extension) },
+    ]);
+  }, [handleDeleteLineCodeExtension]);
+
   const Icon = getIcon(kind);
-  const canAdd = kind !== 'linecode';
-  const showInlineAction = kind === 'agent' || kind === 'mcp' || kind === 'skills';
+  const canAdd = true;
+  const showInlineAction = kind === 'agent' || kind === 'mcp' || kind === 'skills' || kind === 'linecode';
   const inlineActionText = getInlineActionText(kind);
   const rightAction = canAdd ? (
     <TouchableOpacity
@@ -317,12 +371,14 @@ export default function ExtensionDetailScreen({ kind, onBack, onAddAgent, onEdit
               agents,
               mcps,
               skills,
+              lineCodeExtensions,
               colors,
               handleAgentEnabled,
               handleAgentLongPress,
               handleMcpEnabled,
               handleMcpLongPress,
               handleSkillLongPress,
+              handleLineCodeLongPress,
             )}
           </View>
         )}
@@ -347,12 +403,14 @@ function renderCustomContent(
   agents: CustomAgentExtension[],
   mcps: CustomMcpExtension[],
   skills: InstalledSkillExtension[],
+  lineCodeExtensions: InstalledLineCodeExtension[],
   colors: ReturnType<typeof useTheme>['colors'],
   onAgentEnabledChange: (agentId: string, enabled: boolean) => void,
   onAgentLongPress: (agent: CustomAgentExtension) => void,
   onMcpEnabledChange: (mcpId: string, enabled: boolean) => void,
   onMcpLongPress: (mcp: CustomMcpExtension) => void,
   onSkillLongPress: (skill: InstalledSkillExtension) => void,
+  onLineCodeLongPress: (extension: InstalledLineCodeExtension) => void,
 ) {
   if (kind === 'agent') {
     return agents.length === 0 ? (
@@ -411,7 +469,24 @@ function renderCustomContent(
     );
   }
 
-  return <EmptyState text="LineCode 扩展当前暂不支持添加。" />;
+  return lineCodeExtensions.length === 0 ? (
+    <EmptyState text="还没有导入 LineCode LIP 扩展。点击右上角加号选择 .lip 文件。" />
+  ) : (
+    <View style={[styles.group, { backgroundColor: colors.surfaceElevated }]}>
+      {lineCodeExtensions.map((extension, index) => (
+        <CustomRow
+          key={extension.id}
+          icon={<Cpu size={18} color={colors.accent} />}
+          title={extension.name}
+          subtitle="LineCode LIP 扩展"
+          desc={extension.path}
+          meta={extension.fileName}
+          last={index === lineCodeExtensions.length - 1}
+          onLongPress={() => onLineCodeLongPress(extension)}
+        />
+      ))}
+    </View>
+  );
 }
 
 function AgentRow({
@@ -478,6 +553,7 @@ function McpRow({
   onLongPress: (mcp: CustomMcpExtension) => void;
 }) {
   const { colors } = useTheme();
+  const enabledTools = mcp.tools.filter(tool => tool.enabled !== false);
   return (
     <TouchableOpacity
       style={[
@@ -489,7 +565,7 @@ function McpRow({
       activeOpacity={0.75}
     >
       <View style={[styles.customIcon, { backgroundColor: mcp.enabled ? colors.accentMuted : colors.surfaceLight }]}>
-        <Wrench size={18} color={mcp.enabled ? colors.accent : colors.textTertiary} />
+        <McpIcon size={18} color={mcp.enabled ? colors.accent : colors.textTertiary} />
       </View>
       <View style={styles.customText}>
         <View style={styles.customHeader}>
@@ -500,14 +576,14 @@ function McpRow({
             {mcp.name}
           </Text>
           <Text style={[styles.customMeta, { color: mcp.enabled ? colors.accent : colors.textTertiary }]} numberOfLines={1}>
-            {`${mcp.tools.length} tools`}
+            {`${enabledTools.length}/${mcp.tools.length} tools`}
           </Text>
         </View>
         <Text style={[styles.customSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
           {mcp.url}
         </Text>
         <Text style={[styles.customDesc, { color: colors.textTertiary }]} numberOfLines={2}>
-          {mcp.tools.length > 0 ? mcp.tools.map(tool => tool.name).join(', ') : '未查询到 tools 列表'}
+          {enabledTools.length > 0 ? enabledTools.map(tool => tool.name).join(', ') : '未启用 tools'}
         </Text>
       </View>
       <SettingsSwitch

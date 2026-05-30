@@ -18,6 +18,7 @@ import { modelStorage } from '../services/storage';
 import { MCPConfig, ToolDefinition } from '../types';
 import { useTheme } from '../theme';
 import { ActionRow, FormSection, FormTextField, HeaderActionButton, ScreenScaffold, SelectableRow, SettingsSection } from '../components/ui';
+import McpIcon from '../components/icons/McpIcon';
 
 interface Props {
   onBack: () => void;
@@ -131,7 +132,7 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
     ...customMcps.filter(item => item.enabled).map(item => ({
       id: `custom:${item.id}`,
       label: item.name,
-      desc: item.url,
+      desc: `${item.tools.filter(tool => tool.enabled !== false).length}/${item.tools.length} tools · ${item.url}`,
     })),
   ], [builtInMcps, customMcps]);
 
@@ -336,7 +337,7 @@ export default function AgentExtensionEditScreen({ onBack, agentId }: Props) {
                   desc={option.desc}
                   selected={selectedMcps.includes(option.id)}
                   onPress={() => toggleMcp(option.id)}
-                  icon={<Wrench size={19} color={selectedMcps.includes(option.id) ? colors.accent : colors.textSecondary} />}
+                  icon={<McpIcon size={19} color={selectedMcps.includes(option.id) ? colors.accent : colors.textSecondary} />}
                   last={index === mcpOptions.length - 1}
                 />
               ))}

@@ -87,6 +87,30 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     });
     console.log('[LineCode] OpenAI HTTP response status:', res.status, res.statusText);
 
+    const contentType = res.headers?.get?.('content-type') || '';
+    if (contentType && !this.isEventStreamContentType(contentType)) {
+      const rawText = await res.text();
+      const rawEnvelope = this.unwrapRawHttpResponse(rawText);
+      const normalizedSseText = this.normalizePossiblyRawSseText(rawText).trimStart();
+      if (
+        this.isEventStreamContentType(rawEnvelope?.contentType || '') ||
+        normalizedSseText.startsWith('data:')
+      ) {
+        return this.readCompleteSseText(rawText, callbacks, abortSignal);
+      }
+
+      const text = rawText.trim();
+      const responseBody = rawEnvelope?.body || rawText;
+      const responseContentType = rawEnvelope?.contentType || contentType;
+      if (!text || this.isHtmlResponse(responseContentType, responseBody)) {
+        throw this.createNonSseResponseError('OpenAI', contentType, rawText);
+      }
+      return {
+        text,
+        blocks: [{ type: 'text', content: text }],
+      };
+    }
+
     return this.readStream(res, callbacks, abortSignal);
   }
 
@@ -95,6 +119,7 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     callbacks?: StreamCallbacks,
     abortSignal?: AbortSignal,
   ): Promise<StreamResult> {
+    const contentType = res.headers?.get?.('content-type') || '';
     const reader = this.createReader(res);
     abortSignal?.addEventListener('abort', () => reader.cancel(), { once: true });
 
@@ -103,6 +128,8 @@ export class OpenAIStreamProcessor extends StreamProcessor {
     let reasoningFull = '';
     let reasoningDetails: Record<string, unknown>[] | undefined;
     let buffer = '';
+    let rawPrefix = '';
+    let sawSseData = false;
     const blocks: ContentBlock[] = [];
     const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
 
@@ -142,15 +169,20 @@ export class OpenAIStreamProcessor extends StreamProcessor {
         const decoded = decoder.decode(value, { stream: true });
         console.log('[LineCode] OpenAI Stream raw:', this.previewForLog(decoded, 300));
         buffer += decoded;
+        if (!sawSseData && rawPrefix.length < 4096) {
+          rawPrefix = `${rawPrefix}${decoded}`.slice(0, 4096);
+          this.throwIfRawPrefixIsNonSse('OpenAI', contentType, rawPrefix);
+        }
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
         console.log('[LineCode] OpenAI Stream lines:', lines.length);
 
         for (const line of lines) {
-          if (line.startsWith('data: ') && line.trim() !== 'data: [DONE]') {
+          if (line.startsWith('data:') && line.trim() !== 'data: [DONE]') {
+            sawSseData = true;
             let json: any;
             try {
-              json = JSON.parse(line.slice(6));
+              json = JSON.parse(line.slice('data:'.length).replace(/^ /, ''));
             } catch {
               console.warn('[LineCode] OpenAI Stream invalid JSON line:', this.previewForLog(line, 200));
               continue;
@@ -221,6 +253,175 @@ export class OpenAIStreamProcessor extends StreamProcessor {
         console.log('[LineCode] OpenAI Stream aborted by user');
       } else {
         throw err;
+      }
+    }
+
+    if (!sawSseData && rawPrefix) {
+      this.throwIfRawPrefixIsNonSse('OpenAI', contentType, rawPrefix, true);
+    }
+
+    const toolCalls = toolCallsMap.size > 0
+      ? Array.from(toolCallsMap.values()).filter(tc => tc.id && tc.name).map(tc => ({
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.arguments,
+        }))
+      : [];
+
+    if (toolCalls.length > 0) {
+      callbacks?.onToolCalls?.(toolCalls);
+      for (const tc of toolCalls) {
+        blocks.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          content: tc.arguments,
+        });
+      }
+    }
+
+    if (!abortSignal?.aborted && !full.trim() && !reasoningFull.trim() && toolCalls.length === 0) {
+      throw new Error('OpenAI 响应结束但没有返回任何内容。请检查模型是否支持当前协议、流式输出是否被代理截断，或切换到正确的 Base URL。');
+    }
+
+    return {
+      text: full,
+      blocks,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      reasoningContent: reasoningFull || undefined,
+      reasoningDetails,
+    };
+  }
+
+  private throwIfRawPrefixIsNonSse(
+    providerName: string,
+    outerContentType: string,
+    rawPrefix: string,
+    force = false,
+  ): void {
+    const normalized = rawPrefix.replace(/\r\n/g, '\n');
+    const trimmed = normalized.trimStart();
+    if (!trimmed) return;
+
+    const envelope = this.unwrapRawHttpResponse(trimmed);
+    if (envelope) {
+      if (!this.isEventStreamContentType(envelope.contentType) || this.isHtmlResponse(envelope.contentType, envelope.body)) {
+        throw this.createNonSseResponseError(providerName, outerContentType, trimmed);
+      }
+      return;
+    }
+
+    if (this.isHtmlResponse(outerContentType, trimmed)) {
+      throw this.createNonSseResponseError(providerName, outerContentType, trimmed);
+    }
+
+    if (force && /^HTTP\/\d(?:\.\d)?\s+\d{3}/i.test(trimmed)) {
+      throw this.createNonSseResponseError(providerName, outerContentType, trimmed);
+    }
+  }
+
+  private readCompleteSseText(
+    rawText: string,
+    callbacks?: StreamCallbacks,
+    abortSignal?: AbortSignal,
+  ): StreamResult {
+    let full = '';
+    let reasoningFull = '';
+    let reasoningDetails: Record<string, unknown>[] | undefined;
+    const blocks: ContentBlock[] = [];
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+
+    const ensureThinkingBlock = (): ContentBlock => {
+      let block = blocks.find(b => b.type === 'thinking');
+      if (!block) {
+        block = { type: 'thinking', content: '' };
+        blocks.push(block);
+      }
+      return block;
+    };
+
+    const ensureTextBlock = (): ContentBlock => {
+      let block = blocks.find(b => b.type === 'text');
+      if (!block) {
+        block = { type: 'text', content: '' };
+        blocks.push(block);
+      }
+      return block;
+    };
+
+    const streamText = this.normalizePossiblyRawSseText(rawText);
+    for (const rawLine of streamText.split('\n')) {
+      if (abortSignal?.aborted) break;
+
+      const line = rawLine.replace(/\r$/, '');
+      if (!line.startsWith('data:')) continue;
+      const data = line.slice('data:'.length).replace(/^ /, '');
+      if (data.trim() === '[DONE]') continue;
+
+      let json: any;
+      try {
+        json = JSON.parse(data);
+      } catch {
+        console.warn('[LineCode] OpenAI Stream invalid JSON line:', this.previewForLog(line, 200));
+        continue;
+      }
+
+      if (json.error) {
+        throw new Error(`OpenAI 流式错误: ${this.describeErrorPayload(json.error)}`);
+      }
+
+      const delta = json.choices?.[0]?.delta;
+      const finishReason = json.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error('OpenAI 流式错误: 输出被内容安全策略拦截');
+      }
+
+      const reasoningDelta = this.extractReasoningDelta(delta);
+      if (reasoningDelta) {
+        reasoningFull += reasoningDelta;
+        ensureThinkingBlock().content = reasoningFull;
+        callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+      }
+
+      const nextReasoningDetails = this.extractReasoningDetails(delta);
+      if (nextReasoningDetails) {
+        reasoningDetails = nextReasoningDetails;
+        if (!reasoningFull) {
+          const detailsText = this.reasoningDetailsToText(reasoningDetails);
+          if (detailsText) {
+            reasoningFull = detailsText;
+            ensureThinkingBlock().content = reasoningFull;
+            callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+          }
+        }
+      }
+
+      if (delta?.content) {
+        const contentDelta = String(delta.content);
+        const parsedContent = this.parseThinkTags(contentDelta);
+        if (parsedContent.thinking) {
+          reasoningFull += parsedContent.thinking;
+          ensureThinkingBlock().content = reasoningFull;
+        }
+        full += parsedContent.text;
+        ensureTextBlock().content = full;
+        callbacks?.onBlocks?.(blocks.map(b => ({ ...b })));
+      }
+
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          if (!toolCallsMap.has(idx)) {
+            toolCallsMap.set(idx, { id: tc.id || '', name: '', arguments: '' });
+          }
+          const existing = toolCallsMap.get(idx)!;
+          if (tc.id) existing.id = tc.id;
+          if (tc.function?.name) {
+            existing.name = tc.function.name;
+            callbacks?.onToolCallDetected?.({ id: existing.id, name: existing.name });
+          }
+          if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+        }
       }
     }
 

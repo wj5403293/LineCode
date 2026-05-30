@@ -35,7 +35,7 @@ export default React.memo(function TextBlock({
 }: Props) {
   const { colors } = useTheme();
   const renderContent = useTypewriterText(content, !!streaming);
-  const shouldRenderMath = !!mathFormulaRenderingEnabled && !streaming;
+  const shouldRenderMath = !!mathFormulaRenderingEnabled;
   const mdStyle = useMemo(() => createMdStyle(colors), [colors]);
   const customRules = useMemo(() => getMarkdownRules(codeWrap, false), [codeWrap]);
   const mathRules = useMemo(

@@ -59,6 +59,7 @@ const KEYS = {
   MCP_EXECUTION_MODE: '@lineai_mcp_execution_mode',
   AUTO_UPDATE_ENABLED: '@linecode_auto_update_enabled',
   RESTORE_LAST_CONVERSATION_ON_STARTUP: '@linecode_restore_last_conversation_on_startup',
+  LEARNING_MODE_ENABLED: '@linecode_learning_mode_enabled',
   EXPERIMENTAL_ANDROID_KEYBOARD_AVOIDANCE: '@linecode_experimental_android_keyboard_avoidance',
   KEEP_ALIVE: '@linecode_keep_alive_settings',
 } as const;
@@ -242,6 +243,15 @@ class SettingsService {
 
   async setRestoreLastConversationOnStartup(enabled: boolean): Promise<void> {
     await this.set(KEYS.RESTORE_LAST_CONVERSATION_ON_STARTUP, enabled);
+  }
+
+  async getLearningModeEnabled(): Promise<boolean> {
+    const value = await AsyncStorage.getItem(KEYS.LEARNING_MODE_ENABLED);
+    return value === 'true';
+  }
+
+  async setLearningModeEnabled(enabled: boolean): Promise<void> {
+    await this.set(KEYS.LEARNING_MODE_ENABLED, enabled);
   }
 
   async getExperimentalAndroidKeyboardAvoidanceEnabled(): Promise<boolean> {

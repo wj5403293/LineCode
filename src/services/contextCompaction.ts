@@ -5,7 +5,7 @@ const CHARS_PER_TOKEN = 4;
 const STRUCTURE_FIELD_OVERHEAD = 4;
 const MAX_ESTIMATE_DEPTH = 8;
 
-export const COMPACT_TRIGGER_RATIO = 0.8;
+export const COMPACT_TRIGGER_RATIO = 0.95;
 
 const NO_TOOLS_PREAMBLE = `CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
 

@@ -29,6 +29,12 @@ interface AgentResult {
   toolCalls: AgentToolCall[];
 }
 
+function normalizeDependencies(agent: PipelineAgent): string[] {
+  return Array.isArray(agent.depends_on)
+    ? agent.depends_on.filter(Boolean).map(String)
+    : [];
+}
+
 const AGENT_PROMPTS: Record<AgentType, string> = {
   explore: `你是一个代码探索 Agent。你的任务是快速定位和分析代码，回答用户的问题。
 规则：
@@ -188,11 +194,14 @@ export class AgentPipelineTool extends BaseTool {
 
     const toolCallRecords: AgentToolCall[] = [];
     let thinkingContent = '';
+    let output = '';
+    let toolCallCount = 0;
     const progressId = pipelineAgent.id || String(agentId);
+    const dependencies = normalizeDependencies(pipelineAgent);
 
     const progressUpdate = (update: Partial<ContentBlock>) => {
       const status = update.agentStatus || agent.status;
-      const output = update.agentOutput ?? agent.output;
+      const nextOutput = update.agentOutput ?? agent.output;
       const thinking = update.agentThinking ?? thinkingContent;
       const toolCalls = update.agentToolCalls ?? [...toolCallRecords];
       progressStore.upsert({
@@ -200,7 +209,8 @@ export class AgentPipelineTool extends BaseTool {
         name: pipelineAgent.description,
         type: pipelineAgent.type,
         status,
-        output,
+        dependencies,
+        output: nextOutput,
         thinking,
         toolCalls,
         toolCallCount,
@@ -210,16 +220,13 @@ export class AgentPipelineTool extends BaseTool {
       onProgress?.(progressStore.toContentBlock({
         agentType: pipelineAgent.type,
         agentStatus: status,
-        agentOutput: output,
+        agentOutput: nextOutput,
         agentThinking: thinking,
         agentToolCalls: toolCalls,
       }));
     };
 
     progressUpdate({ agentStatus: 'running', agentOutput: '' });
-
-    let output = '';
-    let toolCallCount = 0;
 
     const registry = createDefaultRegistry();
     const agentTools = registry.getAll().filter(t =>
@@ -502,9 +509,24 @@ export class AgentPipelineTool extends BaseTool {
     const results = new Map<string, AgentResult>();
     const agentMap = new Map<string, PipelineAgent>();
     
-    for (const agent of pipelineAgents) {
+    for (const [index, agent] of pipelineAgents.entries()) {
       agentMap.set(agent.id, agent);
+      progressStore.upsert({
+        id: agent.id,
+        name: agent.description,
+        type: agent.type,
+        status: 'waiting',
+        dependencies: normalizeDependencies(agent),
+        output: '',
+        toolCalls: [],
+        toolCallCount: 0,
+        order: index,
+      });
     }
+    onProgress?.(progressStore.toContentBlock({
+      agentStatus: 'running',
+      agentOutput: '',
+    }));
 
     const summary: string[] = [];
 

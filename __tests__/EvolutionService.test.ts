@@ -1,6 +1,7 @@
 import { ConversationIndexer } from '../src/services/evolution/ConversationIndexer';
 import { EvolutionDatabase } from '../src/services/evolution/EvolutionDatabase';
 import { EvolutionService } from '../src/services/evolution/EvolutionService';
+import { MemoryOverviewService } from '../src/services/evolution/MemoryOverviewService';
 
 interface MockEntry {
   name: string;
@@ -109,5 +110,29 @@ describe('evolution learning context', () => {
     expect(enabled).toContain('React Native 写 Jest 测试');
     expect(enabled).toContain('Jest RN');
     expect(enabled).toContain('/tmp/lineai-test/.linecode/skills');
+  });
+
+  it('separates memory overview into long-term, project, environment, short-term, and history buckets', async () => {
+    const db = new EvolutionDatabase('/tmp/lineai-test/.linecode/evolution/overview-db.json');
+    await db.upsertMemory({ scope: 'user', content: '长期用户记忆', source: 'manual' });
+    await db.upsertMemory({ scope: 'project', projectId: '/project-a', content: '项目 A 记忆', source: 'manual' });
+    await db.upsertMemory({ scope: 'project', projectId: '/project-b', content: '项目 B 记忆', source: 'manual' });
+    await db.upsertMemory({ scope: 'environment', projectId: '/project-a', content: '项目 A 环境', source: 'manual' });
+    await db.upsertWorkingMemory({ projectId: '/project-a', content: '短期任务状态', source: 'task' });
+
+    const indexer = new ConversationIndexer(db);
+    await indexer.indexConversation({
+      projectId: '/project-a',
+      conversationId: 'conv-a',
+      messages: [{ id: 'u1', role: 'user', content: '聊天索引内容', timestamp: 1 }],
+    });
+
+    const overview = await new MemoryOverviewService(db).getOverview('/project-a');
+
+    expect(overview.longTerm.map(item => item.content)).toContain('长期用户记忆');
+    expect(overview.project.map(item => item.content)).toEqual(['项目 A 记忆']);
+    expect(overview.environment.map(item => item.content)).toEqual(['项目 A 环境']);
+    expect(overview.shortTerm.map(item => item.content)).toEqual(['短期任务状态']);
+    expect(overview.history.map(item => item.text)).toEqual(['聊天索引内容']);
   });
 });

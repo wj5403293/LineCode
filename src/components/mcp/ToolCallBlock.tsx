@@ -31,14 +31,19 @@ function createFallbackPipelineAgents(input: Record<string, unknown>, status: Ag
   return agents.map((raw, index) => {
     const item = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
     const type = item.type === 'sub-coding' ? 'sub-coding' : 'explore';
+    const dependencies = Array.isArray(item.depends_on)
+      ? item.depends_on.filter(Boolean).map(String)
+      : [];
     return {
       id: String(item.id || index + 1),
       name: String(item.description || item.id || `Agent ${index + 1}`),
       type,
-      status,
+      status: status === 'running' && dependencies.length > 0 ? 'waiting' : status,
+      dependencies,
       output: '',
       toolCalls: [],
       toolCallCount: 0,
+      order: index,
     };
   });
 }

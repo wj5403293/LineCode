@@ -1,6 +1,6 @@
 {
   "name": "LineCode",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "private": true,
   "scripts": {
     "build-prompt": "node scripts/build-prompt.js",
@@ -11,6 +11,7 @@
     "android": "npm run sync-version && npm run build-prompt && react-native run-android --mode remoteDebug",
     "android:local": "npm run sync-version && npm run build-prompt && react-native run-android --mode localDebug",
     "build-android-apks": "npm run sync-version && npm run build-prompt && cd android && ./gradlew :app:assembleRemoteRelease :app:assembleLocalRelease",
+    "build-android-user-cert-apks": "npm run sync-version && npm run build-prompt && cd android && ./gradlew :app:assembleRemoteUserCertDebugSignedRelease :app:assembleLocalUserCertDebugSignedRelease",
     "ios": "npm run sync-version && npm run build-prompt && react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",

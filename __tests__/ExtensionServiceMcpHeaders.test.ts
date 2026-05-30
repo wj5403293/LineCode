@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { extensionService } from '../src/services/ExtensionService';
+import { createRuntimeRegistry, customMcpToolName } from '../src/mcp/tools/runtimeRegistry';
 
 const fetchMock = jest.fn();
 
@@ -23,7 +24,7 @@ describe('ExtensionService MCP headers', () => {
       { name: 'X-Team', value: 'mobile' },
     ]);
 
-    expect(tools).toEqual([{ name: 'echo', description: undefined, inputSchema: undefined }]);
+    expect(tools).toEqual([{ name: 'echo', enabled: true, description: undefined, inputSchema: undefined }]);
     expect(fetchMock).toHaveBeenCalledWith('https://example.com/mcp', expect.objectContaining({
       headers: expect.objectContaining({
         Accept: 'application/json, text/event-stream',
@@ -43,11 +44,36 @@ describe('ExtensionService MCP headers', () => {
         { name: ' Authorization ', value: ' Bearer token ' },
         { name: '', value: 'ignored' },
       ],
-      tools: [],
+      tools: [
+        { name: 'enabled_tool' },
+        { name: 'disabled_tool', enabled: false },
+      ],
     });
 
     const mcps = await extensionService.getMcpExtensions();
     expect(saved.requestHeaders).toEqual([{ name: 'Authorization', value: 'Bearer token' }]);
     expect(mcps[0].requestHeaders).toEqual([{ name: 'Authorization', value: 'Bearer token' }]);
+    expect(mcps[0].tools).toEqual([
+      { name: 'enabled_tool', enabled: true, description: undefined, inputSchema: undefined },
+      { name: 'disabled_tool', enabled: false, description: undefined, inputSchema: undefined },
+    ]);
+  });
+
+  it('registers only enabled custom MCP tools at runtime', async () => {
+    const saved = await extensionService.saveMcpExtension({
+      enabled: true,
+      name: 'Private MCP',
+      url: 'https://example.com/mcp',
+      requestHeaders: [],
+      tools: [
+        { name: 'enabled_tool', enabled: true },
+        { name: 'disabled_tool', enabled: false },
+      ],
+    });
+
+    const registry = await createRuntimeRegistry({ includeCustomAgents: false, includeCustomMcp: true });
+
+    expect(registry.get(customMcpToolName(saved, { name: 'enabled_tool' }))).toBeTruthy();
+    expect(registry.get(customMcpToolName(saved, { name: 'disabled_tool' }))).toBeUndefined();
   });
 });

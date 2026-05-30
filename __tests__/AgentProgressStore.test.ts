@@ -31,4 +31,35 @@ describe('AgentProgressStore', () => {
       expect.objectContaining({ id: 'b', output: 'B1' }),
     ]);
   });
+
+  it('keeps waiting agents with dependencies visible in pipeline order', () => {
+    const store = new AgentProgressStore();
+
+    store.upsert({
+      id: 'b',
+      name: 'Agent B',
+      type: 'sub-coding',
+      status: 'waiting',
+      dependencies: ['a'],
+      order: 1,
+    });
+    store.upsert({
+      id: 'a',
+      name: 'Agent A',
+      type: 'explore',
+      status: 'running',
+      order: 0,
+    });
+    store.upsert({
+      id: 'b',
+      name: 'Agent B',
+      type: 'sub-coding',
+      status: 'running',
+    });
+
+    expect(store.snapshot()).toEqual([
+      expect.objectContaining({ id: 'a', status: 'running' }),
+      expect.objectContaining({ id: 'b', status: 'running', dependencies: ['a'] }),
+    ]);
+  });
 });

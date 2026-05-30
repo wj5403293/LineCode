@@ -16,6 +16,7 @@ import ShellCommandScreen from '../screens/ShellCommandScreen';
 import DataSettingsScreen from '../screens/DataSettingsScreen';
 import StorageManagementScreen from '../screens/StorageManagementScreen';
 import KeepAliveSettingsScreen from '../screens/KeepAliveSettingsScreen';
+import MemorySettingsScreen from '../screens/MemorySettingsScreen';
 import DebugSettingsScreen from '../screens/DebugSettingsScreen';
 import ExperimentalSettingsScreen from '../screens/ExperimentalSettingsScreen';
 import ExtensionsScreen from '../screens/ExtensionsScreen';
@@ -23,6 +24,7 @@ import ExtensionDetailScreen from '../screens/ExtensionDetailScreen';
 import AgentExtensionEditScreen from '../screens/AgentExtensionEditScreen';
 import McpExtensionEditScreen from '../screens/McpExtensionEditScreen';
 import TutorialScreen from '../screens/TutorialScreen';
+import PluginPageScreen from '../screens/PluginPageScreen';
 import type { TutorialVariant } from '../constants/tutorial';
 import type { ExtensionKind } from '../services/ExtensionService';
 
@@ -44,12 +46,14 @@ export type RootStackParamList = {
   ThemeSettings: undefined;
   DataSettings: undefined;
   StorageManagement: undefined;
+  MemorySettings: undefined;
   KeepAliveSettings: undefined;
   ExperimentalSettings: undefined;
   DebugSettings: undefined;
   Tutorial: { variant?: TutorialVariant } | undefined;
   InAppBrowser: { url: string };
   ShellCommand: { command: string };
+  PluginPage: { pluginId: string; pageId: string; title?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,6 +72,17 @@ export default function RootNavigator() {
             onGoSettings={() => navigation.navigate('Settings')}
             onOpenTutorial={(variant) => navigation.navigate('Tutorial', { variant })}
             onViewShellCommand={(command) => navigation.navigate('ShellCommand', { command })}
+            onOpenPluginPage={(pluginId, pageId, title) => navigation.navigate('PluginPage', { pluginId, pageId, title })}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="PluginPage">
+        {({ navigation, route }) => (
+          <PluginPageScreen
+            pluginId={route.params.pluginId}
+            pageId={route.params.pageId}
+            title={route.params.title}
+            onBack={() => navigation.goBack()}
           />
         )}
       </Stack.Screen>
@@ -84,6 +99,7 @@ export default function RootNavigator() {
             onTheme={() => navigation.navigate('ThemeSettings')}
             onData={() => navigation.navigate('DataSettings')}
             onStorage={() => navigation.navigate('StorageManagement')}
+            onMemory={() => navigation.navigate('MemorySettings')}
             onKeepAlive={() => navigation.navigate('KeepAliveSettings')}
             onExperimental={() => navigation.navigate('ExperimentalSettings')}
           />
@@ -152,6 +168,11 @@ export default function RootNavigator() {
       <Stack.Screen name="StorageManagement">
         {({ navigation }) => (
           <StorageManagementScreen onBack={() => navigation.goBack()} />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="MemorySettings">
+        {({ navigation }) => (
+          <MemorySettingsScreen onBack={() => navigation.goBack()} />
         )}
       </Stack.Screen>
       <Stack.Screen name="DataSettings">

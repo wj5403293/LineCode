@@ -21,9 +21,11 @@ import { ConversationPersistenceScheduler } from './persistence/ConversationPers
 import { StreamBufferedUpdate, StreamUpdateBuffer } from './StreamUpdateBuffer';
 import { ToolExecutionCoordinator } from './ToolExecutionCoordinator';
 import { sanitizeToolCallForStorage } from '../utils/toolPayload';
+import { chatHookManager } from '../plugins';
 import { isAgentTool } from '../mcp/toolUtils';
 import { useChatScrollState } from './useChatScrollState';
 import { ConversationIndexer, evolutionDatabase, evolutionService } from '../services/evolution';
+import { isLearningModeEnabled } from '../services/LearningModeService';
 import {
   buildRequestFailedText,
   composeUserContent,
@@ -87,6 +89,7 @@ export function useChatController({
   const contextMetricsRef = useRef(new ContextMetricsService());
   const streamBufferRef = useRef<StreamUpdateBuffer | null>(null);
   const toolExecutionCoordinatorRef = useRef(new ToolExecutionCoordinator());
+  const activeToolMessagesRef = useRef<Message[]>([]);
 
   useEffect(() => {
     getHomePath().then(setHomePath);
@@ -237,17 +240,45 @@ export function useChatController({
   }, []);
 
   const toChatMessages = useCallback((msgs: Message[]): ChatMessage[] => {
-    return msgs.filter(m => !m.excludeFromContext).map(m => ({
-      role: m.role,
-      content: m.content,
-      attachments: m.attachments,
-      toolCalls: m.toolCalls,
-      toolCallId: m.toolCallId,
-      toolName: m.toolName,
-      isError: m.isError,
-      reasoningContent: m.reasoningContent,
-      reasoningDetails: m.reasoningDetails,
-    }));
+    const contextMessages = msgs.filter(m => !m.excludeFromContext);
+    const standaloneToolResultIds = new Set(
+      contextMessages
+        .filter(m => m.role === 'tool' && m.toolCallId)
+        .map(m => m.toolCallId!),
+    );
+    const chatMessages: ChatMessage[] = [];
+
+    for (const m of contextMessages) {
+      chatMessages.push({
+        role: m.role,
+        content: m.content,
+        attachments: m.attachments,
+        toolCalls: m.toolCalls,
+        toolCallId: m.toolCallId,
+        toolName: m.toolName,
+        isError: m.isError,
+        reasoningContent: m.reasoningContent,
+        reasoningDetails: m.reasoningDetails,
+      });
+
+      if (m.role !== 'assistant' || !m.toolCalls?.length || !m.toolResults?.length) {
+        continue;
+      }
+
+      for (const result of m.toolResults) {
+        if (standaloneToolResultIds.has(result.toolCallId)) continue;
+        const toolCall = m.toolCalls.find(tc => tc.id === result.toolCallId);
+        chatMessages.push({
+          role: 'tool',
+          content: result.content,
+          toolCallId: result.toolCallId,
+          toolName: toolCall?.name,
+          isError: result.isError,
+        });
+      }
+    }
+
+    return chatMessages;
   }, []);
 
   const executeToolCall = useCallback(async (
@@ -303,6 +334,10 @@ export function useChatController({
       isError: toolResult.isError,
     };
 
+    activeToolMessagesRef.current = [
+      ...activeToolMessagesRef.current.filter(message => message.toolCallId !== tc.id),
+      toolMsg,
+    ];
     syncMessages(prev => [...prev, toolMsg]);
     return { toolMsg, toolResult };
   }, [syncMessages]);
@@ -380,7 +415,13 @@ export function useChatController({
   }, [executeToolCall, syncMessages]);
 
   const persistTerminatedMessages = useCallback(() => {
-    const terminated = markMessagesTerminated(messageStoreRef.current.getSnapshot());
+    const current = messageStoreRef.current.getSnapshot();
+    const existingToolIds = new Set(current.filter(m => m.role === 'tool').map(m => m.id));
+    const missingToolMessages = activeToolMessagesRef.current.filter(m => !existingToolIds.has(m.id));
+    const terminated = markMessagesTerminated([
+      ...current,
+      ...missingToolMessages,
+    ]);
     syncMessages(terminated, conversationIdRef.current, 'flush');
   }, [syncMessages]);
 
@@ -507,7 +548,7 @@ export function useChatController({
     return recalledText;
   }, [syncMessages]);
 
-  const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
+  const performSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
     if (!model || streamingRef.current || compactingRef.current) return;
     const sentContent = composeUserContent(text, attachments);
     if (!sentContent.trim()) return;
@@ -534,6 +575,7 @@ export function useChatController({
 
     const initialMessages = [...currentMessages, userMsg];
     syncMessages(initialMessages, convId);
+    activeToolMessagesRef.current = [];
     if (wasNewConversation) {
       const fallbackTitle = sentContent.trim().replace(/\s+/g, ' ').slice(0, 20) || '新对话';
       conversationStore.updateConversation(convId, { title: fallbackTitle, messages: initialMessages })
@@ -552,7 +594,7 @@ export function useChatController({
       const latestMessages = messageStoreRef.current.getSnapshot();
       const existingContextMessages = latestMessages.filter(m => !m.excludeFromContext);
       const canCompactExistingContext = existingContextMessages.length >= 4;
-      if (canCompactExistingContext && contextMetricsRef.current.shouldCompact(localMessages, contextInfo.contextTokens, COMPACT_TRIGGER_RATIO)) {
+      if (canCompactExistingContext && contextMetricsRef.current.shouldCompact(existingContextMessages, contextInfo.contextTokens, COMPACT_TRIGGER_RATIO)) {
         compactingRef.current = true;
         setCompacting(true);
         const compactedMessages = await runContextCompaction(latestMessages.filter(m => m.id !== userMsg.id), [userMsg]);
@@ -579,7 +621,8 @@ export function useChatController({
 
         syncMessages(prev => [...prev, aiPlaceholder], convId);
 
-        const learningContext = model.learningMode
+        const learningEnabled = await isLearningModeEnabled(model);
+        const learningContext = learningEnabled
           ? await evolutionService.buildLearningContext({
             learningMode: true,
             userInput: sentContent,
@@ -635,7 +678,7 @@ export function useChatController({
         syncMessages(prev => prev.map(m => m.id === aiId ? assistantMsg : m), convId, 'flush');
         localMessages.push(assistantMsg);
         localMessagesRef.current = localMessages;
-        if (model.learningMode) {
+        if (learningEnabled) {
           conversationIndexer.indexConversation({
             projectId: homePath,
             conversationId: convId,
@@ -647,6 +690,7 @@ export function useChatController({
         if (activeAbortSignal.aborted) break;
 
         if (!result.toolCalls || result.toolCalls.length === 0) {
+          activeToolMessagesRef.current = [];
           if (wasNewConversation) {
             summarizeTitle(model, convId, sentContent, result.text);
           }
@@ -761,6 +805,14 @@ export function useChatController({
       persistenceRef.current.flush(convId).catch(() => {});
     }
   }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow]);
+
+  const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
+    await chatHookManager.invoke(
+      'chat.send',
+      { text, attachments },
+      async event => performSend(event.text, event.attachments),
+    );
+  }, [performSend]);
 
   const resetShellAutoApprove = useCallback(() => {
     shellAutoApproveRef.current = false;

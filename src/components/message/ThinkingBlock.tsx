@@ -24,7 +24,7 @@ export default React.memo(function ThinkingBlock({
   mathFormulaRenderingEnabled,
 }: Props) {
   const { colors } = useTheme();
-  const shouldRenderMath = !!mathFormulaRenderingEnabled && !streaming;
+  const shouldRenderMath = !!mathFormulaRenderingEnabled;
   const mdStyle = useMemo(() => createThinkingMdStyle(colors), [colors]);
   const mathMarkdownRules = useMemo(
     () => shouldRenderMath

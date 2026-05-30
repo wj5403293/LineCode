@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { GitBranch, Circle, CircleCheck, CircleX, Loader } from 'lucide-react-native';
+import { GitBranch, CircleCheck, CircleX, Clock, Loader } from 'lucide-react-native';
 import { AgentProgressItem } from '../../types';
 import { spacing, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
@@ -22,10 +22,14 @@ export default React.memo(function AgentPipelineBlock({
   onCancelWait,
 }: Props) {
   const { colors } = useTheme();
+  const completedAgentIds = useMemo(
+    () => new Set(agents.filter(agent => agent.status === 'done').map(agent => agent.id)),
+    [agents],
+  );
   const completed = agents.filter(agent => agent.status === 'done').length;
   const failed = agents.filter(agent => agent.status === 'error').length;
   const running = agents.filter(agent => agent.status === 'running' || agent.status === 'waiting_unlock').length;
-  const pending = Math.max(agents.length - completed - failed - running, 0);
+  const waiting = agents.filter(agent => agent.status === 'waiting').length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderLight }]}>
@@ -44,10 +48,10 @@ export default React.memo(function AgentPipelineBlock({
               <Loader size={10} color={colors.accent} />
               <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{running} 运行</Text>
             </View>
-            {pending > 0 && (
+            {waiting > 0 && (
               <View style={styles.summaryItem}>
-                <Circle size={10} color={colors.textTertiary} />
-                <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{pending} 待执行</Text>
+                <Clock size={10} color={colors.textTertiary} />
+                <Text style={[styles.subtitle, { color: colors.textTertiary }]}>{waiting} 等待中</Text>
               </View>
             )}
             {failed > 0 && (
@@ -67,6 +71,10 @@ export default React.memo(function AgentPipelineBlock({
             name={agent.name}
             agentType={agent.type}
             status={agent.status}
+            dependencies={(agent.dependencies || []).map(depId => ({
+              id: depId,
+              completed: completedAgentIds.has(depId),
+            }))}
             output={agent.output}
             thinking={agent.thinking}
             toolCalls={agent.toolCalls}

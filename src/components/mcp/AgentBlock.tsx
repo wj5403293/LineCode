@@ -16,7 +16,11 @@ import { StreamingContext } from '../../contexts/StreamingContext';
 interface Props {
   name: string;
   agentType: 'explore' | 'sub-coding';
-  status: 'running' | 'done' | 'error' | 'waiting_unlock';
+  status: 'waiting' | 'running' | 'done' | 'error' | 'waiting_unlock';
+  dependencies?: Array<{
+    id: string;
+    completed: boolean;
+  }>;
   output?: string;
   thinking?: string;
   toolCalls?: AgentToolCall[];
@@ -34,6 +38,7 @@ export default React.memo(function AgentBlock({
   name,
   agentType,
   status,
+  dependencies,
   output,
   thinking,
   toolCalls,
@@ -110,6 +115,7 @@ export default React.memo(function AgentBlock({
         name={name}
         agentType={agentType}
         status={status}
+        dependencies={dependencies}
         expanded={expanded}
         toolCount={toolCalls?.length || 0}
         fileChangeCount={fileChanges.length}

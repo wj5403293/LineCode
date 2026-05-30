@@ -47,6 +47,13 @@ interface FetchWithRetryOptions {
   httpHint: string;
 }
 
+interface RawHttpResponseEnvelope {
+  statusLine: string;
+  headers: Record<string, string>;
+  body: string;
+  contentType: string;
+}
+
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_FETCH_TIMEOUT_MS = 45_000;
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 90_000;
@@ -223,6 +230,87 @@ export abstract class StreamProcessor {
       // Fall through to String() for circular or otherwise unserializable values.
     }
     return String(value).slice(0, maxLength);
+  }
+
+  protected isHtmlResponse(contentType: string, text: string): boolean {
+    const lowerType = contentType.toLowerCase();
+    const lowerText = text.trim().slice(0, 256).toLowerCase();
+    return lowerType.includes('text/html') ||
+      lowerText.startsWith('<!doctype html') ||
+      lowerText.startsWith('<html') ||
+      lowerText.includes('<title>301 moved permanently</title>') ||
+      lowerText.includes('<h1>301 moved permanently</h1>');
+  }
+
+  protected isEventStreamContentType(contentType: string): boolean {
+    return contentType.toLowerCase().includes('text/event-stream');
+  }
+
+  protected unwrapRawHttpResponse(rawText: string): RawHttpResponseEnvelope | null {
+    const normalized = rawText.replace(/\r\n/g, '\n');
+    const startIndex = normalized.search(/HTTP\/\d(?:\.\d)?\s+\d{3}/i);
+    if (startIndex === -1 || normalized.slice(0, startIndex).trim()) return null;
+
+    const text = normalized.slice(startIndex);
+    const headerEnd = text.indexOf('\n\n');
+    if (headerEnd === -1) return null;
+
+    const headerText = text.slice(0, headerEnd);
+    const body = text.slice(headerEnd + 2);
+    const [statusLine = '', ...headerLines] = headerText.split('\n');
+    if (!/^HTTP\/\d(?:\.\d)?\s+\d{3}/i.test(statusLine.trim())) return null;
+
+    const headers: Record<string, string> = {};
+    for (const line of headerLines) {
+      const separatorIndex = line.indexOf(':');
+      if (separatorIndex <= 0) continue;
+      headers[line.slice(0, separatorIndex).trim().toLowerCase()] = line.slice(separatorIndex + 1).trim();
+    }
+
+    return {
+      statusLine: statusLine.trim(),
+      headers,
+      body,
+      contentType: headers['content-type'] || '',
+    };
+  }
+
+  protected normalizePossiblyRawSseText(rawText: string): string {
+    const envelope = this.unwrapRawHttpResponse(rawText);
+    const body = envelope ? envelope.body : rawText;
+    const normalized = body.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    let removedChunkLine = false;
+    const filtered = lines.filter(line => {
+      const trimmed = line.trim();
+      if (/^[0-9a-f]+(?:;.*)?$/i.test(trimmed)) {
+        removedChunkLine = true;
+        return false;
+      }
+      return true;
+    });
+
+    return removedChunkLine ? filtered.join('\n') : normalized;
+  }
+
+  protected createNonSseResponseError(providerName: string, contentType: string, rawText: string): Error {
+    const envelope = this.unwrapRawHttpResponse(rawText);
+    const effectiveContentType = contentType || envelope?.contentType || '';
+    const text = (envelope?.body || rawText).trim();
+    if (!text) {
+      return new Error(`${providerName} 响应不是 SSE 流，且响应体为空。请检查模型协议或 Base URL。`);
+    }
+
+    const responseKind = this.isHtmlResponse(effectiveContentType, text)
+      ? 'HTML/重定向页面'
+      : '非 SSE 响应';
+    const statusLine = envelope?.statusLine ? `HTTP 状态行: ${envelope.statusLine}\n` : '';
+    return new Error(
+      `${providerName} 响应不是 SSE 流，服务端返回了${responseKind}。请检查 Base URL 是否正确、是否缺少 /v1、是否被 Cloudflare/代理重定向。\n\n` +
+      statusLine +
+      `Content-Type: ${effectiveContentType || 'unknown'}\n` +
+      `响应预览:\n${this.previewForLog(text, 1200)}`
+    );
   }
 
   private extractApiErrorText(rawText: string): string {

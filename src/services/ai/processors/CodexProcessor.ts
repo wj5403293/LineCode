@@ -29,7 +29,14 @@ export class CodexStreamProcessor extends StreamProcessor {
     const reasoningEffort = options?.reasoningEffort || 'medium';
     const abortSignal = options?.abortSignal;
     const apiModelId = getApiModelId(model.modelId);
-    const formatted = this.formatMessages(messages);
+    const continuationOutputs = this.getToolContinuationOutputs(messages);
+    const useTurnState = !!this.turnState && continuationOutputs.length > 0;
+    if (this.turnState && !useTurnState) {
+      this.turnState = undefined;
+    }
+    const formatted = useTurnState
+      ? { instructions: '', input: continuationOutputs }
+      : this.formatMessages(messages);
     const formattedTools = this.formatTools(tools);
     const body: Record<string, any> = {
       model: apiModelId,
@@ -60,11 +67,11 @@ export class CodexStreamProcessor extends StreamProcessor {
       'Accept': 'text/event-stream',
     };
 
-    if (this.turnState) {
+    if (useTurnState && this.turnState) {
       headers['x-codex-turn-state'] = this.turnState;
     }
 
-    console.log('[LineCode] Codex Responses request:', requestUrl, 'items:', formatted.input.length, 'tools:', tools.length);
+    console.log('[LineCode] Codex Responses request:', requestUrl, 'items:', formatted.input.length, 'tools:', tools.length, 'turnState:', useTurnState);
 
     let res: Response;
     try {
@@ -98,6 +105,10 @@ export class CodexStreamProcessor extends StreamProcessor {
     console.log('[LineCode] Codex HTTP response status:', res.status, res.statusText);
 
     try {
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (contentType && !this.isEventStreamContentType(contentType)) {
+        throw this.createNonSseResponseError('Codex', contentType, await res.text());
+      }
       return await this.readResponsesStream(res, callbacks, abortSignal);
     } catch (err: any) {
       this.turnState = undefined;
@@ -154,19 +165,54 @@ export class CodexStreamProcessor extends StreamProcessor {
       }
 
       if (msg.role === 'tool' && msg.toolCallId) {
-        input.push({
-          type: 'function_call_output',
-          call_id: msg.toolCallId,
-          output: msg.isError
-            ? `Tool ${msg.toolName || msg.toolCallId} failed:\n${msg.content}`
-            : msg.content,
-        });
+        input.push(this.formatToolOutput(msg));
       }
     }
 
     return {
       instructions: instructions.join('\n\n'),
       input,
+    };
+  }
+
+  private getToolContinuationOutputs(messages: ChatMessage[]): CodexResponseItem[] {
+    let toolStart = messages.length;
+    while (toolStart > 0 && messages[toolStart - 1].role === 'tool') {
+      toolStart--;
+    }
+    if (toolStart === messages.length) return [];
+
+    const assistant = messages[toolStart - 1];
+    if (assistant?.role !== 'assistant' || !assistant.toolCalls?.length) return [];
+
+    const expectedIds = Array.from(new Set(assistant.toolCalls
+      .map(toolCall => toolCall.id)
+      .filter(Boolean)));
+    if (expectedIds.length === 0) return [];
+
+    const trailingToolResults = new Map<string, ChatMessage>();
+    for (let index = toolStart; index < messages.length; index++) {
+      const message = messages[index];
+      if (message.role !== 'tool' || !message.toolCallId || trailingToolResults.has(message.toolCallId)) {
+        continue;
+      }
+      trailingToolResults.set(message.toolCallId, message);
+    }
+
+    if (!expectedIds.every(id => trailingToolResults.has(id))) {
+      return [];
+    }
+
+    return expectedIds.map(id => this.formatToolOutput(trailingToolResults.get(id)!));
+  }
+
+  private formatToolOutput(message: ChatMessage): CodexResponseItem {
+    return {
+      type: 'function_call_output',
+      call_id: message.toolCallId,
+      output: message.isError
+        ? `Tool ${message.toolName || message.toolCallId} failed:\n${message.content}`
+        : message.content,
     };
   }
 

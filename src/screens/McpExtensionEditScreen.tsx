@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, Check, Search, Trash2 } from 'lucide-react-native';
+import { Plus, Search, Trash2 } from 'lucide-react-native';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import { CustomMcpExtension, extensionService, McpRequestHeader, McpToolSummary } from '../services/ExtensionService';
 import { ActionRow, FormSection, FormTextField, HeaderActionButton, ScreenScaffold, SettingsSection } from '../components/ui';
 import { useTheme } from '../theme';
+import SettingsSwitch from '../components/SettingsSwitch';
 
 interface Props {
   onBack: () => void;
@@ -57,6 +58,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
   const urlValid = /^https?:\/\//i.test(url.trim());
   const canQuery = urlValid && !querying;
   const canSave = !!(name.trim() && urlValid) && !saving;
+  const enabledToolCount = tools.filter(tool => tool.enabled !== false).length;
 
   const handleQuery = useCallback(async () => {
     if (!canQuery) return;
@@ -112,6 +114,12 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
     setRequestHeaders(prev => prev.filter((_, headerIndex) => headerIndex !== index));
     setTools([]);
     setQueried(false);
+  }, []);
+
+  const handleToolEnabledChange = useCallback((toolName: string, nextEnabled: boolean) => {
+    setTools(prev => prev.map(tool => (
+      tool.name === toolName ? { ...tool, enabled: nextEnabled } : tool
+    )));
   }, []);
 
   const rightAction = <HeaderActionButton label="保存" onPress={handleSave} disabled={!canSave} />;
@@ -177,7 +185,7 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
             <ActionRow
               icon={<Search size={19} color={canQuery ? colors.accent : colors.textTertiary} />}
               label="查询 MCP 列表"
-              desc={tools.length > 0 ? `已查询到 ${tools.length} 个 tools，保存后会随扩展启用。` : '填写地址后查询服务暴露的 tools。'}
+              desc={tools.length > 0 ? `已查询到 ${tools.length} 个 tools，已启用 ${enabledToolCount} 个。` : '填写地址后查询服务暴露的 tools。'}
               busy={querying}
               disabled={!canQuery}
               showChevron
@@ -186,16 +194,17 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
             />
         </SettingsSection>
 
-        <SettingsSection title={`TOOLS 列表 · ${tools.length}`}>
+        <SettingsSection title={`TOOLS 列表 · 已启用 ${enabledToolCount}/${tools.length}`}>
             {querying ? (
               <StateRow text="正在查询 MCP tools..." />
             ) : tools.length === 0 ? (
-              <StateRow text={queried ? '没有查询到 tools。' : '查询后会在这里显示只读 tools 列表。'} />
+              <StateRow text={queried ? '没有查询到 tools。' : '查询后会在这里显示 tools 列表，可单独开启或关闭。'} />
             ) : tools.map((tool, index) => (
               <ToolRow
                 key={tool.name}
                 tool={tool}
                 last={index === tools.length - 1}
+                onEnabledChange={handleToolEnabledChange}
               />
             ))}
         </SettingsSection>
@@ -203,8 +212,17 @@ export default function McpExtensionEditScreen({ onBack, mcpId }: Props) {
   );
 }
 
-function ToolRow({ tool, last }: { tool: McpToolSummary; last: boolean }) {
+function ToolRow({
+  tool,
+  last,
+  onEnabledChange,
+}: {
+  tool: McpToolSummary;
+  last: boolean;
+  onEnabledChange: (toolName: string, enabled: boolean) => void;
+}) {
   const { colors } = useTheme();
+  const enabled = tool.enabled !== false;
   return (
     <View
       style={[
@@ -212,17 +230,18 @@ function ToolRow({ tool, last }: { tool: McpToolSummary; last: boolean }) {
         !last && { borderBottomColor: colors.borderLight, borderBottomWidth: StyleSheet.hairlineWidth },
       ]}
     >
-      <View style={[styles.checkCircle, { backgroundColor: colors.accentMuted }]}>
-        <Check size={13} color={colors.accent} />
-      </View>
       <View style={styles.toolText}>
-        <Text style={[styles.toolName, { color: colors.text }]} numberOfLines={1}>{tool.name}</Text>
+        <Text style={[styles.toolName, { color: enabled ? colors.text : colors.textTertiary }]} numberOfLines={1}>{tool.name}</Text>
         {!!tool.description && (
           <Text style={[styles.toolDesc, { color: colors.textTertiary }]} numberOfLines={2}>
             {tool.description}
           </Text>
         )}
       </View>
+      <SettingsSwitch
+        value={enabled}
+        onValueChange={(value) => onEnabledChange(tool.name, value)}
+      />
     </View>
   );
 }
@@ -277,13 +296,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: fontSizes.xs,
     lineHeight: 17,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   toolRow: {
     minHeight: 60,

@@ -193,7 +193,9 @@ function buildAgentToolNames(
     }
     const customMcp = customMcps.find(item => `custom:${item.id}` === mcpId || item.id === mcpId);
     if (!customMcp) continue;
-    customMcp.tools.forEach(tool => selected.add(customMcpToolName(customMcp, tool)));
+    customMcp.tools
+      .filter(tool => tool.enabled !== false)
+      .forEach(tool => selected.add(customMcpToolName(customMcp, tool)));
   }
   return Array.from(selected).filter(name => registry.get(name));
 }
@@ -431,7 +433,7 @@ export async function createRuntimeRegistry(options: RuntimeRegistryOptions = {}
 
   if (includeCustomMcp) {
     for (const mcp of enabledMcps) {
-      for (const tool of mcp.tools) {
+      for (const tool of mcp.tools.filter(item => item.enabled !== false)) {
         registry.register(new CustomMcpHttpTool(mcp, tool));
       }
     }

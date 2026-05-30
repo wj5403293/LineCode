@@ -7,7 +7,11 @@ import { useTheme } from '../../../theme';
 interface AgentHeaderProps {
   name: string;
   agentType: 'explore' | 'sub-coding';
-  status: 'running' | 'done' | 'error' | 'waiting_unlock';
+  status: 'waiting' | 'running' | 'done' | 'error' | 'waiting_unlock';
+  dependencies?: Array<{
+    id: string;
+    completed: boolean;
+  }>;
   expanded: boolean;
   toolCount?: number;
   fileChangeCount?: number;
@@ -15,6 +19,7 @@ interface AgentHeaderProps {
 }
 
 function getStatusLabel(status: AgentHeaderProps['status']): string {
+  if (status === 'waiting') return '等待中';
   if (status === 'running') return '运行中';
   if (status === 'done') return '完成';
   if (status === 'waiting_unlock') return '等待解锁';
@@ -25,6 +30,7 @@ export const AgentHeader = React.memo(function AgentHeader({
   name,
   agentType,
   status,
+  dependencies = [],
   expanded,
   toolCount = 0,
   fileChangeCount = 0,
@@ -46,7 +52,7 @@ export const AgentHeader = React.memo(function AgentHeader({
       onPress={onToggle}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={`${name}，${typeLabel} Agent，${statusLabel}`}
+      accessibilityLabel={`${name}，${typeLabel} Agent，${statusLabel}${dependencies.length ? `，依赖 ${dependencies.map(dep => dep.id).join('、')}` : ''}`}
     >
       <View style={styles.left}>
         <View style={[styles.iconBadge, { borderColor: typeColor }]}>
@@ -59,6 +65,28 @@ export const AgentHeader = React.memo(function AgentHeader({
               <TypeIcon size={10} color={typeColor} />
               <Text style={[styles.typeText, { color: typeColor }]}>{typeLabel}</Text>
             </View>
+            {dependencies.map(dep => (
+              <View
+                key={dep.id}
+                style={[
+                  styles.dependencyPill,
+                  {
+                    backgroundColor: dep.completed ? colors.accentMuted : colors.surfaceLight,
+                    borderColor: dep.completed ? colors.success : colors.codeBorder,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dependencyText,
+                    { color: dep.completed ? colors.success : colors.textTertiary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {dep.id}
+                </Text>
+              </View>
+            ))}
             {!!meta && (
               <Text style={[styles.subtitle, { color: colors.textTertiary }]} numberOfLines={1}>{meta}</Text>
             )}
@@ -68,6 +96,8 @@ export const AgentHeader = React.memo(function AgentHeader({
       <View style={styles.right}>
         {status === 'running' ? (
           <ActivityIndicator size="small" color={colors.accent} />
+        ) : status === 'waiting' ? (
+          <Clock size={14} color={colors.textTertiary} />
         ) : status === 'done' ? (
           <CheckCircle size={14} color={colors.success} />
         ) : status === 'waiting_unlock' ? (
@@ -120,6 +150,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.xs,
     marginTop: 3,
   },
@@ -133,6 +164,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   typeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  dependencyPill: {
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    maxWidth: 86,
+  },
+  dependencyText: {
     fontSize: 10,
     fontWeight: '700',
   },

@@ -1,8 +1,9 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Archive, Brain, ChevronRight, Cpu, Wrench } from 'lucide-react-native';
+import { Archive, Brain, ChevronRight, Cpu } from 'lucide-react-native';
 import ScreenHeader from '../components/ScreenHeader';
+import McpIcon from '../components/icons/McpIcon';
 import { fontSizes, radius, spacing } from '../constants/theme';
 import { ExtensionKind } from '../services/ExtensionService';
 import { useTheme } from '../theme';
@@ -17,7 +18,7 @@ type ExtensionCard = {
   title: string;
   desc: string;
   badge: string;
-  icon: typeof Brain;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
   disabled?: boolean;
 };
 
@@ -34,7 +35,7 @@ const EXTENSIONS: ExtensionCard[] = [
     title: 'MCP 扩展',
     desc: '添加 HTTP/S MCP 服务，查询 tools 列表，可单独启停。',
     badge: 'HTTP/S',
-    icon: Wrench,
+    icon: McpIcon,
   },
   {
     kind: 'skills',
@@ -46,10 +47,9 @@ const EXTENSIONS: ExtensionCard[] = [
   {
     kind: 'linecode',
     title: 'LineCode 扩展',
-    desc: 'LineCode 原生扩展接口预留中，当前版本暂不支持添加。',
-    badge: '暂不支持',
+    desc: '导入 .lip 原生扩展包，可注册页面、菜单和 Hook。',
+    badge: 'LIP',
     icon: Cpu,
-    disabled: true,
   },
 ];
 

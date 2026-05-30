@@ -32,6 +32,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
 function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [showLayoutShowcase, setShowLayoutShowcase] = useState(() => window.location.hash === '#layout-demos');
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [inspection, setInspection] = useState<ArtifactInspection | null>(null);
   const [artifactDir, setArtifactDir] = useState('dist/hot-update');
@@ -80,6 +81,12 @@ function App() {
     () => summary?.releases.filter(release => release.status === 'published' || release.status === 'archived').length || 0,
     [summary],
   );
+
+  useEffect(() => {
+    const syncLayoutHash = () => setShowLayoutShowcase(window.location.hash === '#layout-demos');
+    window.addEventListener('hashchange', syncLayoutHash);
+    return () => window.removeEventListener('hashchange', syncLayoutHash);
+  }, []);
 
   const runAction = useCallback(async (label: string, action: () => Promise<string | void>) => {
     setBusy(label);
@@ -167,8 +174,27 @@ function App() {
     });
   }, [refreshSummary, runAction]);
 
+  const openLayoutShowcase = useCallback(() => {
+    window.location.hash = 'layout-demos';
+    setShowLayoutShowcase(true);
+  }, []);
+
+  const closeLayoutShowcase = useCallback(() => {
+    if (window.location.hash === '#layout-demos') {
+      window.history.pushState('', document.title, window.location.pathname + window.location.search);
+    }
+    setShowLayoutShowcase(false);
+  }, []);
+
   if (!authChecked) {
+    if (showLayoutShowcase) {
+      return <LayoutShowcasePage onBack={closeLayoutShowcase} />;
+    }
     return <LoadingScreen />;
+  }
+
+  if (showLayoutShowcase) {
+    return <LayoutShowcasePage onBack={closeLayoutShowcase} />;
   }
 
   if (!authenticated) {
@@ -190,6 +216,7 @@ function App() {
         <Metric label="发布记录" value={String(summary?.releases.length || 0)} sub={`${publishedCount} 个链路版本`} />
 
         <nav className="rail-nav" aria-label="管理器导航">
+          <a href="#layout-demos" onClick={openLayoutShowcase}><ScanSearch size={17} />方案</a>
           <a href="#publish"><UploadCloud size={17} />发布</a>
           <a href="#cloud"><Cloud size={17} />蓝奏云</a>
           <a href="#records"><FileArchive size={17} />记录</a>
@@ -267,6 +294,248 @@ function App() {
         </div>
       </section>
     </main>
+  );
+}
+
+type LayoutDemoTone = 'command' | 'pipeline' | 'split' | 'timeline';
+
+interface LayoutDemo {
+  id: string;
+  title: string;
+  subtitle: string;
+  tone: LayoutDemoTone;
+  stats: [string, string][];
+  bullets: string[];
+}
+
+const LAYOUT_DEMOS: LayoutDemo[] = [
+  {
+    id: 'A',
+    title: '指挥台密集布局',
+    subtitle: '左侧导航固定，发布、云端、记录按操作频率排列，适合日常高频维护。',
+    tone: 'command',
+    stats: [['主操作', '左上'], ['记录', '全宽'], ['密度', '高']],
+    bullets: ['保留当前信息密度', '发布链路最短', '适合桌面大屏'],
+  },
+  {
+    id: 'B',
+    title: '流水线看板布局',
+    subtitle: '把扫描、上传、激活、归档做成流程列，适合对发布状态做巡检。',
+    tone: 'pipeline',
+    stats: [['主操作', '流程列'], ['记录', '卡片列'], ['密度', '中']],
+    bullets: ['步骤关系清楚', '异常状态更醒目', '适合团队交接'],
+  },
+  {
+    id: 'C',
+    title: '三栏控制台布局',
+    subtitle: '左侧版本队列，中间发布控制，右侧云端和系统状态，适合边查边操作。',
+    tone: 'split',
+    stats: [['主操作', '居中'], ['记录', '左栏'], ['密度', '高']],
+    bullets: ['上下文切换少', '状态常驻可见', '适合宽屏工作台'],
+  },
+  {
+    id: 'D',
+    title: '审计时间线布局',
+    subtitle: '以版本时间线为主轴，发布入口保持在顶部，适合追踪变更和回看记录。',
+    tone: 'timeline',
+    stats: [['主操作', '顶部'], ['记录', '时间线'], ['密度', '中高']],
+    bullets: ['历史可读性强', '版本链路突出', '适合发布复盘'],
+  },
+];
+
+function readLayoutChoice() {
+  try {
+    return localStorage.getItem('linecode-layout-demo-choice') || LAYOUT_DEMOS[0].id;
+  } catch {
+    return LAYOUT_DEMOS[0].id;
+  }
+}
+
+function LayoutShowcasePage({ onBack }: { onBack: () => void }) {
+  const [selectedId, setSelectedId] = useState(readLayoutChoice);
+  const selectedDemo = useMemo(() => LAYOUT_DEMOS.find(demo => demo.id === selectedId) || LAYOUT_DEMOS[0], [selectedId]);
+
+  const selectDemo = useCallback((id: string) => {
+    setSelectedId(id);
+    try {
+      localStorage.setItem('linecode-layout-demo-choice', id);
+    } catch {
+      // Local storage may be disabled in hardened browser contexts.
+    }
+  }, []);
+
+  return (
+    <main className="layout-demo-page">
+      <header className="layout-demo-topbar">
+        <div className="brand-block">
+          <span className="brand-mark">LC</span>
+          <div>
+            <p className="eyebrow">Layout Demos</p>
+            <h1>热更新管理台排版候选</h1>
+          </div>
+        </div>
+        <div className="layout-demo-choice">
+          <span>当前选择</span>
+          <strong>{selectedDemo.id} · {selectedDemo.title}</strong>
+        </div>
+        <button className="secondary-button" type="button" onClick={onBack}>
+          <FileArchive size={17} />
+          返回管理台
+        </button>
+      </header>
+
+      <section className="layout-demo-intro" aria-label="排版目标">
+        <div>
+          <p className="eyebrow">LineCode Hot Update Manager</p>
+          <h2>先定信息架构，再重排真实页面</h2>
+        </div>
+        <p>
+          下面四个方案使用同一组发布、云端、版本记录信息，只改变工作流的位置、密度和阅读顺序。
+        </p>
+      </section>
+
+      <section className="layout-demo-grid" aria-label="排版候选">
+        {LAYOUT_DEMOS.map(demo => {
+          const selected = selectedId === demo.id;
+          return (
+            <article className={`layout-demo-card ${demo.tone} ${selected ? 'is-selected' : ''}`} key={demo.id}>
+              <div className="layout-demo-meta">
+                <span className="demo-index">方案 {demo.id}</span>
+                <h2>{demo.title}</h2>
+                <p>{demo.subtitle}</p>
+                <div className="demo-stat-row">
+                  {demo.stats.map(([label, value]) => (
+                    <span key={label}>
+                      {label}
+                      <strong>{value}</strong>
+                    </span>
+                  ))}
+                </div>
+                <ul className="demo-bullets">
+                  {demo.bullets.map(item => <li key={item}>{item}</li>)}
+                </ul>
+                <button
+                  className={selected ? 'primary-button' : 'secondary-button'}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => selectDemo(demo.id)}
+                >
+                  {selected ? <CheckCircle2 size={17} /> : <Play size={17} />}
+                  {selected ? '已选择' : '选择方案'}
+                </button>
+              </div>
+              <LayoutPreview demo={demo} />
+            </article>
+          );
+        })}
+      </section>
+    </main>
+  );
+}
+
+function LayoutPreview({ demo }: { demo: LayoutDemo }) {
+  if (demo.tone === 'pipeline') {
+    return (
+      <div className="demo-preview pipeline-preview" aria-hidden="true">
+        <div className="preview-toolbar">
+          <span />
+          <strong>base.zip</strong>
+          <span />
+        </div>
+        <div className="pipeline-lanes">
+          {['扫描', '上传', '激活'].map((label, index) => (
+            <div className="pipeline-lane" key={label}>
+              <span>{label}</span>
+              <div className="pipeline-ticket" />
+              <div className={index === 1 ? 'pipeline-ticket hot' : 'pipeline-ticket'} />
+            </div>
+          ))}
+        </div>
+        <div className="preview-record-strip">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
+  }
+
+  if (demo.tone === 'split') {
+    return (
+      <div className="demo-preview split-preview" aria-hidden="true">
+        <div className="split-queue">
+          <strong>版本</strong>
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="split-console">
+          <div className="console-head" />
+          <div className="console-path" />
+          <div className="console-actions">
+            <span />
+            <span />
+          </div>
+          <div className="console-table">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <div className="split-status">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
+  }
+
+  if (demo.tone === 'timeline') {
+    return (
+      <div className="demo-preview timeline-preview" aria-hidden="true">
+        <div className="timeline-actionbar">
+          <span />
+          <span />
+          <strong>发布</strong>
+        </div>
+        <div className="timeline-rail">
+          {[0, 1, 2].map(item => (
+            <div className="timeline-item" key={item}>
+              <span />
+              <div>
+                <strong />
+                <p />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="demo-preview command-preview" aria-hidden="true">
+      <div className="command-rail">
+        <strong>LC</strong>
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="command-workspace">
+        <div className="preview-toolbar">
+          <span />
+          <strong>发布面板</strong>
+          <span />
+        </div>
+        <div className="command-grid">
+          <div className="command-panel large" />
+          <div className="command-panel" />
+          <div className="command-panel wide" />
+        </div>
+      </div>
+    </div>
   );
 }
 

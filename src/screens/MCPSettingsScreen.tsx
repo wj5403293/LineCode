@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Copy, Download, ExternalLink, Search, ShieldCheck, Terminal, Wrench, Server } from 'lucide-react-native';
+import { Copy, Download, ExternalLink, Search, ShieldCheck, Terminal, Server } from 'lucide-react-native';
 import { MCPConfig, WebSearchConfig, WebSearchProvider } from '../types';
 import { mcpService } from '../services/MCPService';
 import { MCPExecutionMode } from '../services/settings';
@@ -32,13 +32,14 @@ import { useTheme } from '../theme';
 import { FormTextField } from '../components/ui';
 import ScreenHeader from '../components/ScreenHeader';
 import SettingsSwitch from '../components/SettingsSwitch';
+import McpIcon from '../components/icons/McpIcon';
 
 interface Props {
   onBack: () => void;
 }
 
-const MCP_ICONS: Record<string, typeof Wrench> = {
-  file_ops: Wrench,
+const MCP_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  file_ops: McpIcon,
   http_server: Server,
   shell: Terminal,
   web_search: Search,
@@ -452,7 +453,7 @@ export default function MCPSettingsScreen({ onBack }: Props) {
         {configs.map(config => {
           if (executionMode === 'local' && config.id === 'shell') return null;
           if (executionMode === 'ssh' && config.id !== 'shell' && config.id !== 'web_search') return null;
-          const Icon = MCP_ICONS[config.id] || Wrench;
+          const Icon = MCP_ICONS[config.id] || McpIcon;
           return (
             <View key={config.id} style={[styles.card, { backgroundColor: colors.surfaceElevated }]}>
               <View style={styles.cardHeader}>

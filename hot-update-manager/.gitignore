@@ -3,4 +3,4 @@ dist
 .env
 data/store.json
 data/artifacts
-
+.codex/

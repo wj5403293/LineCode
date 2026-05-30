@@ -23,14 +23,16 @@ import ChatMessageList from '../components/ChatMessageList';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { Message } from '../types';
 import { addAndroidKeyboardFrameListener } from '../utils/androidKeyboardFrame';
+import { lineCodePluginService, LineCodePluginContributionItem } from '../services/LineCodePluginService';
 
 interface Props {
   onGoSettings: () => void;
   onOpenTutorial: (variant: TutorialVariant) => void;
   onViewShellCommand: (command: string) => void;
+  onOpenPluginPage: (pluginId: string, pageId: string, title?: string) => void;
 }
 
-export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCommand }: Props) {
+export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCommand, onOpenPluginPage }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const {
@@ -99,9 +101,20 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
   const [recalledDraft, setRecalledDraft] = useState<string | undefined>();
   const [keyboardFrame, setKeyboardFrame] = useState<NativeKeyboardFrame | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [pluginMenuItems, setPluginMenuItems] = useState<LineCodePluginContributionItem[]>([]);
+  const [drawerPluginItems, setDrawerPluginItems] = useState<LineCodePluginContributionItem[]>([]);
 
   const openSidebar = useCallback(() => setSidebarVisible(true), []);
   const closeSidebar = useCallback(() => setSidebarVisible(false), []);
+
+  useEffect(() => {
+    lineCodePluginService.reloadActivePlugins()
+      .then(() => {
+        setPluginMenuItems(lineCodePluginService.getMenuItems('chat.more'));
+        setDrawerPluginItems(lineCodePluginService.getMenuItems('app.drawer'));
+      })
+      .catch(err => console.warn('[LineCode] load plugins failed:', err));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -173,7 +186,19 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
     handleRecallUserMessage(message.id);
   }, [handleRecallUserMessage]);
 
+  const handleOpenPluginItem = useCallback((item: LineCodePluginContributionItem) => {
+    if (!item.page) return;
+    closeDialog();
+    closeSidebar();
+    onOpenPluginPage(item.pluginId, item.page, item.title);
+  }, [closeDialog, closeSidebar, onOpenPluginPage]);
+
   const handleMoreSelect = useCallback((id: string) => {
+    const pluginItem = pluginMenuItems.find(item => `plugin:${item.pluginId}:${item.itemId}` === id);
+    if (pluginItem) {
+      handleOpenPluginItem(pluginItem);
+      return;
+    }
     closeDialog();
     if (id === 'tutorial') onOpenTutorial('beginner');
     if (id === 'settings') onGoSettings();
@@ -188,7 +213,7 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
         ],
       );
     }
-  }, [onOpenTutorial, onGoSettings, closeDialog, clearMessages, handleCompactContext]);
+  }, [pluginMenuItems, handleOpenPluginItem, onOpenTutorial, onGoSettings, closeDialog, clearMessages, handleCompactContext]);
 
   const handleProjectDialogSelect = useCallback((id: string) => {
     if (id === '__open_project') {
@@ -265,7 +290,14 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
             onClose={closeDialog}
           />
           <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
-          <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
+          <Dialog visible={dialog === 'more'} title="更多" options={[
+            ...MORE_OPTIONS,
+            ...pluginMenuItems.map(item => ({
+              id: `plugin:${item.pluginId}:${item.itemId}`,
+              label: item.title,
+              desc: 'LineCode 扩展',
+            })),
+          ]} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
         </View>
         <Sidebar
           visible={sidebarVisible}
@@ -277,6 +309,8 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
           projectLabel={selectedProject.label}
           onOpenProject={handleOpenProjectAction}
           onCreateProject={handleCreateProjectAction}
+          pluginItems={drawerPluginItems}
+          onPluginItemPress={handleOpenPluginItem}
         />
         <CreateProjectModal
           visible={createProjectVisible}
@@ -354,7 +388,14 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
           onClose={closeDialog}
         />
         <Dialog visible={dialog === 'permission'} title="权限设置" options={PERMISSIONS} selectedId={permissionMode} onSelect={handlePermissionSelect} onClose={closeDialog} />
-        <Dialog visible={dialog === 'more'} title="更多" options={MORE_OPTIONS} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
+        <Dialog visible={dialog === 'more'} title="更多" options={[
+          ...MORE_OPTIONS,
+          ...pluginMenuItems.map(item => ({
+            id: `plugin:${item.pluginId}:${item.itemId}`,
+            label: item.title,
+            desc: 'LineCode 扩展',
+          })),
+        ]} selectedId="" onSelect={handleMoreSelect} onClose={closeDialog} />
 
         <Sidebar
           visible={sidebarVisible}
@@ -366,6 +407,8 @@ export default function ChatScreen({ onGoSettings, onOpenTutorial, onViewShellCo
           projectLabel={selectedProject.label}
           onOpenProject={handleOpenProjectAction}
           onCreateProject={handleCreateProjectAction}
+          pluginItems={drawerPluginItems}
+          onPluginItemPress={handleOpenPluginItem}
         />
 
         <BatchDeleteConfirm

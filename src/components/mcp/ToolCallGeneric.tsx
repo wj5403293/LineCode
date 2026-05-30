@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AlertCircle, Check, ChevronDown, ChevronRight, Wrench } from 'lucide-react-native';
+import { AlertCircle, Check, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../../constants/theme';
 import { useTheme } from '../../theme';
 import ContainedScrollView from '../ContainedScrollView';
+import McpIcon from '../icons/McpIcon';
 
 const COLLAPSED_LINE_COUNT = 4;
 
@@ -38,7 +39,7 @@ export default React.memo(function ToolCallGeneric({
     <View style={[styles.container, { backgroundColor: colors.codeBg, borderColor: isError ? colors.dangerMuted2 : colors.codeBorder }]}>
       <View style={styles.header}>
         <View style={[styles.iconFrame, { borderColor: colors.codeBorder }]}>
-          <Wrench size={13} color={statusColor} />
+          <McpIcon size={13} color={statusColor} />
         </View>
         <View style={styles.titleBlock}>
           <Text style={[styles.label, { color: colors.textTertiary }]}>MCP 调用</Text>

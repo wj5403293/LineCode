@@ -97,6 +97,11 @@ export class AnthropicStreamProcessor extends StreamProcessor {
 
     console.log('[LineCode] HTTP response status:', res.status, res.statusText);
 
+    const contentType = res.headers?.get?.('content-type') || '';
+    if (contentType && !this.isEventStreamContentType(contentType)) {
+      throw this.createNonSseResponseError('Anthropic', contentType, await res.text());
+    }
+
     return this.readStream(res, callbacks, abortSignal);
   }
 

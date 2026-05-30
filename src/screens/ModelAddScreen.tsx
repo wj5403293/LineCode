@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView,
-  ActivityIndicator, Modal, FlatList, Alert, Platform, Switch,
+  ActivityIndicator, Modal, FlatList, Alert, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, Check, ChevronDown, FileUp, Cpu } from 'lucide-react-native';
@@ -139,7 +139,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
   const [localContextTokens, setLocalContextTokens] = useState('4096');
   const [importingLocalModel, setImportingLocalModel] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [learningMode, setLearningMode] = useState(false);
 
   useEffect(() => {
     if (!editingModelId) return;
@@ -162,7 +161,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
       setLocalFileSize(target.localModel?.fileSize);
       setLocalAcceleration(target.localModel?.acceleration || 'auto');
       setLocalContextTokens(String(target.localModel?.nCtx || 4096));
-      setLearningMode(target.learningMode === true);
     });
     return () => {
       cancelled = true;
@@ -303,7 +301,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
       modelId: isLocalProvider ? localModelIdFrom(name.trim(), String(localCtx)) : modelId.trim(),
       apiKey: isLocalProvider ? '' : apiKey.trim(),
       baseUrl: isLocalProvider ? undefined : baseUrl.trim() || undefined,
-      learningMode,
       localModel: isLocalProvider ? {
         fileUri: localFileUri,
         fileName: localFileName,
@@ -347,7 +344,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     localPath,
     localAcceleration,
     localContextTokens,
-    learningMode,
   ]);
 
   const rightAction = (
@@ -587,15 +583,9 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
 
         <View style={[styles.learningCard, { backgroundColor: colors.surfaceLight, borderColor: colors.borderLight }]}>
           <View style={styles.learningTextWrap}>
-            <Text style={[styles.learningTitle, { color: colors.text }]}>学习模式</Text>
-            <Text style={[styles.learningDesc, { color: colors.textTertiary }]}>越用越强。开启后会启用自动 Skills、长期记忆和聊天记录检索。</Text>
+            <Text style={[styles.learningTitle, { color: colors.text }]}>学习模式已移至 AI 行为</Text>
+            <Text style={[styles.learningDesc, { color: colors.textTertiary }]}>请在设置 → AI 行为中统一开启或关闭学习模式，避免每个模型重复配置。</Text>
           </View>
-          <Switch
-            value={learningMode}
-            onValueChange={setLearningMode}
-            trackColor={{ false: colors.surface, true: colors.accentDim }}
-            thumbColor={learningMode ? colors.accent : colors.textTertiary}
-          />
         </View>
       </ScrollView>
 

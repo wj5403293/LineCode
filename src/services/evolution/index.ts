@@ -5,3 +5,5 @@ export { EvolutionService, evolutionService } from './EvolutionService';
 export { SkillDiscoveryService, skillDiscoveryService } from './SkillDiscoveryService';
 export { extractKeywords, ragScore, scoreText } from './MemoryPolicy';
 export { ragRank } from './RagRetriever';
+export type { MemoryOverview } from './MemoryOverviewService';
+export { MemoryOverviewService, memoryOverviewService } from './MemoryOverviewService';

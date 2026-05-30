@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Zap, Smile, Brain, Expand, ScrollText, Sparkles } from 'lucide-react-native';
-import {
-  settingsService, ToneMode, ReasoningEffort, REASONING_EFFORT_DESC,
-} from '../services/settings';
+import { settingsService, ToneMode, ReasoningEffort, REASONING_EFFORT_DESC } from '../services/settings';
+import { setLearningModeEnabled } from '../services/LearningModeService';
 import { useTheme } from '../theme';
 import OptionRow from '../components/OptionRow';
 import SwitchRow from '../components/SwitchRow';
@@ -20,6 +19,7 @@ export default function LLMSettingsScreen({ onBack }: Props) {
   const [thinkingAutoExpandEnabled, setThinkingAutoExpandEnabled] = useState(false);
   const [reasoningEffort, setReasoningEffortState] = useState<ReasoningEffort>('medium');
   const [preserveReasoningEnabled, setPreserveReasoningEnabled] = useState(false);
+  const [learningModeEnabled, setLearningModeEnabledState] = useState(false);
   const { colors } = useTheme();
 
   useEffect(() => {
@@ -27,12 +27,14 @@ export default function LLMSettingsScreen({ onBack }: Props) {
       settingsService.getToneMode(),
       settingsService.getThinkingScroll(), settingsService.getThinkingAutoExpand(),
       settingsService.getReasoningEffort(), settingsService.getPreserveReasoning(),
-    ]).then(([t, s, a, r, p]) => {
+      settingsService.getLearningModeEnabled(),
+    ]).then(([t, s, a, r, p, l]) => {
       setCurrentToneMode(t);
       setThinkingScrollEnabled(s);
       setThinkingAutoExpandEnabled(a);
       setReasoningEffortState(r);
       setPreserveReasoningEnabled(p);
+      setLearningModeEnabledState(l);
     });
   }, []);
 
@@ -61,6 +63,11 @@ export default function LLMSettingsScreen({ onBack }: Props) {
     setPreserveReasoningEnabled(value);
   }, []);
 
+  const handleLearningMode = useCallback(async (value: boolean) => {
+    await setLearningModeEnabled(value);
+    setLearningModeEnabledState(value);
+  }, []);
+
   return (
     <ScreenScaffold title="AI 行为" onBack={onBack}>
       <SettingsSection title="思考深度">
@@ -74,6 +81,16 @@ export default function LLMSettingsScreen({ onBack }: Props) {
             onPress={() => handleReasoningEffort(effort)}
           />
         ))}
+      </SettingsSection>
+
+      <SettingsSection title="学习与记忆">
+        <SwitchRow
+          icon={<Brain size={20} color={colors.textSecondary} />}
+          label="学习模式"
+          desc="启用自动 Skills、长期记忆、项目记忆、短期记忆和聊天记录检索"
+          value={learningModeEnabled}
+          onValueChange={handleLearningMode}
+        />
       </SettingsSection>
 
       <SettingsSection title="交流语气">

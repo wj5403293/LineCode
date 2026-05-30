@@ -41,6 +41,7 @@ export interface CustomMcpExtension {
 
 export interface McpToolSummary {
   name: string;
+  enabled?: boolean;
   description?: string;
   inputSchema?: Record<string, unknown>;
 }
@@ -64,6 +65,14 @@ export interface InstalledSkillExtension {
   installedAt: number;
 }
 
+export interface InstalledLineCodeExtension {
+  id: string;
+  name: string;
+  fileName: string;
+  path: string;
+  installedAt: number;
+}
+
 export interface PickedDocument {
   uri: string;
   name?: string | null;
@@ -73,6 +82,7 @@ const KEYS = {
   AGENTS: '@linecode_extension_agents',
   MCPS: '@linecode_extension_mcps',
   SKILLS: '@linecode_extension_skills',
+  LINECODE: '@linecode_extension_linecode',
 } as const;
 
 const SKILL_TMP_DIR = `${RNFS.DocumentDirectoryPath}/.linecode/tmp/skills`;
@@ -93,6 +103,15 @@ function sanitizeFileName(name: string): string {
 function ensureZipFileName(name: string): string {
   const clean = sanitizeFileName(name);
   return clean.toLowerCase().endsWith('.zip') ? clean : `${clean}.zip`;
+}
+
+function ensureLipFileName(name: string): string {
+  const clean = sanitizeFileName(name);
+  return clean.toLowerCase().endsWith('.lip') ? clean : `${clean}.lip`;
+}
+
+function removeLipExtension(fileName: string): string {
+  return fileName.replace(/\.lip$/i, '');
 }
 
 function removeZipExtension(fileName: string): string {
@@ -123,9 +142,9 @@ function extractJsonFromEventStream(text: string): string {
 function normalizeToolList(value: unknown): McpToolSummary[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map(item => {
+    .map((item): McpToolSummary | null => {
       if (typeof item === 'string') {
-        return { name: item };
+        return { name: item, enabled: true };
       }
       if (!item || typeof item !== 'object') return null;
       const record = item as Record<string, unknown>;
@@ -133,6 +152,7 @@ function normalizeToolList(value: unknown): McpToolSummary[] {
       if (!name) return null;
       return {
         name,
+        enabled: record.enabled !== false,
         description: typeof record.description === 'string' ? record.description : undefined,
         inputSchema: normalizeInputSchema(record.inputSchema || record.input_schema || record.schema),
       };
@@ -224,6 +244,18 @@ function normalizeSkill(value: Partial<InstalledSkillExtension>): InstalledSkill
     fileName: String(value.fileName),
     location,
     locationLabel: String(value.locationLabel || location),
+    path: String(value.path),
+    installedAt: Number(value.installedAt || Date.now()),
+  };
+}
+
+function normalizeLineCodeExtension(value: Partial<InstalledLineCodeExtension>): InstalledLineCodeExtension | null {
+  if (!value || typeof value !== 'object') return null;
+  if (!value.id || !value.name || !value.fileName || !value.path) return null;
+  return {
+    id: String(value.id),
+    name: String(value.name),
+    fileName: String(value.fileName),
     path: String(value.path),
     installedAt: Number(value.installedAt || Date.now()),
   };
@@ -364,6 +396,14 @@ class ExtensionService {
       : [];
   }
 
+  async getLineCodeExtensions(): Promise<InstalledLineCodeExtension[]> {
+    const json = await AsyncStorage.getItem(KEYS.LINECODE);
+    const parsed = json ? JSON.parse(json) : [];
+    return Array.isArray(parsed)
+      ? parsed.map(normalizeLineCodeExtension).filter((item): item is InstalledLineCodeExtension => !!item)
+      : [];
+  }
+
   async buildExtensionPrompt(): Promise<string> {
     const [agents, mcps, skills] = await Promise.all([
       this.getAgentExtensions(),
@@ -389,7 +429,10 @@ class ExtensionService {
     if (enabledMcps.length > 0) {
       sections.push([
         '### 自定义 HTTP MCP',
-        ...enabledMcps.map(mcp => `- ${mcp.name}: ${mcp.url} (${mcp.tools.map(tool => tool.name).join(', ') || '未查询 tools'})`),
+        ...enabledMcps.map(mcp => {
+          const enabledTools = mcp.tools.filter(tool => tool.enabled !== false);
+          return `- ${mcp.name}: ${mcp.url} (${enabledTools.map(tool => tool.name).join(', ') || '未启用 tools'})`;
+        }),
       ].join('\n'));
     }
 
@@ -490,6 +533,47 @@ class ExtensionService {
     if (target?.location !== 'ssh' && target?.path && await RNFS.exists(target.path)) {
       await RNFS.unlink(target.path).catch(() => {});
     }
+  }
+
+  async deleteLineCodeExtension(id: string): Promise<void> {
+    const extensions = await this.getLineCodeExtensions();
+    const target = extensions.find(item => item.id === id);
+    try {
+      const { lineCodePluginService } = require('./LineCodePluginService');
+      await lineCodePluginService.deactivateExtension(id);
+    } catch {
+      // Plugin runtime may not be loaded yet; metadata/filesystem deletion should still proceed.
+    }
+    await AsyncStorage.setItem(KEYS.LINECODE, JSON.stringify(extensions.filter(item => item.id !== id)));
+    if (target?.path && await RNFS.exists(target.path)) {
+      await RNFS.unlink(target.path).catch(() => {});
+    }
+  }
+
+  async installLineCodeLip(document: PickedDocument): Promise<InstalledLineCodeExtension> {
+    const fileName = ensureLipFileName(document.name || `linecode_${Date.now()}.lip`);
+    const timestamp = Date.now();
+    const targetRoot = `${projectService.getLinecodeRoot()}/extensions`;
+    await RNFS.mkdir(targetRoot);
+    const targetPath = `${targetRoot}/${timestamp}_${fileName}`;
+    await copyFile(document.uri, `file://${targetPath}`, { replaceIfDestinationExists: true });
+
+    const extensions = await this.getLineCodeExtensions();
+    const next: InstalledLineCodeExtension = {
+      id: nowId('linecode'),
+      name: removeLipExtension(fileName),
+      fileName,
+      path: targetPath,
+      installedAt: timestamp,
+    };
+    await AsyncStorage.setItem(KEYS.LINECODE, JSON.stringify([next, ...extensions]));
+    try {
+      const { lineCodePluginService } = require('./LineCodePluginService');
+      await lineCodePluginService.activateExtension(next.id);
+    } catch {
+      // Import is still recorded; plugin activation can retry on next chat screen load.
+    }
+    return next;
   }
 
   async installSkillZip(document: PickedDocument, location: SkillInstallLocation): Promise<InstalledSkillExtension> {

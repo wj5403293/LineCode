@@ -87,4 +87,48 @@ describe('ExtensionService delete extensions', () => {
     expect(skills.map(skill => skill.id)).toEqual(['skill_keep']);
     expect(RNFS.unlink).toHaveBeenCalledWith('/tmp/lineai-test/.linecode/skills/delete');
   });
+
+  it('imports LineCode .lip extensions into app extension storage', async () => {
+    const copyFile = require('react-native-saf-x').copyFile;
+
+    const installed = await extensionService.installLineCodeLip({
+      uri: 'content://picked/plugin.lip',
+      name: 'plugin.lip',
+    });
+
+    expect(installed.fileName).toBe('plugin.lip');
+    expect(installed.name).toBe('plugin');
+    expect(installed.path).toContain('/tmp/lineai-test/.linecode/extensions/');
+    expect(copyFile).toHaveBeenCalledWith(
+      'content://picked/plugin.lip',
+      expect.stringMatching(/^file:\/\/\/tmp\/lineai-test\/\.linecode\/extensions\/\d+_plugin\.lip$/),
+      { replaceIfDestinationExists: true },
+    );
+    expect((await extensionService.getLineCodeExtensions()).map(item => item.id)).toEqual([installed.id]);
+  });
+
+  it('deletes LineCode extensions from storage and local filesystem', async () => {
+    await AsyncStorage.setItem('@linecode_extension_linecode', JSON.stringify([
+      {
+        id: 'linecode_keep',
+        name: 'keep',
+        fileName: 'keep.lip',
+        path: '/tmp/lineai-test/.linecode/extensions/keep.lip',
+        installedAt: 1,
+      },
+      {
+        id: 'linecode_delete',
+        name: 'delete',
+        fileName: 'delete.lip',
+        path: '/tmp/lineai-test/.linecode/extensions/delete.lip',
+        installedAt: 2,
+      },
+    ]));
+
+    await extensionService.deleteLineCodeExtension('linecode_delete');
+
+    const extensions = await extensionService.getLineCodeExtensions();
+    expect(extensions.map(item => item.id)).toEqual(['linecode_keep']);
+    expect(RNFS.unlink).toHaveBeenCalledWith('/tmp/lineai-test/.linecode/extensions/delete.lip');
+  });
 });

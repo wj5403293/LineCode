@@ -10,6 +10,7 @@ import FileTree from './FileTree';
 import { ConversationList } from './sidebar/ConversationList';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ExportModal } from './sidebar/ExportModal';
+import { LineCodePluginContributionItem } from '../services/LineCodePluginService';
 import { workspaceFs } from '../services/WorkspaceFileSystem';
 
 const SIDEBAR_WIDTH = 300;
@@ -26,9 +27,23 @@ interface Props {
   projectLabel: string;
   onOpenProject: () => void;
   onCreateProject: () => void;
+  pluginItems?: LineCodePluginContributionItem[];
+  onPluginItemPress?: (item: LineCodePluginContributionItem) => void;
 }
 
-function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, projectLabel, onOpenProject, onCreateProject }: Props) {
+function SidebarInner({
+  visible,
+  currentId,
+  onClose,
+  onSelect,
+  onNew,
+  homePath,
+  projectLabel,
+  onOpenProject,
+  onCreateProject,
+  pluginItems = [],
+  onPluginItemPress,
+}: Props) {
   const { colors } = useTheme();
   const displayHomePath = workspaceFs.toDisplayPath(homePath);
   const [conversations, setConversations] = useState<ConversationMeta[]>([]);
@@ -149,6 +164,21 @@ function SidebarInner({ visible, currentId, onClose, onSelect, onNew, homePath, 
 
         <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
+        {pluginItems.length > 0 && (
+          <View style={[styles.pluginSection, { borderColor: colors.borderLight }]}> 
+            {pluginItems.map(item => (
+              <TouchableOpacity
+                key={`${item.pluginId}:${item.itemId}`}
+                style={styles.pluginItem}
+                activeOpacity={0.75}
+                onPress={() => onPluginItemPress?.(item)}
+              >
+                <Text style={[styles.pluginItemText, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {activeTab === 'files' && (
           <View style={[styles.projectStrip, { borderColor: colors.borderLight, backgroundColor: colors.surfaceLight }]}>
             <Text style={[styles.projectStripLabel, { color: colors.text }]} numberOfLines={1}>
@@ -236,6 +266,20 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  pluginSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  pluginItem: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  pluginItemText: {
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
   },
   projectStrip: {
     borderWidth: StyleSheet.hairlineWidth,

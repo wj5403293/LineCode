@@ -13,11 +13,13 @@ export interface AgentProgressItem {
   id: string;
   name: string;
   type: 'explore' | 'sub-coding';
-  status: 'running' | 'done' | 'error' | 'waiting_unlock';
+  status: 'waiting' | 'running' | 'done' | 'error' | 'waiting_unlock';
+  dependencies?: string[];
   output?: string;
   thinking?: string;
   toolCalls?: AgentToolCall[];
   toolCallCount?: number;
+  order?: number;
   startTime?: number;
   endTime?: number;
   waitingForUnlock?: {

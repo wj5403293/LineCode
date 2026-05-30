@@ -7,18 +7,19 @@ import {
   Monitor,
   Cpu,
   Brain,
-  Wrench,
   Package,
   Palette,
   Archive,
   Database,
   BatteryCharging,
   FlaskConical,
+  BookOpen,
 } from 'lucide-react-native';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
 import SectionHeader from '../components/SectionHeader';
+import McpIcon from '../components/icons/McpIcon';
 
 interface Props {
   onBack: () => void;
@@ -31,6 +32,7 @@ interface Props {
   onTheme: () => void;
   onData: () => void;
   onStorage: () => void;
+  onMemory: () => void;
   onKeepAlive: () => void;
   onExperimental: () => void;
 }
@@ -43,6 +45,7 @@ type SettingsItemId =
   | 'theme'
   | 'output'
   | 'storage'
+  | 'memory'
   | 'keepAlive'
   | 'experimental'
   | 'data'
@@ -52,7 +55,7 @@ type SettingsItem = {
   id: SettingsItemId;
   label: string;
   desc: string;
-  icon: typeof Box;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
 };
 
 type SettingsSection = {
@@ -71,7 +74,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   {
     title: '工具与执行',
     items: [
-      { id: 'mcp', label: '工具与执行', desc: 'MCP 工具开关、SSH 执行和网页搜索', icon: Wrench },
+      { id: 'mcp', label: '工具与执行', desc: 'MCP 工具开关、SSH 执行和网页搜索', icon: McpIcon },
       { id: 'extensions', label: '扩展', desc: 'Agent、MCP、Skills 和 LineCode 扩展', icon: Package },
     ],
   },
@@ -87,6 +90,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
     title: '数据与系统',
     items: [
       { id: 'storage', label: '存储管理', desc: '聊天、配置、diff 和工作区占用', icon: Database },
+      { id: 'memory', label: '记忆', desc: '查看和添加长期记忆、项目记忆、短期记忆', icon: BookOpen },
       { id: 'data', label: '数据与更新', desc: '热更新、完整导出和 .linecode 导入', icon: Archive },
       { id: 'keepAlive', label: '后台保活', desc: 'Wake Lock、前台服务和电池白名单', icon: BatteryCharging },
     ],
@@ -110,6 +114,7 @@ export default function SettingsScreen({
   onTheme,
   onData,
   onStorage,
+  onMemory,
   onKeepAlive,
   onExperimental,
 }: Props) {
@@ -141,6 +146,9 @@ export default function SettingsScreen({
         break;
       case 'storage':
         onStorage();
+        break;
+      case 'memory':
+        onMemory();
         break;
       case 'keepAlive':
         onKeepAlive();

@@ -12,6 +12,7 @@ import { projectService } from '../ProjectService';
 import { workspaceFs } from '../WorkspaceFileSystem';
 import { extensionService } from '../ExtensionService';
 import { LOCAL_MODEL_ENABLED } from '../RuntimeConfig';
+import { normalizeToolProtocolMessages } from './toolProtocol';
 
 export { SYSTEM_PROMPT };
 export type { ChatMessage };
@@ -93,7 +94,7 @@ class AIService {
       });
     }
 
-    return messages;
+    return normalizeToolProtocolMessages(messages);
   }
 
   private async buildSshProjectPrompt(homePath: string): Promise<string> {
@@ -181,14 +182,15 @@ class AIService {
       tools = registry.toJSONSchema([...enabledTools, ...extensionTools]);
     }
 
-    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', messages.length, 'tools:', tools.length, 'reasoningEffort:', reasoningEffort, 'preserveReasoning:', preserveReasoning);
+    const protocolMessages = normalizeToolProtocolMessages(messages);
+    console.log('[LineCode] Sending to', model.provider, model.modelId, 'messages:', protocolMessages.length, 'tools:', tools.length, 'reasoningEffort:', reasoningEffort, 'preserveReasoning:', preserveReasoning);
     try {
       if (model.provider === 'local' && !LOCAL_MODEL_ENABLED) {
         throw new Error('当前安装包未编译本地模型支持，请安装本地模型版。');
       }
       const processor = this.processors[model.provider];
       if (!processor) throw new Error(`Unsupported provider: ${model.provider}`);
-      return await processor.process(model, messages, tools, callbacks, { reasoningEffort, preserveReasoning, abortSignal });
+      return await processor.process(model, protocolMessages, tools, callbacks, { reasoningEffort, preserveReasoning, abortSignal });
     } catch (err) {
       console.error('[LineCode] API error:', err);
       throw err;
@@ -196,7 +198,7 @@ class AIService {
   }
 
   convertToChatMessages(messages: { role: MessageRole; content: string; attachments?: InputAttachment[]; toolCalls?: ToolCall[]; toolCallId?: string; toolName?: string; isError?: boolean; reasoningContent?: string; reasoningDetails?: ReasoningDetail[] }[]): ChatMessage[] {
-    return messages.map(m => {
+    return normalizeToolProtocolMessages(messages.map(m => {
       const legacy = m.role === 'user' ? this.splitLegacyAttachmentBlock(m.content) : null;
       return {
         role: m.role,
@@ -209,7 +211,7 @@ class AIService {
         reasoningContent: m.reasoningContent,
         reasoningDetails: m.reasoningDetails,
       };
-    });
+    }));
   }
 }
 

@@ -18,7 +18,7 @@ function markAgentToolCallsTerminated(toolCalls?: AgentToolCall[]): AgentToolCal
 function markAgentItemsTerminated(items?: AgentProgressItem[]): AgentProgressItem[] | undefined {
   if (!items) return items;
   return items.map(item => {
-    if (item.status !== 'running' && item.status !== 'waiting_unlock') return item;
+    if (item.status !== 'waiting' && item.status !== 'running' && item.status !== 'waiting_unlock') return item;
     return {
       ...item,
       status: 'error' as const,
@@ -51,7 +51,7 @@ function markBlocksTerminated(blocks?: ContentBlock[]): {
     if (block.type !== 'tool_use') return block;
 
     const hasRunningAgentItems = block.agentItems?.some(item =>
-      item.status === 'running' || item.status === 'waiting_unlock'
+      item.status === 'waiting' || item.status === 'running' || item.status === 'waiting_unlock'
     );
 
     if (block.agentStatus === 'running' || block.agentStatus === 'waiting_unlock' || hasRunningAgentItems) {
@@ -67,9 +67,11 @@ function markBlocksTerminated(blocks?: ContentBlock[]): {
     }
 
     if (block.id) {
+      const shellOutput = typeof block.shellOutput === 'string' ? block.shellOutput.trim() : '';
+      const content = block.name === 'shell_execute' && shellOutput ? shellOutput : TERMINATED_RESULT;
       toolResults.push({
         toolCallId: block.id,
-        content: TERMINATED_RESULT,
+        content,
         isError: true,
       });
     }

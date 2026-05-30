@@ -42,6 +42,30 @@ describe('chat message lifecycle helpers', () => {
     }));
   });
 
+  it('preserves streamed shell output as the interrupted shell tool result', () => {
+    const messages: Message[] = [{
+      id: 'assistant',
+      role: 'assistant',
+      content: '',
+      timestamp: 1,
+      streaming: true,
+      blocks: [{
+        type: 'tool_use',
+        id: 'shell-1',
+        name: 'shell_execute',
+        content: '{"command":"npm test"}',
+        shellStatus: 'running',
+        shellOutput: 'PASS first suite\n',
+      }],
+    }];
+
+    const [terminated] = markMessagesTerminated(messages);
+
+    expect(terminated.toolResults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ toolCallId: 'shell-1', content: 'PASS first suite', isError: true }),
+    ]));
+  });
+
   it('appends request errors to block-backed assistant messages', () => {
     const message: Message = {
       id: 'assistant',

@@ -456,7 +456,6 @@ export default React.memo(function InputBar({
               placeholder="输入消息..."
               placeholderTextColor={colors.textTertiary}
               multiline
-              maxLength={4000}
               returnKeyType="send"
               blurOnSubmit
               onSubmitEditing={handleSend}
