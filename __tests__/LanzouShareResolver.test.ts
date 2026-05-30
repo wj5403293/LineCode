@@ -115,11 +115,17 @@ describe('LanzouShareResolver', () => {
       throw new Error(`unexpected url: ${url}`);
     });
 
-    await expect(resolveLanzouHotUpdateFiles(folderUrl, 'dfaj', fetcher as any)).resolves.toEqual({
+    await expect(resolveLanzouHotUpdateFiles(folderUrl, 'dfaj', fetcher as any)).resolves.toEqual(expect.objectContaining({
       index: expect.objectContaining({ name: 'base.txt' }),
       history: [expect.objectContaining({ name: 'base-1600014.txt' })],
       zip: expect.objectContaining({ name: 'base.zip' }),
-    });
+      apkPackages: {},
+      all: expect.arrayContaining([
+        expect.objectContaining({ name: 'base.zip' }),
+        expect.objectContaining({ name: 'base.txt' }),
+        expect.objectContaining({ name: 'base-1600014.txt' }),
+      ]),
+    }));
   });
 
   it('uses desktop pages for file download resolution', async () => {

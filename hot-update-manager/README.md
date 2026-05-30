@@ -1,6 +1,6 @@
 # LineCode Hot Update Manager
 
-React + Node 子项目，用于管理 `scripts/build-hot-update.mjs` 生成的热更新产物，并通过蓝奏云上传/删除 `base.zip` 与 `base.txt`，同时保留历史 `base-{versionCode}.txt` 更新日志。`.txt` 文件内容仍然是 JSON，用来兼容蓝奏云不允许上传 `.json` 后缀的限制。
+React + Node 子项目，用于管理 `scripts/build-hot-update.mjs` 生成的热更新产物，并通过蓝奏云上传/删除 `base.zip`、`base.txt` 和可选的 APK 更新包，同时保留历史 `base-{versionCode}.txt` 更新日志。`.txt` 文件内容仍然是 JSON，用来兼容蓝奏云不允许上传 `.json` 后缀的限制。
 
 ## 运行
 
@@ -38,6 +38,7 @@ ADMIN_PASSWORD='change-me' npm run start
 - `base.txt`: 当前可用更新索引，包含完整更新链路，内容为 JSON。
 - `base-{versionCode}.txt`: 单个历史版本详情，包含 changelog 与 `requiresApk`，内容为 JSON。
 - `base.zip`: 热更新包。
+- `base-remote.enc` / `base-local.enc`: 可选 APK 更新包，内容是 `scripts/build-hot-update.mjs --apk-update --remote-apk <apk> --local-apk <apk>` 生成的 XOR 加密 APK。客户端会按当前 runtime 下载对应文件，解密为临时 APK 后调用系统安装器。
 - `payload/manifest.json`: 必须包含 `versionCode/versionName`、`bundle`、`files`，并且 bundle 文件需要 SHA-256 校验。
 
 ## 蓝奏云 API 说明

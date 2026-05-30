@@ -123,3 +123,10 @@ NativeModules.StoragePermission = {
 NativeModules.AppLifecycle = {
   exitApp: jest.fn(() => Promise.resolve(null)),
 };
+
+NativeModules.ApkInstaller = {
+  canRequestPackageInstalls: jest.fn(() => Promise.resolve(true)),
+  openInstallPermissionSettings: jest.fn(() => Promise.resolve(null)),
+  decryptXorFile: jest.fn(() => Promise.resolve(null)),
+  installApk: jest.fn(() => Promise.resolve(null)),
+};

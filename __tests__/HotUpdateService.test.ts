@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
+import { NativeModules, Platform } from 'react-native';
 import { APP_ANDROID_VERSION_CODE, APP_HOT_UPDATE_VERSION_CODE, APP_VERSION } from '../src/constants/appInfo';
 import { hotUpdateService } from '../src/services/HotUpdateService';
 import {
@@ -252,5 +253,90 @@ describe('HotUpdateService', () => {
       expect.stringContaining(`"installedApkVersionName": "${APP_VERSION}"`),
       'utf8',
     );
+  });
+
+  it('downloads encrypted runtime APK packages and invokes the system installer', async () => {
+    const originalOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    const nextVersion = APP_HOT_UPDATE_VERSION_CODE + 1;
+    (resolveLanzouHotUpdateFiles as jest.Mock).mockResolvedValue({
+      index: { fileId: 'index', name: 'base.txt', sizeLabel: '', shareUrl: 'https://lanzou.example/base.txt' },
+      history: [
+        { fileId: 'detail', name: `base-${nextVersion}.txt`, sizeLabel: '', shareUrl: 'https://lanzou.example/base-next.txt' },
+      ],
+      zip: undefined,
+      apkPackages: {
+        local: { fileId: 'apk', name: 'base-local.enc', sizeLabel: '', shareUrl: 'https://lanzou.example/base-local.enc' },
+      },
+      all: [
+        { fileId: 'index', name: 'base.txt', sizeLabel: '', shareUrl: 'https://lanzou.example/base.txt' },
+        { fileId: 'detail', name: `base-${nextVersion}.txt`, sizeLabel: '', shareUrl: 'https://lanzou.example/base-next.txt' },
+        { fileId: 'apk', name: 'base-local.enc', sizeLabel: '', shareUrl: 'https://lanzou.example/base-local.enc' },
+      ],
+    });
+    (fetchLanzouTextFile as jest.Mock).mockImplementation(async (url: string) => {
+      if (url.endsWith('base.txt')) {
+        return JSON.stringify({
+          current: {
+            versionCode: nextVersion,
+            versionName: '1.9.2',
+            changelog: 'apk update',
+            requiresApk: true,
+            detailFile: `base-${nextVersion}.txt`,
+            apkPackages: {
+              local: {
+                file: 'base-local.enc',
+                sha256: 'enc-sha',
+                apkSha256: 'apk-sha',
+              },
+            },
+          },
+        });
+      }
+      return JSON.stringify({
+        versionCode: nextVersion,
+        versionName: '1.9.2',
+        changelog: 'apk update detail',
+        requiresApk: true,
+        apkPackages: {
+          local: {
+            file: 'base-local.enc',
+            sha256: 'enc-sha',
+            apkSha256: 'apk-sha',
+          },
+        },
+      });
+    });
+    (resolveLanzouDownloadUrl as jest.Mock).mockResolvedValue('https://cdn.example/base-local.enc');
+    (RNFS.downloadFile as jest.Mock).mockReturnValue({ promise: Promise.resolve({ statusCode: 200 }) });
+    (RNFS.hash as jest.Mock)
+      .mockResolvedValueOnce('enc-sha')
+      .mockResolvedValueOnce('apk-sha');
+
+    try {
+      const info = await hotUpdateService.checkForUpdate();
+      await hotUpdateService.install(info!);
+
+      expect(info).toEqual(expect.objectContaining({
+        requiresApk: true,
+        apkPackages: expect.objectContaining({
+          local: expect.objectContaining({
+            url: 'https://lanzou.example/base-local.enc',
+          }),
+        }),
+      }));
+      expect(RNFS.downloadFile).toHaveBeenCalledWith(expect.objectContaining({
+        fromUrl: 'https://cdn.example/base-local.enc',
+        toFile: expect.stringContaining('base-local.enc'),
+      }));
+      expect(NativeModules.ApkInstaller.decryptXorFile).toHaveBeenCalledWith(
+        expect.stringContaining('base-local.enc'),
+        expect.stringContaining('.apk'),
+        'LineCodeApkUpdateXorV1',
+      );
+      expect(NativeModules.ApkInstaller.installApk).toHaveBeenCalledWith(expect.stringContaining('.apk'));
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+    }
   });
 });

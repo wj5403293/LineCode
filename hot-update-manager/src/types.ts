@@ -30,6 +30,7 @@ export interface ArtifactInspection {
   changelog: string;
   requiresApk: boolean;
   apkUrl: string;
+  apkPackages: Record<string, ApkPackageFile>;
   manifest: {
     versionCode: number;
     versionName: string;
@@ -46,7 +47,19 @@ export interface ArtifactInspection {
     zipSize: number;
     indexSize: number;
     detailSize: number;
+    apkPackages: Record<string, ApkPackageFile>;
   };
+}
+
+export interface ApkPackageFile {
+  file: string;
+  path?: string;
+  encryption?: string;
+  sha256: string;
+  size: number;
+  apkSha256?: string;
+  apkSize?: number;
+  url?: string;
 }
 
 export interface ManifestFile {
@@ -75,6 +88,7 @@ export interface ReleaseRecord {
     zipPath: string;
     indexPath: string;
     detailPath: string;
+    apkPackages?: Record<string, string>;
   };
   updateIndex?: {
     releases: ReleaseChainItem[];
@@ -87,6 +101,7 @@ export interface ReleaseRecord {
       zip: CloudFile | null;
       index: CloudFile | null;
       detail: CloudFile;
+      apkPackages?: Record<string, CloudFile>;
     };
   };
   deleteErrors?: string[];
@@ -98,6 +113,7 @@ export interface ReleaseChainItem {
   changelog: string;
   requiresApk: boolean;
   apkUrl?: string;
+  apkPackages?: Record<string, ApkPackageFile>;
   createdAt?: string;
   detailFile?: string;
   zipFile?: string;

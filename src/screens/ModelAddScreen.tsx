@@ -12,6 +12,7 @@ import { modelStorage } from '../services/storage';
 import { spacing, fontSizes, radius } from '../constants/theme';
 import { useTheme } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
+import SettingsSwitch from '../components/SettingsSwitch';
 import { formatContextSize } from '../utils/modelContext';
 import { getModelProviderPreset } from '../constants/modelProviders';
 import { LOCAL_MODEL_ENABLED } from '../services/RuntimeConfig';
@@ -246,6 +247,14 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
     }
     setShowModelPicker(false);
   }, [name, preset]);
+
+  const handleCustomIdChange = useCallback((enabled: boolean) => {
+    setIsCustomId(enabled);
+    setShowModelPicker(false);
+    if (!enabled && modelId && !fetchedModels.includes(modelId)) {
+      setModelId('');
+    }
+  }, [fetchedModels, modelId]);
 
   const handleSelectLocalModel = useCallback(async () => {
     if (importingLocalModel) return;
@@ -515,7 +524,13 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
               secureTextEntry
             />
 
-            <Text style={[styles.label, { color: colors.textSecondary }]}>模型 ID</Text>
+            <View style={styles.modelIdHeader}>
+              <Text style={[styles.label, styles.modelIdLabel, { color: colors.textSecondary }]}>模型 ID</Text>
+              <View style={styles.customIdSwitch}>
+                <Text style={[styles.customIdSwitchText, { color: colors.textSecondary }]}>自定义</Text>
+                <SettingsSwitch value={isCustomId} onValueChange={handleCustomIdChange} />
+              </View>
+            </View>
 
             {isCustomId ? (
               <TextInput
@@ -563,15 +578,6 @@ export default function ModelAddScreen({ onBack, presetId, modelId: editingModel
                   )}
                 </TouchableOpacity>
               </View>
-            )}
-
-            {isCustomId && (
-              <TouchableOpacity
-                style={styles.switchBtn}
-                onPress={() => { setIsCustomId(false); setModelId(''); }}
-              >
-                <Text style={[styles.switchBtnText, { color: colors.accent }]}>从列表中选择</Text>
-              </TouchableOpacity>
             )}
 
             {fetchError && (
@@ -644,6 +650,27 @@ const styles = StyleSheet.create({
     fontSize: fontSizes.sm, fontWeight: '600',
     marginBottom: spacing.sm, marginTop: spacing.lg,
   },
+  modelIdHeader: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  modelIdLabel: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  customIdSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  customIdSwitchText: {
+    fontSize: fontSizes.sm,
+    fontWeight: '600',
+  },
   toggleRow: { flexDirection: 'row', gap: spacing.sm },
   toggleBtn: {
     flex: 1, paddingVertical: spacing.md, borderRadius: radius.md,
@@ -693,13 +720,6 @@ const styles = StyleSheet.create({
   queryText: {
     fontSize: fontSizes.md,
     fontWeight: '600',
-  },
-  switchBtn: {
-    marginTop: spacing.sm,
-    alignSelf: 'flex-end',
-  },
-  switchBtnText: {
-    fontSize: fontSizes.sm,
   },
   errorText: {
     fontSize: fontSizes.xs,

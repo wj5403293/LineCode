@@ -649,6 +649,7 @@ function InspectionView({ inspection }: { inspection: ArtifactInspection | null 
         <div><dt>文件</dt><dd>{inspection.manifest.fileCount}</dd></div>
         <div><dt>ZIP</dt><dd>{formatBytes(inspection.localFiles.zipSize)}</dd></div>
         <div><dt>安装</dt><dd>{inspection.requiresApk ? '需要新版 APK' : '热更新'}</dd></div>
+        <div><dt>APK 包</dt><dd>{Object.keys(inspection.apkPackages).length ? Object.keys(inspection.apkPackages).join(', ') : '无'}</dd></div>
         <div><dt>详情</dt><dd>{inspection.localFiles.detailFile}</dd></div>
       </dl>
       <pre className="changelog">{inspection.changelog || '暂无更新日志'}</pre>
@@ -721,7 +722,14 @@ function ReleaseList({
 
           <ReleaseChain release={release} />
 
-          {release.cloud ? <CloudLinks zip={release.cloud.files.zip} index={release.cloud.files.index} detail={release.cloud.files.detail} /> : null}
+          {release.cloud ? (
+            <CloudLinks
+              zip={release.cloud.files.zip}
+              index={release.cloud.files.index}
+              detail={release.cloud.files.detail}
+              apkPackages={release.cloud.files.apkPackages || {}}
+            />
+          ) : null}
 
           <div className="release-actions">
             <button className="secondary-button" type="button" onClick={() => onActivate(release)} disabled={Boolean(busy) || release.active || release.status === 'deleted'}>
@@ -760,12 +768,25 @@ function ReleaseChain({ release }: { release: ReleaseRecord }) {
   );
 }
 
-function CloudLinks({ zip, index, detail }: { zip: CloudFile | null; index: CloudFile | null; detail: CloudFile }) {
+function CloudLinks({
+  zip,
+  index,
+  detail,
+  apkPackages,
+}: {
+  zip: CloudFile | null;
+  index: CloudFile | null;
+  detail: CloudFile;
+  apkPackages: Record<string, CloudFile>;
+}) {
   return (
     <div className="cloud-links">
       <CloudLink label="base.zip" file={zip} />
       <CloudLink label="base.txt" file={index} />
       <CloudLink label={detail.name || 'base-{version}.txt'} file={detail} />
+      {Object.entries(apkPackages).map(([runtime, file]) => (
+        <CloudLink key={runtime} label={`base-${runtime}.enc`} file={file} />
+      ))}
     </div>
   );
 }

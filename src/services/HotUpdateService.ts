@@ -9,12 +9,21 @@ import {
   resolveLanzouHotUpdateFiles,
 } from './LanzouShareResolver';
 import { settingsService } from './settings';
+import { MODEL_RUNTIME } from './RuntimeConfig';
 
 interface AppLifecycleNativeModule {
   exitApp(delayMs: number): Promise<null>;
 }
 
+interface ApkInstallerNativeModule {
+  canRequestPackageInstalls?(): Promise<boolean>;
+  openInstallPermissionSettings?(): Promise<null>;
+  decryptXorFile(inputPath: string, outputPath: string, key: string): Promise<null>;
+  installApk(apkPath: string): Promise<null>;
+}
+
 const AppLifecycle = NativeModules.AppLifecycle as AppLifecycleNativeModule | undefined;
+const ApkInstaller = NativeModules.ApkInstaller as ApkInstallerNativeModule | undefined;
 
 const UPDATE_ROOT = `${RNFS.DocumentDirectoryPath}/.linecode/updates`;
 const CURRENT_DIR = `${UPDATE_ROOT}/current`;
@@ -22,6 +31,8 @@ const TEMP_DIR = `${UPDATE_ROOT}/tmp`;
 const CURRENT_STATE_PATH = `${CURRENT_DIR}/hot-update-state.json`;
 const STATE_KEY = '@linecode_hot_update_state';
 const HERMES_BYTECODE_MAGIC_BASE64 = 'xh+8A8EDGR8=';
+const APK_XOR_KEY = 'LineCodeApkUpdateXorV1';
+const APK_PACKAGE_EXTENSION = '.enc';
 
 export interface HotUpdateInfo {
   versionCode: number;
@@ -30,7 +41,8 @@ export interface HotUpdateInfo {
   updateChain: HotUpdateChainItem[];
   requiresApk: boolean;
   apkUrl?: string;
-  zipUrl: string;
+  apkPackages?: Record<string, HotUpdateApkPackage>;
+  zipUrl?: string;
   zipSha256?: string;
   detailUrl?: string;
 }
@@ -41,8 +53,22 @@ export interface HotUpdateChainItem {
   changelog: string;
   requiresApk: boolean;
   apkUrl?: string;
+  apkPackages?: Record<string, HotUpdateApkPackage>;
   createdAt?: string;
   detailUrl?: string;
+}
+
+export interface HotUpdateApkPackage {
+  file?: string;
+  url?: string;
+  shareUrl?: string;
+  sha256?: string;
+  size?: number;
+  apkSha256?: string;
+  apk_sha256?: string;
+  apkSize?: number;
+  apk_size?: number;
+  encryption?: string;
 }
 
 export interface HotUpdateState {
@@ -70,6 +96,8 @@ interface HotUpdateManifest {
   version_name?: string;
   requiresApk?: boolean;
   requires_apk?: boolean;
+  apkPackages?: Record<string, HotUpdateApkPackage>;
+  apk_packages?: Record<string, HotUpdateApkPackage>;
   bundle?: ManifestFile;
   bundlePath?: string;
   bundle_path?: string;
@@ -88,6 +116,8 @@ interface HotUpdateIndexRelease {
   requires_apk?: boolean;
   apkUrl?: string;
   apk_url?: string;
+  apkPackages?: Record<string, HotUpdateApkPackage>;
+  apk_packages?: Record<string, HotUpdateApkPackage>;
   createdAt?: string;
   created_at?: string;
   detailFile?: string;
@@ -124,7 +154,41 @@ function releaseVersionCode(release: HotUpdateIndexRelease | undefined): number 
   return Number(release?.versionCode ?? release?.version_code ?? 0);
 }
 
-function normalizeReleaseSummary(release: HotUpdateIndexRelease): HotUpdateChainItem & { zipSha256?: string } {
+function normalizeApkPackages(
+  value: Record<string, HotUpdateApkPackage> | undefined,
+  fileUrls?: Map<string, string>,
+): Record<string, HotUpdateApkPackage> {
+  const packages: Record<string, HotUpdateApkPackage> = {};
+  if (!value || typeof value !== 'object') return packages;
+
+  for (const [runtime, entry] of Object.entries(value)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const file = String(entry.file || '').trim();
+    const url = String(entry.url || entry.shareUrl || (file ? fileUrls?.get(file) : '') || '').trim();
+    packages[runtime] = {
+      ...entry,
+      file,
+      url,
+      sha256: entry.sha256 ? String(entry.sha256) : undefined,
+      apkSha256: entry.apkSha256 ?? entry.apk_sha256,
+      apkSize: entry.apkSize ?? entry.apk_size,
+      encryption: entry.encryption || 'xor-v1',
+    };
+  }
+  return packages;
+}
+
+function releaseApkPackages(
+  release: HotUpdateIndexRelease,
+  fileUrls?: Map<string, string>,
+): Record<string, HotUpdateApkPackage> {
+  return normalizeApkPackages(release.apkPackages ?? release.apk_packages, fileUrls);
+}
+
+function normalizeReleaseSummary(
+  release: HotUpdateIndexRelease,
+  fileUrls?: Map<string, string>,
+): HotUpdateChainItem & { zipSha256?: string } {
   const versionCode = releaseVersionCode(release);
   const versionName = String(release.versionName ?? release.version_name ?? `v${versionCode}`);
   return {
@@ -133,6 +197,7 @@ function normalizeReleaseSummary(release: HotUpdateIndexRelease): HotUpdateChain
     changelog: String(release.changelog || '').trim(),
     requiresApk: Boolean(release.requiresApk ?? release.requires_apk),
     apkUrl: String(release.apkUrl ?? release.apk_url ?? ''),
+    apkPackages: releaseApkPackages(release, fileUrls),
     createdAt: release.createdAt ?? release.created_at,
     detailUrl: release.detailUrl ?? release.detail_url,
     zipSha256: release.zipSha256 ?? release.zip_sha256,
@@ -238,18 +303,31 @@ class HotUpdateService {
       : APP_HOT_UPDATE_VERSION_CODE;
     const files = await resolveLanzouHotUpdateFiles();
     const historyUrls = new Map<string, string>();
+    const fileUrls = new Map<string, string>();
+    for (const file of files.all || []) {
+      fileUrls.set(file.name, file.shareUrl);
+    }
     for (const file of files.history) {
       historyUrls.set(file.name, file.shareUrl);
       historyUrls.set(alternateMetadataFileName(file.name), file.shareUrl);
     }
     const info = files.index
-      ? await this.readJsonUpdateInfo(files.index.shareUrl, files.zip.shareUrl, localVersionCode, historyUrls)
-      : await this.readLegacyTextUpdateInfo(files.detail!.shareUrl, files.zip.shareUrl, localVersionCode);
+      ? await this.readJsonUpdateInfo(files.index.shareUrl, files.zip?.shareUrl, localVersionCode, historyUrls, fileUrls)
+      : await this.readLegacyTextUpdateInfo(files.detail!.shareUrl, files.zip!.shareUrl, localVersionCode);
 
     return info.versionCode > localVersionCode ? info : null;
   }
 
   async install(info: HotUpdateInfo): Promise<void> {
+    if (info.requiresApk) {
+      await this.installApkUpdate(info);
+      return;
+    }
+
+    if (!info.zipUrl) {
+      throw new Error('更新信息缺少 base.zip 下载链接。');
+    }
+
     await RNFS.mkdir(UPDATE_ROOT);
     await ensureCleanDir(TEMP_DIR);
     const previousState = await this.getInstalledState();
@@ -349,9 +427,10 @@ class HotUpdateService {
 
   private async readJsonUpdateInfo(
     indexUrl: string,
-    zipUrl: string,
+    zipUrl: string | undefined,
     localVersionCode: number,
     historyUrls: Map<string, string>,
+    fileUrls: Map<string, string>,
   ): Promise<HotUpdateInfo> {
     const raw = await fetchLanzouTextFile(indexUrl);
     let parsed: HotUpdateIndex;
@@ -367,10 +446,10 @@ class HotUpdateService {
     if (!currentSource || releaseVersionCode(currentSource) <= 0) {
       throw new Error('base.txt 缺少有效的 current 或 releases');
     }
-    const releases = await this.resolveUpdateChain(parsed, indexUrl, localVersionCode, historyUrls);
-    const current = normalizeReleaseSummary(currentSource);
+    const releases = await this.resolveUpdateChain(parsed, indexUrl, localVersionCode, historyUrls, fileUrls);
+    const current = normalizeReleaseSummary(currentSource, fileUrls);
     const chain = releases
-      .map(release => normalizeReleaseSummary(release))
+      .map(release => normalizeReleaseSummary(release, fileUrls))
       .filter(release => release.versionCode > localVersionCode)
       .sort((a, b) => a.versionCode - b.versionCode);
     if (chain.length === 0) {
@@ -381,6 +460,7 @@ class HotUpdateService {
         updateChain: [],
         requiresApk: current.requiresApk,
         apkUrl: current.apkUrl,
+        apkPackages: current.apkPackages,
         zipUrl,
         zipSha256: current.zipSha256,
         detailUrl: current.detailUrl,
@@ -388,6 +468,7 @@ class HotUpdateService {
     }
 
     const latest = chain[chain.length - 1];
+    const latestApkRelease = [...chain].reverse().find(item => item.requiresApk && Object.keys(item.apkPackages || {}).length > 0);
     return {
       versionCode: latest.versionCode,
       versionName: latest.versionName,
@@ -395,6 +476,7 @@ class HotUpdateService {
       updateChain: chain,
       requiresApk: chain.some(item => item.requiresApk),
       apkUrl: chain.find(item => item.requiresApk && item.apkUrl)?.apkUrl || latest.apkUrl,
+      apkPackages: latestApkRelease?.apkPackages || latest.apkPackages,
       zipUrl,
       zipSha256: latest.zipSha256 || current.zipSha256,
       detailUrl: latest.detailUrl || current.detailUrl,
@@ -406,6 +488,7 @@ class HotUpdateService {
     indexUrl: string,
     localVersionCode: number,
     historyUrls: Map<string, string>,
+    fileUrls: Map<string, string>,
   ): Promise<HotUpdateIndexRelease[]> {
     const releases = Array.isArray(index.releases) ? [...index.releases] : [];
     if (index.current) {
@@ -419,13 +502,14 @@ class HotUpdateService {
       .filter(release => releaseVersionCode(release) > localVersionCode)
       .sort((a, b) => releaseVersionCode(a) - releaseVersionCode(b));
 
-    return Promise.all(candidates.map(release => this.hydrateReleaseDetail(release, indexUrl, historyUrls)));
+    return Promise.all(candidates.map(release => this.hydrateReleaseDetail(release, indexUrl, historyUrls, fileUrls)));
   }
 
   private async hydrateReleaseDetail(
     release: HotUpdateIndexRelease,
     indexUrl: string,
     historyUrls: Map<string, string>,
+    fileUrls: Map<string, string>,
   ): Promise<HotUpdateIndexRelease> {
     const detailFile = release.detailFile || release.detail_file;
     const detailUrl = release.detailUrl || release.detail_url || (detailFile ? historyUrls.get(detailFile) : '');
@@ -434,9 +518,14 @@ class HotUpdateService {
     try {
       const detailText = await fetchLanzouTextFile(detailUrl);
       const detail = JSON.parse(detailText) as HotUpdateReleaseDetail;
+      const apkPackages = {
+        ...releaseApkPackages(release, fileUrls),
+        ...releaseApkPackages(detail, fileUrls),
+      };
       return {
         ...release,
         ...detail,
+        apkPackages,
         detailUrl,
       };
     } catch (err) {
@@ -500,6 +589,88 @@ class HotUpdateService {
       throw new Error('manifest 必须包含 bundle 文件的 sha256');
     }
     return files;
+  }
+
+  private async installApkUpdate(info: HotUpdateInfo): Promise<void> {
+    if (Platform.OS !== 'android') {
+      throw new Error('APK 更新仅支持 Android。');
+    }
+    if (!ApkInstaller?.decryptXorFile || !ApkInstaller.installApk) {
+      throw new Error('当前 APK 缺少安装更新模块，请手动安装新版 APK。');
+    }
+
+    await RNFS.mkdir(UPDATE_ROOT);
+    await ensureCleanDir(TEMP_DIR);
+
+    const apkPackage = this.selectApkPackage(info);
+    const packageUrl = apkPackage.url || apkPackage.shareUrl || info.apkUrl;
+    if (!packageUrl) {
+      throw new Error(`此更新需要安装新版 APK，但缺少 ${this.currentApkRuntime()} 安装包链接。`);
+    }
+    if (apkPackage.encryption && apkPackage.encryption !== 'xor-v1') {
+      throw new Error(`不支持的 APK 加密方式: ${apkPackage.encryption}`);
+    }
+
+    const encryptedPath = `${TEMP_DIR}/${apkPackage.file || `base-${this.currentApkRuntime()}${APK_PACKAGE_EXTENSION}`}`;
+    const apkPath = `${TEMP_DIR}/LineCode-${this.currentApkRuntime()}-${info.versionCode}.apk`;
+
+    try {
+      const downloadUrl = await this.resolveUpdateDownloadUrl(packageUrl);
+      await this.downloadFile(downloadUrl, encryptedPath);
+
+      if (apkPackage.sha256) {
+        const actualEncryptedSha = normalizeSha(await RNFS.hash(encryptedPath, 'sha256'));
+        if (actualEncryptedSha !== normalizeSha(apkPackage.sha256)) {
+          throw new Error('APK 更新包校验失败，请重新下载。');
+        }
+      }
+
+      const canInstall = ApkInstaller.canRequestPackageInstalls
+        ? await ApkInstaller.canRequestPackageInstalls()
+        : true;
+      if (!canInstall) {
+        await ApkInstaller.openInstallPermissionSettings?.().catch(() => null);
+        throw new Error('需要允许 LineCode 安装未知应用。请在系统设置中开启后重新安装更新。');
+      }
+
+      await ApkInstaller.decryptXorFile(encryptedPath, apkPath, APK_XOR_KEY);
+      const expectedApkSha = apkPackage.apkSha256 ?? apkPackage.apk_sha256;
+      if (expectedApkSha) {
+        const actualApkSha = normalizeSha(await RNFS.hash(apkPath, 'sha256'));
+        if (actualApkSha !== normalizeSha(expectedApkSha)) {
+          throw new Error('APK 解密校验失败，请重新下载。');
+        }
+      }
+
+      await ApkInstaller.installApk(apkPath);
+    } catch (err) {
+      await this.markFailed(info, err);
+      throw err;
+    }
+  }
+
+  private currentApkRuntime(): string {
+    return MODEL_RUNTIME === 'remote' ? 'remote' : 'local';
+  }
+
+  private selectApkPackage(info: HotUpdateInfo): HotUpdateApkPackage {
+    const runtime = this.currentApkRuntime();
+    const packages = info.apkPackages || {};
+    const selected = packages[runtime] || Object.values(packages)[0];
+    if (selected) return selected;
+    if (info.apkUrl) return { url: info.apkUrl, encryption: 'xor-v1' };
+    throw new Error(`此更新需要安装新版 APK，但清单缺少 base-${runtime}${APK_PACKAGE_EXTENSION}。`);
+  }
+
+  private async resolveUpdateDownloadUrl(url: string): Promise<string> {
+    try {
+      return await resolveLanzouDownloadUrl(url);
+    } catch (err) {
+      if (/lanzou|woozooo|lanrar/i.test(url)) {
+        throw err;
+      }
+      return url;
+    }
   }
 
   private async downloadFile(url: string, targetPath: string): Promise<void> {

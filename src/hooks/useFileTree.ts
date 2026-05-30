@@ -9,9 +9,30 @@ export interface FileTreeNode {
   expanded?: boolean;
 }
 
+function getItemPath(item: { name?: string; path?: string }, parentPath: string): string {
+  return typeof item.path === 'string' && item.path.length > 0
+    ? item.path
+    : workspaceFs.resolvePath(item.name || '', parentPath);
+}
+
+function getItemName(item: { name?: string; path?: string }, parentPath: string): string {
+  if (typeof item.name === 'string' && item.name.length > 0) {
+    return item.name;
+  }
+  return basename(getItemPath(item, parentPath)) || '未命名';
+}
+
 export function useFileTree(rootPath: string) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading] = useState(false);
+
+  const createDirectoryNode = useCallback((path: string, children: FileTreeNode[] = [], expanded = true): FileTreeNode => ({
+    name: basename(path) || 'home',
+    path,
+    isDirectory: true,
+    children,
+    expanded,
+  }), []);
 
   const loadTree = useCallback(async (dirPath?: string): Promise<FileTreeNode> => {
     const path = dirPath || rootPath;
@@ -21,32 +42,28 @@ export function useFileTree(rootPath: string) {
 
       for (const item of items.sort((a, b) => {
         if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
-        return a.name.localeCompare(b.name);
+        return getItemName(a, path).localeCompare(getItemName(b, path));
       })) {
+        const itemPath = getItemPath(item, path);
+        const itemName = getItemName(item, path);
         const node: FileTreeNode = {
-          name: item.name,
-          path: item.path,
+          name: itemName,
+          path: itemPath,
           isDirectory: item.isDirectory(),
         };
         children.push(node);
       }
 
-      const node: FileTreeNode = {
-        name: basename(path) || 'home',
-        path,
-        isDirectory: true,
-        children,
-        expanded: !dirPath, // root is always expanded
-      };
+      const node = createDirectoryNode(path, children, !dirPath);
 
       if (!dirPath) setTree(node);
       return node;
     } catch {
-      const empty: FileTreeNode = { name: basename(path) || 'home', path, isDirectory: true, children: [], expanded: true };
+      const empty = createDirectoryNode(path, [], true);
       if (!dirPath) setTree(empty);
       return empty;
     }
-  }, [rootPath]);
+  }, [createDirectoryNode, rootPath]);
 
   const expandNode = useCallback(async (path: string) => {
     if (!tree) return;

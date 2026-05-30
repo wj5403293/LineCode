@@ -27,7 +27,9 @@ export interface LanzouHotUpdateFiles {
   index?: LanzouSharedFile;
   detail?: LanzouSharedFile;
   history: LanzouSharedFile[];
-  zip: LanzouSharedFile;
+  zip?: LanzouSharedFile;
+  apkPackages: Record<string, LanzouSharedFile>;
+  all: LanzouSharedFile[];
 }
 
 interface FetchLike {
@@ -72,11 +74,16 @@ export async function resolveLanzouHotUpdateFiles(
   const detail = files.find(file => file.name === 'base.zip.txt');
   const history = files.filter(file => /^base-\d+\.(?:txt|json)$/.test(file.name));
   const zip = files.find(file => file.name === 'base.zip');
-  if ((!index && !detail) || !zip) {
-    const names = files.map(file => file.name).join(', ') || '空目录';
-    throw new Error(`蓝奏云目录缺少 base.zip 或 base.txt，当前文件: ${names}`);
+  const apkPackages: Record<string, LanzouSharedFile> = {};
+  for (const file of files) {
+    const match = file.name.match(/^base-(remote|local)\.enc$/);
+    if (match) apkPackages[match[1]] = file;
   }
-  return { index, detail, history, zip };
+  if (!index && (!detail || !zip)) {
+    const names = files.map(file => file.name).join(', ') || '空目录';
+    throw new Error(`蓝奏云目录缺少 base.txt，或缺少旧格式 base.zip/base.zip.txt，当前文件: ${names}`);
+  }
+  return { index, detail, history, zip, apkPackages, all: files };
 }
 
 export async function fetchLanzouTextFile(fileUrl: string, fetcher: FetchLike = fetch): Promise<string> {

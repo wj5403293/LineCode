@@ -129,17 +129,23 @@ export async function uploadAndShareFile(cookie, folderId, filePath) {
 }
 
 export async function uploadReleasePair(cookie, folderId, releaseFiles, options = {}) {
-  const zip = await uploadAndShareFile(cookie, folderId, releaseFiles.zipPath);
+  const zip = releaseFiles.zipPath
+    ? await uploadAndShareFile(cookie, folderId, releaseFiles.zipPath)
+    : null;
   const detail = await uploadAndShareFile(cookie, folderId, releaseFiles.detailPath);
+  const apkPackages = {};
+  for (const [runtime, filePath] of Object.entries(releaseFiles.apkPackagePaths || {})) {
+    apkPackages[runtime] = await uploadAndShareFile(cookie, folderId, filePath);
+  }
   if (options.beforeIndexUpload) {
-    await options.beforeIndexUpload({ zip, detail });
+    await options.beforeIndexUpload({ zip, detail, apkPackages });
   }
   const index = await uploadAndShareFile(cookie, folderId, releaseFiles.indexPath);
   return {
     provider: 'lanzou',
     folderId,
     uploadedAt: new Date().toISOString(),
-    files: { zip, index, detail },
+    files: { zip, index, detail, apkPackages },
   };
 }
 
@@ -274,6 +280,7 @@ function cookieForFolder(cookie, folderId) {
 function contentTypeFor(filename) {
   const lower = filename.toLowerCase();
   if (lower.endsWith('.zip')) return 'application/zip';
+  if (lower.endsWith('.enc')) return 'application/octet-stream';
   if (lower.endsWith('.txt')) return 'text/plain; charset=utf-8';
   return 'application/octet-stream';
 }

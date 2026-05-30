@@ -11,6 +11,8 @@ import { deflateRawSync } from 'node:zlib';
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DEFAULT_OUT_DIR = path.join(ROOT, 'dist', 'hot-update');
 const DEFAULT_ENTRY = 'index.js';
+const APK_XOR_KEY = 'LineCodeApkUpdateXorV1';
+const APK_PACKAGE_EXTENSION = 'enc';
 
 function parseArgs(argv) {
   const args = {
@@ -24,6 +26,8 @@ function parseArgs(argv) {
     hermesBytecode: 'auto',
     requiresApk: false,
     apkUrl: '',
+    remoteApk: '',
+    localApk: '',
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -43,8 +47,11 @@ function parseArgs(argv) {
     else if (arg === '--version-name') args.versionName = readValue();
     else if (arg === '--changelog') args.changelog = readValue();
     else if (arg === '--changelog-file') args.changelog = readFileSync(path.resolve(ROOT, readValue()), 'utf8').trim();
+    else if (arg === '--apk-update') args.requiresApk = true;
     else if (arg === '--requires-apk') args.requiresApk = true;
     else if (arg === '--apk-url') args.apkUrl = readValue();
+    else if (arg === '--remote-apk') args.remoteApk = path.resolve(ROOT, readValue());
+    else if (arg === '--local-apk') args.localApk = path.resolve(ROOT, readValue());
     else if (arg === '--dev') args.dev = true;
     else if (arg === '--sourcemap') args.sourcemap = true;
     else if (arg === '--hermes-bytecode') args.hermesBytecode = true;
@@ -71,6 +78,9 @@ function parseArgs(argv) {
   if (!Number.isInteger(args.versionCode) || args.versionCode <= 0) {
     throw new Error('--version-code must be a positive integer.');
   }
+  if (args.requiresApk && !args.apkUrl && !args.remoteApk && !args.localApk) {
+    throw new Error('--apk-update requires --remote-apk, --local-apk, or --apk-url.');
+  }
 
   return args;
 }
@@ -84,8 +94,11 @@ Options:
   --version-name <name>        Update versionName. Defaults to version.json version.
   --changelog <text>           Changelog text written as JSON to base-{versionCode}.txt.
   --changelog-file <path>      Read changelog text from a file.
+  --apk-update                 Alias of --requires-apk.
   --requires-apk               Mark this update as requiring a new APK install.
   --apk-url <url>              Optional APK download URL shown to users when --requires-apk is set.
+  --remote-apk <path>          Encrypt a remote-runtime APK as base-remote.${APK_PACKAGE_EXTENSION}.
+  --local-apk <path>           Encrypt a local-runtime APK as base-local.${APK_PACKAGE_EXTENSION}.
   --out-dir <path>             Output directory. Default: dist/hot-update
   --entry-file <path>          React Native entry file. Default: index.js
   --dev                        Build a dev bundle.
@@ -292,6 +305,36 @@ async function writeZip(sourceDir, zipPath) {
   await writeFile(zipPath, Buffer.concat([...localParts, central, end]));
 }
 
+function xorBuffer(buffer) {
+  const key = Buffer.from(APK_XOR_KEY, 'utf8');
+  const output = Buffer.allocUnsafe(buffer.length);
+  for (let index = 0; index < buffer.length; index += 1) {
+    output[index] = buffer[index] ^ key[index % key.length];
+  }
+  return output;
+}
+
+async function writeEncryptedApk(runtime, apkPath, outDir) {
+  if (!apkPath) return null;
+  if (!existsSync(apkPath)) {
+    throw new Error(`${runtime} APK not found: ${apkPath}`);
+  }
+  const apkData = await readFile(apkPath);
+  const encryptedData = xorBuffer(apkData);
+  const file = `base-${runtime}.${APK_PACKAGE_EXTENSION}`;
+  const encryptedPath = path.join(outDir, file);
+  await writeFile(encryptedPath, encryptedData);
+  return {
+    runtime,
+    file,
+    encryption: 'xor-v1',
+    sha256: createHash('sha256').update(encryptedData).digest('hex'),
+    size: encryptedData.length,
+    apkSha256: createHash('sha256').update(apkData).digest('hex'),
+    apkSize: apkData.length,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const payloadDir = path.join(args.outDir, 'payload');
@@ -377,10 +420,25 @@ async function main() {
     throw new Error('React Native bundle was not generated.');
   }
 
+  const apkPackageEntries = [
+    await writeEncryptedApk('remote', args.remoteApk, args.outDir),
+    await writeEncryptedApk('local', args.localApk, args.outDir),
+  ].filter(Boolean);
+  const apkPackages = Object.fromEntries(
+    apkPackageEntries.map(entry => [entry.runtime, {
+      file: entry.file,
+      encryption: entry.encryption,
+      sha256: entry.sha256,
+      size: entry.size,
+      apkSha256: entry.apkSha256,
+      apkSize: entry.apkSize,
+    }]),
+  );
   const manifest = {
     versionCode: args.versionCode,
     versionName: args.versionName,
     requiresApk: args.requiresApk,
+    apkPackages,
     bundleFormat: useHermesBytecode ? 'hermes-bytecode' : 'js',
     bundle,
     files: manifestFiles,
@@ -398,12 +456,14 @@ async function main() {
     createdAt: generatedAt,
     requiresApk: args.requiresApk,
     apkUrl: args.apkUrl,
+    apkPackages,
     changelog: args.changelog.trim(),
     artifact: {
       zipFile: 'base.zip',
       zipSha256,
       zipSize,
       detailFile: detailFileName,
+      apkPackages,
     },
     manifest: {
       bundleFormat: manifest.bundleFormat,
@@ -421,6 +481,7 @@ async function main() {
       versionName: release.versionName,
       requiresApk: release.requiresApk,
       apkUrl: release.apkUrl,
+      apkPackages,
       changelog: release.changelog,
       zipFile: 'base.zip',
       zipSha256,
@@ -433,6 +494,7 @@ async function main() {
       createdAt: release.createdAt,
       requiresApk: release.requiresApk,
       apkUrl: release.apkUrl,
+      apkPackages,
       changelog: release.changelog,
       detailFile: detailFileName,
       zipFile: 'base.zip',
@@ -452,11 +514,17 @@ async function main() {
   console.log(`  versionName=${args.versionName}`);
   console.log(`  requiresApk=${args.requiresApk}`);
   console.log(`  bundleFormat=${manifest.bundleFormat}`);
+  for (const entry of apkPackageEntries) {
+    console.log(`  ${entry.file} (${entry.size} bytes, apk ${entry.apkSize} bytes)`);
+  }
   console.log('');
   console.log('Upload these files to the update host:');
   console.log('  base.zip');
   console.log('  base.txt');
   console.log(`  ${detailFileName}`);
+  for (const entry of apkPackageEntries) {
+    console.log(`  ${entry.file}`);
+  }
 }
 
 main().catch(error => {

@@ -22,6 +22,7 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json; charset=utf-8',
   '.zip': 'application/zip',
+  '.enc': 'application/octet-stream',
   '.txt': 'text/plain; charset=utf-8',
 };
 
@@ -38,6 +39,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/base.zip'
       || url.pathname === '/base.txt'
       || url.pathname === '/base.json'
+      || /^\/base-(?:remote|local)\.enc$/.test(url.pathname)
       || /^\/base-\d+\.(?:txt|json)$/.test(url.pathname)) {
       await serveActiveReleaseFile(res, url.pathname);
       return;
@@ -161,9 +163,12 @@ async function handleApi(req, res, url) {
         zipPath: archived.zipTarget,
         indexPath: archived.indexTarget,
         detailPath: archived.detailTarget,
+        apkPackagePaths: Object.fromEntries(
+          Object.entries(archived.local.apkPackages || {}).map(([runtime, relative]) => [runtime, path.resolve(MANAGER_ROOT, relative)]),
+        ),
       }, {
-        beforeIndexUpload: async ({ zip, detail }) => {
-          archived.updateIndex = applyCloudUrlsToIndex(archived.updateIndex, { files: { zip, detail } });
+        beforeIndexUpload: async ({ zip, detail, apkPackages }) => {
+          archived.updateIndex = applyCloudUrlsToIndex(archived.updateIndex, { files: { zip, detail, apkPackages } });
           await writeFile(archived.indexTarget, `${JSON.stringify(archived.updateIndex, null, 2)}\n`, 'utf8');
         },
       });
@@ -220,7 +225,7 @@ async function handleApi(req, res, url) {
     const target = store.releases.find(item => item.id === releaseId);
     if (!target) throw httpError(404, 'Release not found.');
     const deleteCloud = body.deleteCloud !== false;
-    const deleteErrors = deleteCloud ? await deleteReleaseCloudFiles(store, target) : [];
+    const deleteErrors = deleteCloud ? await deleteReleaseCloudFiles(store, target, { includeHistoryFiles: true }) : [];
     target.status = 'deleted';
     target.active = false;
     target.deletedAt = new Date().toISOString();
@@ -237,7 +242,7 @@ async function deletePublishedLanzouReleases(store) {
   const cleanupErrors = [];
   for (const release of store.releases) {
     if (release.status === 'deleted' || release.status === 'archived' || release.cloud?.provider !== 'lanzou') continue;
-    const deleteErrors = await deleteReleaseCloudFiles(store, release);
+    const deleteErrors = await deleteReleaseCloudFiles(store, release, { includeHistoryFiles: false });
     release.deleteErrors = deleteErrors;
     if (deleteErrors.length === 0) {
       release.status = 'archived';
@@ -253,10 +258,18 @@ async function deletePublishedLanzouReleases(store) {
   return cleanupErrors;
 }
 
-async function deleteReleaseCloudFiles(store, release) {
+async function deleteReleaseCloudFiles(store, release, options = {}) {
   const deleteErrors = [];
   if (release.cloud?.provider !== 'lanzou') return deleteErrors;
-  for (const file of [release.cloud.files?.zip, release.cloud.files?.index]) {
+  const files = options.includeHistoryFiles
+    ? [
+      release.cloud.files?.zip,
+      release.cloud.files?.index,
+      release.cloud.files?.detail,
+      ...Object.values(release.cloud.files?.apkPackages || {}),
+    ]
+    : [release.cloud.files?.zip, release.cloud.files?.index];
+  for (const file of files) {
     if (!file?.fileId) continue;
     try {
       await deleteFile(store.settings.lanzou.cookie, file.fileId, release.cloud.folderId);
@@ -274,6 +287,9 @@ async function serveActiveReleaseFile(res, pathname) {
   let relative = active.local?.indexPath;
   if (pathname === '/base.zip') {
     relative = active.local?.zipPath;
+  } else if (/^\/base-(?:remote|local)\.enc$/.test(pathname)) {
+    const runtime = pathname.match(/^\/base-(remote|local)\.enc$/)?.[1];
+    relative = runtime ? active.local?.apkPackages?.[runtime] : null;
   } else if (/^\/base-\d+\.(?:txt|json)$/.test(pathname)) {
     const versionCode = Number(pathname.match(/^\/base-(\d+)\.(?:txt|json)$/)?.[1]);
     const matchingRelease = store.releases.find(item =>
@@ -296,16 +312,26 @@ function applyCloudUrlsToIndex(index, cloud) {
   if (!index || !cloud?.files) return index;
   const detailUrl = cloud.files.detail?.shareUrl || '';
   const zipUrl = cloud.files.zip?.shareUrl || '';
+  const applyApkUrls = release => {
+    const apkPackages = { ...(release.apkPackages || release.apk_packages || {}) };
+    for (const [runtime, file] of Object.entries(cloud.files.apkPackages || {})) {
+      apkPackages[runtime] = {
+        ...(apkPackages[runtime] || {}),
+        url: file?.shareUrl || '',
+      };
+    }
+    return { ...release, apkPackages };
+  };
   return {
     ...index,
-    current: index.current ? {
+    current: index.current ? applyApkUrls({
       ...index.current,
       detailUrl,
       zipUrl,
-    } : index.current,
+    }) : index.current,
     releases: (index.releases || []).map(release => (
       release.versionCode === index.current?.versionCode
-        ? { ...release, detailUrl, zipUrl }
+        ? applyApkUrls({ ...release, detailUrl, zipUrl })
         : release
     )),
   };

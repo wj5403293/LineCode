@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import {
-  Folder, FolderOpen, FileText, FileCode, FileJson, File,
-  Image, Settings as SettingsIcon, Plus,
+  Folder, FolderOpen, FileText, FileCode, File, Plus,
 } from 'lucide-react-native';
 import { spacing, fontSizes } from '../constants/theme';
 import { useTheme } from '../theme';
 import { FileTreeNode } from '../hooks/useFileTree';
+import { basename } from '../services/WorkspaceFileSystem';
 
 interface Props {
   node: FileTreeNode;
@@ -29,6 +29,19 @@ const FILE_ICON_COLORS: Record<string, string> = {
   png: '#A855F7', jpg: '#A855F7', jpeg: '#A855F7', svg: '#A855F7', gif: '#A855F7',
 };
 
+function getNodePath(node: FileTreeNode): string {
+  return typeof node.path === 'string' ? node.path : '';
+}
+
+function getNodeName(node: FileTreeNode): string {
+  if (typeof node.name === 'string' && node.name.length > 0) {
+    return node.name;
+  }
+
+  const path = getNodePath(node);
+  return (path ? basename(path) : '') || '未命名';
+}
+
 function getFileIcon(name: string, isDir: boolean, expanded: boolean | undefined, accentColor: string, textSecondary: string, textTertiary: string) {
   if (isDir) {
     return expanded
@@ -48,12 +61,16 @@ function getFileIcon(name: string, isDir: boolean, expanded: boolean | undefined
 
 export default React.memo(function FileTreeItem({ node, depth, isRoot, onExpand, onSelect, onDelete, onRename, onCreate, onRootAction, onContextMenu }: Props) {
   const { colors } = useTheme();
+  const nodeName = getNodeName(node);
+  const nodePath = getNodePath(node);
+  const isDirectory = Boolean(node.isDirectory);
 
   const handlePress = () => {
-    if (node.isDirectory) {
-      onExpand(node.path);
+    if (!nodePath) return;
+    if (isDirectory) {
+      onExpand(nodePath);
     } else {
-      onSelect(node.path);
+      onSelect(nodePath);
     }
   };
 
@@ -62,7 +79,8 @@ export default React.memo(function FileTreeItem({ node, depth, isRoot, onExpand,
       onRootAction?.();
       return;
     }
-    onContextMenu?.(node.path, node.name, node.isDirectory);
+    if (!nodePath) return;
+    onContextMenu?.(nodePath, nodeName, isDirectory);
   };
 
   return (
@@ -73,17 +91,17 @@ export default React.memo(function FileTreeItem({ node, depth, isRoot, onExpand,
         onLongPress={handleLongPress}
         activeOpacity={0.7}
       >
-        {getFileIcon(node.name, node.isDirectory, node.expanded, colors.accent, colors.textSecondary, colors.textTertiary)}
-        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{node.name}</Text>
+        {getFileIcon(nodeName, isDirectory, node.expanded, colors.accent, colors.textSecondary, colors.textTertiary)}
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{nodeName}</Text>
         {isRoot && (
           <TouchableOpacity onPress={() => onRootAction?.()} style={styles.addBtn}>
             <Plus size={14} color={colors.textTertiary} />
           </TouchableOpacity>
         )}
       </TouchableOpacity>
-      {node.isDirectory && node.expanded && node.children?.map(child => (
+      {isDirectory && node.expanded && node.children?.map((child, index) => (
         <FileTreeItem
-          key={child.path}
+          key={child.path || `${nodePath}:${getNodeName(child)}:${index}`}
           node={child}
           depth={depth + 1}
           onExpand={onExpand}

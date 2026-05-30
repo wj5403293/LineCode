@@ -70,7 +70,7 @@ export default function UpdatePromptModal({
             <View style={[styles.apkNotice, { backgroundColor: colors.processingMuted, borderColor: colors.warning }]}>
               <AlertTriangle size={15} color={colors.warning} />
               <Text style={[styles.apkNoticeText, { color: colors.text }]}>
-                此更新链路包含需要新版 APK 的版本，请先安装 APK 后再继续。
+                此更新链路包含需要新版 APK 的版本，将下载加密安装包并打开系统安装器。
               </Text>
             </View>
           )}
@@ -141,7 +141,7 @@ export default function UpdatePromptModal({
                 <ActivityIndicator size="small" color={colors.textOnColor} />
               ) : (
                 <Text style={[styles.primaryText, { color: colors.textOnColor }]}>
-                  {update.requiresApk ? '打开 APK' : '安装热更新'}
+                  {update.requiresApk ? '安装 APK' : '安装热更新'}
                 </Text>
               )}
             </TouchableOpacity>

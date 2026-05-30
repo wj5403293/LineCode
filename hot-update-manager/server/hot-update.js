@@ -6,6 +6,7 @@ import { assertSafeRelativePath, ensureDir, fileSha256Hex, isPathInside, toRelat
 
 const INDEX_FILE = 'base.txt';
 const LEGACY_INDEX_FILE = 'base.json';
+const APK_PACKAGE_FILE_PATTERN = /^base-(remote|local)\.enc$/;
 
 function detailFileForVersion(versionCode) {
   return `base-${versionCode}.txt`;
@@ -71,7 +72,30 @@ function normalizeReleaseDetail(input) {
     zipSha256: input.artifact?.zipSha256 ?? input.zipSha256 ?? input.zip_sha256,
     zipSize: Number(input.artifact?.zipSize ?? input.zipSize ?? input.zip_size ?? 0),
     detailFile: normalizeDetailMetadataFileName(input.artifact?.detailFile ?? input.detailFile ?? input.detail_file, versionCode),
+    apkPackages: normalizeApkPackages(input.artifact?.apkPackages ?? input.apkPackages ?? input.apk_packages),
   };
+}
+
+function normalizeApkPackages(input) {
+  const packages = {};
+  if (!input || typeof input !== 'object') return packages;
+  for (const [runtime, entry] of Object.entries(input)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const file = String(entry.file || '').trim();
+    if (!APK_PACKAGE_FILE_PATTERN.test(file)) {
+      throw new Error(`APK package for ${runtime} must be named base-remote.enc or base-local.enc.`);
+    }
+    packages[runtime] = {
+      file,
+      encryption: entry.encryption || 'xor-v1',
+      sha256: String(entry.sha256 || '').toLowerCase(),
+      size: Number(entry.size || 0),
+      apkSha256: String(entry.apkSha256 ?? entry.apk_sha256 ?? '').toLowerCase(),
+      apkSize: Number(entry.apkSize ?? entry.apk_size ?? 0),
+      ...(entry.url ? { url: String(entry.url) } : {}),
+    };
+  }
+  return packages;
 }
 
 export async function inspectArtifactDir(inputDir) {
@@ -146,6 +170,10 @@ export async function inspectArtifactDir(inputDir) {
       size: buffer.length,
     });
   }
+  const verifiedApkPackages = await verifyApkPackages(artifactDir, detail.apkPackages);
+  if (detail.requiresApk && Object.keys(verifiedApkPackages).length === 0 && !detail.apkUrl) {
+    throw new Error('APK update requires base-remote.enc/base-local.enc or apkUrl.');
+  }
 
   const zipStat = await stat(zipPath);
   const zipSha256 = fileSha256Hex(zipBuffer);
@@ -157,6 +185,7 @@ export async function inspectArtifactDir(inputDir) {
     changelog: detail.changelog,
     requiresApk: detail.requiresApk,
     apkUrl: detail.apkUrl,
+    apkPackages: verifiedApkPackages,
     manifest: {
       versionCode: manifestVersionCode,
       versionName: manifestVersionName || detail.versionName,
@@ -173,8 +202,28 @@ export async function inspectArtifactDir(inputDir) {
       zipSize: zipStat.size,
       indexSize: Buffer.byteLength(indexText, 'utf8'),
       detailSize: Buffer.byteLength(JSON.stringify(detailJson), 'utf8'),
+      apkPackages: verifiedApkPackages,
     },
   };
+}
+
+async function verifyApkPackages(artifactDir, packages) {
+  const verified = {};
+  for (const [runtime, entry] of Object.entries(packages || {})) {
+    const absolute = path.join(artifactDir, entry.file);
+    const buffer = await readFile(absolute);
+    const sha256 = fileSha256Hex(buffer);
+    if (entry.sha256 && sha256 !== entry.sha256) {
+      throw new Error(`sha256 mismatch for ${entry.file}.`);
+    }
+    verified[runtime] = {
+      ...entry,
+      sha256,
+      size: buffer.length,
+      path: absolute,
+    };
+  }
+  return verified;
 }
 
 export async function archiveArtifact(inspection, previousReleases = []) {
@@ -185,6 +234,7 @@ export async function archiveArtifact(inspection, previousReleases = []) {
   const zipTarget = path.join(targetDir, 'base.zip');
   const indexTarget = path.join(targetDir, INDEX_FILE);
   const detailTarget = path.join(targetDir, inspection.localFiles.detailFile);
+  const apkPackageTargets = {};
   const releaseSummaries = buildReleaseChain(inspection, previousReleases);
   const index = {
     schemaVersion: 2,
@@ -193,11 +243,17 @@ export async function archiveArtifact(inspection, previousReleases = []) {
     current: releaseSummaries[releaseSummaries.length - 1],
     releases: releaseSummaries,
   };
-  await Promise.all([
+  const copyTasks = [
     copyFile(inspection.localFiles.zipPath, zipTarget),
     copyFile(inspection.localFiles.detailPath, detailTarget),
     writeFile(indexTarget, `${JSON.stringify(index, null, 2)}\n`, 'utf8'),
-  ]);
+  ];
+  for (const [runtime, entry] of Object.entries(inspection.localFiles.apkPackages || {})) {
+    const target = path.join(targetDir, entry.file);
+    apkPackageTargets[runtime] = target;
+    copyTasks.push(copyFile(entry.path, target));
+  }
+  await Promise.all(copyTasks);
 
   return {
     id,
@@ -209,6 +265,9 @@ export async function archiveArtifact(inspection, previousReleases = []) {
       zipPath: toRelative(MANAGER_ROOT, zipTarget),
       indexPath: toRelative(MANAGER_ROOT, indexTarget),
       detailPath: toRelative(MANAGER_ROOT, detailTarget),
+      apkPackages: Object.fromEntries(
+        Object.entries(apkPackageTargets).map(([runtime, target]) => [runtime, toRelative(MANAGER_ROOT, target)]),
+      ),
     },
     updateIndex: index,
   };
@@ -260,6 +319,7 @@ function normalizeChainItem(item) {
     createdAt: item.createdAt ?? item.created_at ?? new Date().toISOString(),
     requiresApk: Boolean(item.requiresApk ?? item.requires_apk),
     apkUrl: String(item.apkUrl ?? item.apk_url ?? ''),
+    apkPackages: normalizeApkPackages(item.apkPackages ?? item.apk_packages),
     changelog: String(item.changelog || ''),
     detailFile: normalizeDetailMetadataFileName(item.detailFile ?? item.detail_file, versionCode),
     zipFile: item.zipFile ?? item.zip_file ?? 'base.zip',
@@ -272,12 +332,14 @@ function normalizeChainItem(item) {
 
 function releaseToSummary(release) {
   const detailPath = release.local?.detailPath || release.localFiles?.detailFile || detailFileForVersion(release.versionCode);
+  const apkPackages = normalizeApkPackages(release.localFiles?.apkPackages || release.apkPackages || {});
   return {
     versionCode: release.versionCode,
     versionName: release.versionName,
     createdAt: release.createdAt || new Date().toISOString(),
     requiresApk: Boolean(release.requiresApk),
     apkUrl: release.apkUrl || '',
+    apkPackages,
     changelog: release.changelog || '',
     detailFile: normalizeDetailMetadataFileName(path.basename(detailPath), release.versionCode),
     zipFile: 'base.zip',

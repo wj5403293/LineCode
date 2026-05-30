@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Platform,
   Share,
   View,
@@ -138,18 +137,15 @@ export default function AboutScreen({ onOpenLicenses, onOpenDebug }: Props) {
 
   const handleInstallUpdate = useCallback(async () => {
     if (!updateInfo || installingUpdate) return;
-    if (updateInfo.requiresApk) {
-      if (updateInfo.apkUrl) {
-        Linking.openURL(updateInfo.apkUrl).catch(err => setUpdateError(err?.message || String(err)));
-      } else {
-        setUpdateError('此更新需要安装新版 APK，但更新信息没有提供 APK 下载链接。');
-      }
-      return;
-    }
     setInstallingUpdate(true);
     setUpdateError(null);
     try {
       await hotUpdateService.install(updateInfo);
+      if (updateInfo.requiresApk) {
+        setUpdateInfo(null);
+        Alert.alert('系统安装器已打开', '请按系统提示完成 APK 安装。');
+        return;
+      }
       await refreshInstalledHotUpdate();
       setUpdateInfo(null);
       Alert.alert('更新完成', '热更新包已安装，重启应用后生效。');

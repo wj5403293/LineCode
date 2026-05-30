@@ -70,22 +70,24 @@ a {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: 286px minmax(0, 1fr);
+  align-items: start;
 }
 
 .side-rail {
   position: sticky;
   top: 0;
   z-index: 10;
-  min-height: 86px;
-  padding: 14px 22px;
-  border-bottom: 1px solid var(--line);
+  min-height: 100dvh;
+  max-height: 100dvh;
+  padding: 18px 14px;
+  border-right: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(18px);
-  display: grid;
-  grid-template-columns: minmax(280px, 1.3fr) minmax(150px, 0.42fr) minmax(150px, 0.42fr) minmax(280px, 0.9fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: center;
+  overflow-y: auto;
 }
 
 .brand-block {
@@ -129,7 +131,7 @@ a {
 }
 
 .metric {
-  min-height: 58px;
+  min-height: 74px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -147,27 +149,28 @@ a {
 .metric strong {
   color: var(--ink-strong);
   font-family: var(--mono);
-  font-size: 20px;
+  font-size: 21px;
   line-height: 1;
   overflow-wrap: anywhere;
 }
 
 .rail-nav {
-  justify-self: end;
+  margin-top: 4px;
   display: flex;
+  flex-direction: column;
   gap: 6px;
-  flex-wrap: wrap;
 }
 
 .rail-nav a {
-  min-height: 38px;
-  padding: 0 11px;
+  min-height: 42px;
+  padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 6px;
   color: var(--muted-strong);
   background: #ffffff;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 7px;
 }
 
@@ -178,19 +181,25 @@ a {
 }
 
 .rail-logout {
+  width: 100%;
+  margin-top: auto;
   white-space: nowrap;
 }
 
 .workspace {
-  width: min(100%, 1480px);
-  margin: 0 auto;
-  padding: 18px 22px 32px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 18px 20px 36px;
   display: grid;
   gap: 14px;
   align-content: start;
 }
 
 .top-bar {
+  position: sticky;
+  top: 12px;
+  z-index: 8;
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -217,6 +226,9 @@ a {
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(420px, 1.15fr) minmax(340px, 0.85fr);
+  grid-template-areas:
+    "publish cloud"
+    "records records";
   gap: 14px;
 }
 
@@ -237,7 +249,15 @@ a {
 }
 
 .records-panel {
-  grid-column: 1 / -1;
+  grid-area: records;
+}
+
+.publish-panel {
+  grid-area: publish;
+}
+
+.cloud-panel {
+  grid-area: cloud;
 }
 
 .panel-title {
@@ -557,6 +577,7 @@ a {
 
 .release-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 10px;
 }
 
@@ -1313,20 +1334,15 @@ a {
 }
 
 @media (max-width: 1180px) {
-  .side-rail {
-    grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, 0.4fr));
-  }
-
-  .rail-nav {
-    grid-column: 1 / 3;
-    justify-self: start;
-  }
-
-  .rail-logout {
-    grid-column: 3;
-  }
-
   .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "publish"
+      "cloud"
+      "records";
+  }
+
+  .release-list {
     grid-template-columns: 1fr;
   }
 
@@ -1337,6 +1353,56 @@ a {
   .layout-demo-topbar,
   .layout-demo-intro {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .side-rail {
+    position: sticky;
+    top: 0;
+    min-height: auto;
+    max-height: none;
+    padding: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .side-rail > .metric {
+    display: none;
+  }
+
+  .rail-nav {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .rail-nav a {
+    flex: 1 1 130px;
+    justify-content: center;
+  }
+
+  .rail-logout {
+    width: auto;
+    margin-top: 0;
+  }
+
+  .workspace {
+    padding: 14px 12px 28px;
+  }
+
+  .top-bar {
+    position: static;
   }
 }
 
@@ -1358,6 +1424,10 @@ a {
   .rail-logout {
     grid-column: auto;
     justify-self: stretch;
+  }
+
+  .rail-nav {
+    grid-column: 1 / -1;
   }
 
   .rail-nav a,
