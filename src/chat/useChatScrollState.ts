@@ -39,6 +39,8 @@ export function useChatScrollState() {
     setAtBottom(true);
   }, [setAtBottom]);
 
+  const isFollowingBottom = useCallback(() => shouldFollowBottomRef.current, []);
+
   const requestScrollToBottom = useCallback((animated = true) => {
     if (scrollToBottomFrameRef.current !== null) {
       cancelAnimationFrame(scrollToBottomFrameRef.current);
@@ -114,6 +116,7 @@ export function useChatScrollState() {
     flatListRef,
     isAtBottom,
     enableBottomFollow,
+    isFollowingBottom,
     scrollToBottom,
     jumpToBottom,
     handleScrollBeginDrag,

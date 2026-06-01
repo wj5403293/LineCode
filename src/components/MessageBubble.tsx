@@ -86,4 +86,39 @@ function MessageBubble({ message, contentOverride, streamingOverride, showAction
       />;
 }
 
-export default React.memo(MessageBubble);
+function areMessageBubblePropsEqual(prev: Props, next: Props): boolean {
+  if (
+    prev.contentOverride !== next.contentOverride ||
+    prev.streamingOverride !== next.streamingOverride ||
+    prev.showActionBar !== next.showActionBar
+  ) {
+    return false;
+  }
+
+  const prevMessage = prev.message;
+  const nextMessage = next.message;
+  if (prevMessage === nextMessage) return true;
+
+  if (
+    prevMessage.id !== nextMessage.id ||
+    prevMessage.role !== nextMessage.role ||
+    prevMessage.hidden !== nextMessage.hidden
+  ) {
+    return false;
+  }
+
+  const usesContentOverride = prev.contentOverride !== undefined || next.contentOverride !== undefined;
+  if (usesContentOverride) {
+    return prevMessage.toolResults === nextMessage.toolResults;
+  }
+
+  return prevMessage.content === nextMessage.content
+    && prevMessage.streaming === nextMessage.streaming
+    && prevMessage.blocks === nextMessage.blocks
+    && prevMessage.toolCalls === nextMessage.toolCalls
+    && prevMessage.toolResults === nextMessage.toolResults
+    && prevMessage.attachments === nextMessage.attachments
+    && prevMessage.isError === nextMessage.isError;
+}
+
+export default React.memo(MessageBubble, areMessageBubblePropsEqual);

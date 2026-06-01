@@ -2,6 +2,8 @@ import { ContentBlock } from '../types';
 
 const DEFAULT_FLUSH_INTERVAL_MS = 180;
 
+type FlushInterval = number | (() => number);
+
 type PendingUpdate =
   | { type: 'status'; status: string }
   | { type: 'blocks'; blocks: ContentBlock[] }
@@ -12,7 +14,7 @@ export class StreamUpdateBuffer {
   private timeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    private readonly flushIntervalMs = DEFAULT_FLUSH_INTERVAL_MS,
+    private readonly flushIntervalMs: FlushInterval = DEFAULT_FLUSH_INTERVAL_MS,
     private readonly onFlush: (updates: PendingUpdate[]) => void,
   ) {}
 
@@ -51,7 +53,14 @@ export class StreamUpdateBuffer {
 
   private schedule() {
     if (this.timeout) return;
-    this.timeout = setTimeout(() => this.flush(), this.flushIntervalMs);
+    this.timeout = setTimeout(() => this.flush(), this.getFlushIntervalMs());
+  }
+
+  private getFlushIntervalMs(): number {
+    const interval = typeof this.flushIntervalMs === 'function'
+      ? this.flushIntervalMs()
+      : this.flushIntervalMs;
+    return Math.max(0, interval);
   }
 
   private clearTimer() {

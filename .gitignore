@@ -1,10 +1,63 @@
-# OSX
-#
+# macOS
 .DS_Store
 
-# Xcode
-#
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+local.properties
+signing.properties
+android/local.properties
+android/signing.properties
+**/.xcode.env.local
+*.keystore
+!android/app/debug.keystore
+
+# Logs and diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.hprof
+
+# Dependencies
+node_modules/
+hot-update-manager/node_modules/
+/vendor/bundle/
+
+# Yarn, if used locally
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# React Native, Metro, and test output
+*.jsbundle
+.metro-health-check*
+/coverage/
+
+# Build artifacts
 build/
+dist/
+hot-update-manager/dist/
+*.apk
+*.aab
+*.ipa
+
+# Android and Gradle
+.gradle/
+.cxx/
+.kotlin/
+*.iml
+.idea/
+android/app/src/main/assets/index.android.bundle
+android/app/src/main/assets/ggml-hexagon/
+android/app/src/local/assets/ggml-hexagon/
+
+# Xcode
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -13,76 +66,43 @@ build/
 !default.mode2v3
 *.perspectivev3
 !default.perspectivev3
-xcuserdata
+xcuserdata/
 *.xccheckout
 *.moved-aside
-DerivedData
+DerivedData/
 *.hmap
-*.ipa
 *.xcuserstate
-**/.xcode.env.local
 
-# Android/IntelliJ
-#
-build/
-.idea
-.gradle
-local.properties
-signing.properties
-*.iml
-*.hprof
-.cxx/
-*.keystore
-!debug.keystore
-.kotlin/
+# Ruby and CocoaPods
+**/Pods/
 
-# node.js
-#
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# fastlane
-#
-# It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
-# screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/
-
+# fastlane generated reports and screenshots
 **/fastlane/report.xml
 **/fastlane/Preview.html
-**/fastlane/screenshots
-**/fastlane/test_output
+**/fastlane/screenshots/
+**/fastlane/test_output/
 
-# Bundle artifact
-*.jsbundle
-/dist/
+# Hot update manager runtime data
+hot-update-manager/.env
+hot-update-manager/.env.*
+hot-update-manager/data/store.json
+hot-update-manager/data/artifacts/
 
-# Ruby / CocoaPods
-**/Pods/
-/vendor/bundle/
-
-# Temporary files created by Metro to check the health of the file watcher
-.metro-health-check*
-
-# testing
-/coverage
-
-# Yarn
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+# Local AI agents and assistant workspaces
 .agents/
 .claude/
-*.log
 .trae/
-*.apk
-android/app/src/main/assets/ggml-hexagon/
-android/app/src/local/assets/ggml-hexagon/
+.codex
+.codex/
+hot-update-manager/.codex/
+
+# Local model files
+models/
+*.gguf
+*.safetensors
+*.onnx
+*.tflite
+
+# Local product drafts
 LineCode_产品设计方案.md
 产品设计文档.md
-models/Qwen_Qwen3.5-2B-Q4_K_M.gguf
-.codex

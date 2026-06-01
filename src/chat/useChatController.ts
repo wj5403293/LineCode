@@ -45,6 +45,8 @@ interface PendingToolCall {
 
 const CONTEXT_METRICS_DEBOUNCE_MS = 300;
 const CONTEXT_LIMIT_RETRY_COUNT = 1;
+const STREAM_FOLLOW_FLUSH_INTERVAL_MS = 80;
+const STREAM_BACKGROUND_FLUSH_INTERVAL_MS = 360;
 const conversationIndexer = new ConversationIndexer(evolutionDatabase);
 
 const CONTEXT_LIMIT_ERROR_PATTERNS = [
@@ -121,6 +123,7 @@ export function useChatController({
     flatListRef,
     isAtBottom,
     enableBottomFollow,
+    isFollowingBottom,
     scrollToBottom,
     jumpToBottom,
     handleScrollBeginDrag,
@@ -141,6 +144,11 @@ export function useChatController({
   const streamBufferRef = useRef<StreamUpdateBuffer | null>(null);
   const toolExecutionCoordinatorRef = useRef(new ToolExecutionCoordinator());
   const activeToolMessagesRef = useRef<Message[]>([]);
+
+  const jumpToBottomAndFlush = useCallback((animated = true) => {
+    streamBufferRef.current?.flush();
+    jumpToBottom(animated);
+  }, [jumpToBottom]);
 
   useEffect(() => {
     getHomePath().then(setHomePath);
@@ -711,10 +719,13 @@ export function useChatController({
         const chatMessages = await aiService.buildMessages(SYSTEM_PROMPT, toChatMessages(localMessages), toneMode, homePath, learningContext);
 
         streamBufferRef.current?.cancel();
-        const streamBuffer = new StreamUpdateBuffer(80, updates => {
-          if (activeAbortSignal.aborted) return;
-          applyStreamUpdates(aiId, updates, convId);
-        });
+        const streamBuffer = new StreamUpdateBuffer(
+          () => isFollowingBottom() ? STREAM_FOLLOW_FLUSH_INTERVAL_MS : STREAM_BACKGROUND_FLUSH_INTERVAL_MS,
+          updates => {
+            if (activeAbortSignal.aborted) return;
+            applyStreamUpdates(aiId, updates, convId);
+          },
+        );
         streamBufferRef.current = streamBuffer;
 
         let result: Awaited<ReturnType<typeof aiService.sendMessage>>;
@@ -917,7 +928,7 @@ export function useChatController({
       abortControllerRef.current = null;
       persistenceRef.current.flush(convId).catch(() => {});
     }
-  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runAutoContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow]);
+  }, [model, conversationId, applyStreamUpdates, summarizeTitle, toneMode, toChatMessages, homePath, reasoningEffort, preserveReasoning, executeToolCalls, persistTerminatedMessages, shouldConfirmToolCall, runAutoContextCompaction, scrollToBottom, syncMessages, updateConversationId, enableBottomFollow, isFollowingBottom]);
 
   const handleSend = useCallback(async (text: string, attachments: InputAttachment[] = []) => {
     await chatHookManager.invoke(
@@ -1048,7 +1059,7 @@ export function useChatController({
       handleSend,
       handleStop,
       scrollToBottom,
-      jumpToBottom,
+      jumpToBottom: jumpToBottomAndFlush,
       clearMessages,
       handleNewConversation,
       handleSelectConversation,

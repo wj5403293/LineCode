@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
-const DEFAULT_INTERVAL_MS = 16;
+const DEFAULT_INTERVAL_MS = 48;
+const MAX_ANIMATED_CONTENT_LENGTH = 4000;
 
-function nextStep(backlog: number): number {
+function nextStep(backlog: number, targetLength: number): number {
+  if (targetLength > 3000) return Math.max(48, Math.ceil(backlog * 0.3));
+  if (targetLength > 1800) return Math.max(24, Math.ceil(backlog * 0.22));
   if (backlog > 240) return 12;
   if (backlog > 120) return 8;
   if (backlog > 48) return 4;
-  return 1;
+  return Math.min(backlog, 2);
 }
 
 export function useTypewriterText(
@@ -25,19 +28,22 @@ export function useTypewriterText(
       clearInterval(timerRef.current);
       timerRef.current = null;
     };
+    const commitVisibleText = (nextText: string) => {
+      if (visibleRef.current === nextText) return;
+      visibleRef.current = nextText;
+      setVisibleText(prev => prev === nextText ? prev : nextText);
+    };
 
     targetRef.current = text;
 
-    if (!enabled) {
+    if (!enabled || text.length > MAX_ANIMATED_CONTENT_LENGTH) {
       stop();
-      visibleRef.current = text;
-      setVisibleText(text);
+      commitVisibleText(text);
       return stop;
     }
 
     if (!text.startsWith(visibleRef.current)) {
-      visibleRef.current = text;
-      setVisibleText(text);
+      commitVisibleText(text);
       return stop;
     }
 
@@ -54,10 +60,9 @@ export function useTypewriterText(
       }
 
       const backlog = target.length - current.length;
-      const nextLength = Math.min(target.length, current.length + nextStep(backlog));
+      const nextLength = Math.min(target.length, current.length + nextStep(backlog, target.length));
       const nextText = target.slice(0, nextLength);
-      visibleRef.current = nextText;
-      setVisibleText(nextText);
+      commitVisibleText(nextText);
     }, intervalMs);
 
     return stop;
