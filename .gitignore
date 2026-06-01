@@ -102,7 +102,3 @@ models/
 *.safetensors
 *.onnx
 *.tflite
-
-# Local product drafts
-LineCode_产品设计方案.md
-产品设计文档.md
