@@ -169,3 +169,12 @@ docs: update development guide
 ```
 
 不要提交 API Key、本地日志、生成 APK、热更新产物、私有模型文件或本地工作区数据。
+
+## 许可
+
+LineCode 采用双重许可：
+
+- 开源许可：AGPL-3.0-only，完整条款见 [LICENSE](LICENSE)。
+- 商业许可：需与版权持有人另行取得书面授权，说明见 [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)。
+
+未取得商业许可时，只能按 AGPL-3.0-only 使用、修改、分发或提供网络访问。第三方依赖仍遵循各自许可证；已经按 AGPL 获得的副本不受后续商业授权影响。

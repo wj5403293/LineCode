@@ -13,6 +13,12 @@ interface License {
 
 const LICENSES: License[] = [
   {
+    name: 'LineCode',
+    version: 'project license',
+    license: 'AGPL-3.0-only OR Commercial License',
+    licenseText: 'LineCode 采用双重许可：未取得单独书面商业许可时，只能按 AGPL-3.0-only 使用、修改、分发或提供网络访问；商业许可需与版权持有人另行签署或确认。第三方依赖仍遵循各自许可证。',
+  },
+  {
     name: 'openai/codex',
     version: 'source reference',
     license: 'Apache-2.0',

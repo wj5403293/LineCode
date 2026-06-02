@@ -2,7 +2,7 @@
   "name": "LineCode",
   "version": "1.9.1",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "(AGPL-3.0-only OR LicenseRef-LineCode-Commercial)",
   "scripts": {
     "build-prompt": "node scripts/build-prompt.js",
     "postinstall": "node scripts/patch-llama-rn.js",
