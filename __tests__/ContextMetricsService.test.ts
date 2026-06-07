@@ -26,4 +26,10 @@ describe('ContextMetricsService', () => {
 
     expect(second).toBeGreaterThan(first);
   });
+
+  it('requests compaction for oversized contexts even with fewer than four active messages', () => {
+    const service = new ContextMetricsService();
+
+    expect(service.shouldCompact([shellMessage('x'.repeat(400))], 100, 0.8)).toBe(true);
+  });
 });

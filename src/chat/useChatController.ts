@@ -144,6 +144,8 @@ export function useChatController({
   const streamBufferRef = useRef<StreamUpdateBuffer | null>(null);
   const toolExecutionCoordinatorRef = useRef(new ToolExecutionCoordinator());
   const activeToolMessagesRef = useRef<Message[]>([]);
+  const contextTokensRef = useRef(250_000);
+  const autoCompactAbortRef = useRef(false);
 
   const jumpToBottomAndFlush = useCallback((animated = true) => {
     streamBufferRef.current?.flush();
@@ -247,7 +249,7 @@ export function useChatController({
 
   const applyStreamUpdates = useCallback((aiId: string, updates: StreamBufferedUpdate[], convId: string | null) => {
     if (updates.length === 0) return;
-    syncMessages(prev => prev.map(message => {
+    const nextMessages = syncMessages(prev => prev.map(message => {
       if (message.id !== aiId) return message;
 
       let nextMessage = message;
@@ -282,6 +284,17 @@ export function useChatController({
       }
       return nextMessage;
     }), convId, 'none');
+    const hasGeneratedContentUpdate = updates.some(update => update.type === 'blocks');
+    if (
+      hasGeneratedContentUpdate &&
+      streamingRef.current &&
+      !compactingRef.current &&
+      !autoCompactAbortRef.current &&
+      contextMetricsRef.current.shouldCompact(nextMessages, contextTokensRef.current, COMPACT_TRIGGER_RATIO)
+    ) {
+      autoCompactAbortRef.current = true;
+      abortControllerRef.current?.abort();
+    }
     scrollToBottom(false);
   }, [scrollToBottom, syncMessages]);
 
@@ -473,23 +486,28 @@ export function useChatController({
     return true;
   }, [executeToolCall, syncMessages]);
 
-  const persistTerminatedMessages = useCallback(() => {
+  const getTerminatedMessages = useCallback((): Message[] => {
     const current = messageStoreRef.current.getSnapshot();
     const existingToolIds = new Set(current.filter(m => m.role === 'tool').map(m => m.id));
     const missingToolMessages = activeToolMessagesRef.current.filter(m => !existingToolIds.has(m.id));
-    const terminated = markMessagesTerminated([
+    return markMessagesTerminated([
       ...current,
       ...missingToolMessages,
     ]);
+  }, []);
+
+  const persistTerminatedMessages = useCallback((): Message[] => {
+    const terminated = getTerminatedMessages();
     syncMessages(terminated, conversationIdRef.current, 'flush');
-  }, [syncMessages]);
+    return terminated;
+  }, [getTerminatedMessages, syncMessages]);
 
   const runContextCompaction = useCallback(async (baseMessages: Message[], preservedTail: Message[] = []): Promise<Message[]> => {
     if (!model) return baseMessages;
 
     const contextMessages = baseMessages.filter(m => !m.excludeFromContext);
     const summarizableMessages = contextMessages.filter(m => m.content.trim() || m.toolCalls?.length || m.toolResults?.length);
-    if (summarizableMessages.length < 4) {
+    if (summarizableMessages.length === 0) {
       throw new Error('当前上下文不足，无需压缩');
     }
 
@@ -573,7 +591,9 @@ export function useChatController({
     const preservedTail = getAutoCompactPreservedTail(sourceMessages, options.activeUserMessageId);
     const preservedIds = new Set(preservedTail.map(message => message.id));
     const baseMessages = sourceMessages.filter(message => !preservedIds.has(message.id));
-    if (baseMessages.filter(m => !m.excludeFromContext).length < 4) {
+    const baseContextMessages = baseMessages.filter(m => !m.excludeFromContext);
+    const hasSummarizableContext = baseContextMessages.some(m => m.content.trim() || m.toolCalls?.length || m.toolResults?.length);
+    if (!hasSummarizableContext) {
       return sourceMessages;
     }
 
@@ -590,6 +610,7 @@ export function useChatController({
   }, [runContextCompaction]);
 
   const handleStop = useCallback(() => {
+    autoCompactAbortRef.current = false;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -613,6 +634,7 @@ export function useChatController({
     if (index < 0) return '';
 
     if (streamingRef.current || compactingRef.current || abortControllerRef.current) {
+      autoCompactAbortRef.current = false;
       abortControllerRef.current?.abort();
       agentToolManager.abort();
       compactingRef.current = false;
@@ -676,6 +698,8 @@ export function useChatController({
 
     try {
       const contextInfo = parseModelContext(model.modelId);
+      contextTokensRef.current = contextInfo.contextTokens;
+      autoCompactAbortRef.current = false;
       const preparedMessages = await runAutoContextCompaction(
         messageStoreRef.current.getSnapshot(),
         contextInfo.contextTokens,
@@ -750,6 +774,21 @@ export function useChatController({
             streamBufferRef.current = null;
           }
 
+          if (activeAbortSignal.aborted && autoCompactAbortRef.current) {
+            autoCompactAbortRef.current = false;
+            abortControllerRef.current = null;
+            const beforeCompaction = persistTerminatedMessages();
+            const compactedMessages = await runAutoContextCompaction(
+              beforeCompaction,
+              contextInfo.contextTokens,
+              { force: true },
+            );
+            localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
+            localMessagesRef.current = localMessages;
+            abortSignal = null;
+            break;
+          }
+
           if (
             !activeAbortSignal.aborted &&
             contextLimitRetries < CONTEXT_LIMIT_RETRY_COUNT &&
@@ -783,7 +822,20 @@ export function useChatController({
         }
 
         if (activeAbortSignal.aborted) {
-          persistTerminatedMessages();
+          const shouldCompactInterruptedOutput = autoCompactAbortRef.current;
+          autoCompactAbortRef.current = false;
+          abortControllerRef.current = null;
+          const beforeCompaction = persistTerminatedMessages();
+          if (shouldCompactInterruptedOutput) {
+            const compactedMessages = await runAutoContextCompaction(
+              beforeCompaction,
+              contextInfo.contextTokens,
+              { force: true },
+            );
+            localMessages.splice(0, localMessages.length, ...compactedMessages.filter(m => !m.excludeFromContext));
+            localMessagesRef.current = localMessages;
+          }
+          abortSignal = null;
           break;
         }
 
@@ -921,6 +973,7 @@ export function useChatController({
       if (abortSignal?.aborted) {
         persistTerminatedMessages();
       }
+      autoCompactAbortRef.current = false;
       compactingRef.current = false;
       setCompacting(false);
       streamingRef.current = false;
@@ -944,11 +997,13 @@ export function useChatController({
 
   const clearMessages = useCallback(() => {
     shellAutoApproveRef.current = false;
+    autoCompactAbortRef.current = false;
     syncMessages([], conversationIdRef.current, 'flush');
   }, [syncMessages]);
 
   const handleNewConversation = useCallback(async () => {
     shellAutoApproveRef.current = false;
+    autoCompactAbortRef.current = false;
     const conv = await conversationStore.createConversation();
     updateConversationId(conv.id);
     messageStoreRef.current.setMessages([]);
@@ -959,6 +1014,7 @@ export function useChatController({
 
   const handleSelectConversation = useCallback(async (id: string) => {
     shellAutoApproveRef.current = false;
+    autoCompactAbortRef.current = false;
     const conv = await conversationStore.getConversation(id);
     if (conv) {
       updateConversationId(conv.id);

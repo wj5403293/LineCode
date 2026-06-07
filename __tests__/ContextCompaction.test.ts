@@ -1,11 +1,21 @@
 import {
   COMPACT_TRIGGER_RATIO,
   estimateMessageTokens,
+  shouldCompactContext,
 } from '../src/services/contextCompaction';
 
 describe('context compaction token estimation', () => {
   it('triggers automatic compaction at 80% context usage', () => {
     expect(COMPACT_TRIGGER_RATIO).toBe(0.8);
+  });
+
+  it('allows compaction for a small number of oversized messages', () => {
+    expect(shouldCompactContext([{
+      id: 'large',
+      role: 'assistant',
+      content: 'x'.repeat(321),
+      timestamp: 1,
+    }], 100)).toBe(true);
   });
 
   it('estimates structured message fields without JSON serialization', () => {

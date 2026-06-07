@@ -80,7 +80,6 @@ export function estimateMessageTokens(messages: Pick<Message, 'content' | 'attac
 }
 
 export function shouldCompactContext(messages: Message[], contextTokens: number): boolean {
-  if (messages.length < 4) return false;
   return estimateMessageTokens(messages) >= contextTokens * COMPACT_TRIGGER_RATIO;
 }
 

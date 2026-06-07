@@ -70,7 +70,6 @@ export class ContextMetricsService {
   }
 
   shouldCompact(messages: Message[], contextTokens: number, triggerRatio: number): boolean {
-    if (messages.length < 4) return false;
     return this.estimateContextTokens(messages) >= contextTokens * triggerRatio;
   }
 
